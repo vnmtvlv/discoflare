@@ -8,7 +8,24 @@ Self-hosted team chat that runs on your Cloudflare account.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)
 
-![Discoflare](public/og-image.png)
+<p align="center">
+  <img src="docs/screenshots/design-review-thread.jpg" alt="Discoflare design review with an image, reactions, and a live thread" width="100%" />
+</p>
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/campaign-assets.jpg" alt="A campaign asset shared in Discoflare with the workspace member rail open" />
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/customer-story-files.jpg" alt="A customer story image in Discoflare with channel files open" />
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><strong>Campaign assets</strong> · Feedback stays beside the work.</sub></td>
+    <td align="center"><sub><strong>Customer stories</strong> · Files stay with their conversation.</sub></td>
+  </tr>
+</table>
 
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
