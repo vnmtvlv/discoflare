@@ -3,6 +3,7 @@ import { ensureAdminFromEnv, readAdminEnv } from '../../utils/bootstrap'
 import { cf } from '../../utils/cf'
 import { ensureMigrated, userCount } from '../../utils/db'
 import type { SetupHealth } from '../../../shared/types'
+import { readAppBranding } from '../../../shared/app-branding'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   let env
@@ -17,6 +18,8 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       adminEnv: false,
       bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false },
       realtimekit: false,
+      twitterAuth: false,
+      ...readAppBranding(),
     }
   }
 
@@ -62,5 +65,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     adminEnv: Boolean(readAdminEnv(env)),
     bindings,
     realtimekit: realtimekitConfigured(env),
+    twitterAuth: Boolean(env.TWITTER_CLIENT_ID?.trim() && env.TWITTER_CLIENT_SECRET?.trim()),
+    ...readAppBranding(env),
   }
 })

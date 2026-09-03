@@ -6,7 +6,8 @@
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
-    "dev:full": "nuxt build && wrangler dev",
+    "dev:full": "nuxt build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
+    "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "preview": "nuxt build && wrangler dev",
     "deploy": "nuxt build && pnpm db:migrate && wrangler deploy",
     "env:init": "node scripts/init-env.mjs",
@@ -23,6 +24,11 @@
   "cloudflare": {
     "bindings": {
       "AUTH_SECRET": { "description": "Generate a random 32+ character value. This signs login sessions." },
+      "APP_NAME": { "description": "Name shown beside the Discoflare logo and in the page title." },
+      "APP_TITLE": { "description": "Login headline. Use \\n to split it across two lines." },
+      "APP_SUBTITLE": { "description": "Supporting copy shown below the login headline." },
+      "TWITTER_CLIENT_ID": { "description": "Optional OAuth 2.0 client ID for Sign in with X. Configure `/api/auth/callback/twitter` as the callback path." },
+      "TWITTER_CLIENT_SECRET": { "description": "Optional OAuth 2.0 client secret for Sign in with X." },
       "ADMIN_EMAIL": { "description": "Email for the first owner account." },
       "ADMIN_PASSWORD": { "description": "Strong password for the first owner account (8+ characters)." },
       "ADMIN_NAME": { "description": "Display name for the first owner account." }

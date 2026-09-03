@@ -1,6 +1,6 @@
 import { and, inArray, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { channelMembers, channels, users } from '../../../../drizzle/schema'
+import { channelCategories, channelMembers, channels, users } from '../../../../drizzle/schema'
 import { newId, nowIso } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
 import { requireMember } from '../../../utils/guards'
@@ -14,6 +14,7 @@ const bodySchema = z.object({
   type: z.enum(['text', 'voice']).default('text'),
   topic: z.string().max(200).optional(),
   visibility: z.enum(['workspace', 'private']).default('workspace'),
+  categoryId: z.string().min(8).nullable().optional(),
   memberIds: z.array(z.string().min(8)).max(100).optional(),
 })
 
@@ -27,6 +28,12 @@ export default defineEventHandler(async (event) => {
   const created = nowIso()
   const name = body.name.toLowerCase()
   const type = body.type
+  const categoryId = body.categoryId ?? null
+  if (categoryId) {
+    const category = await db.select({ id: channelCategories.id }).from(channelCategories)
+      .where(eq(channelCategories.id, categoryId)).limit(1)
+    if (!category.length) fail(400, 'bad_request', 'Channel category not found')
+  }
   const position = Date.now() % 100000
   const channel = {
     id,
@@ -34,6 +41,7 @@ export default defineEventHandler(async (event) => {
     topic: body.topic ?? '',
     type,
     visibility: body.visibility,
+    categoryId,
     position,
     huddleMeetingId: null,
     parentId: null,
@@ -63,6 +71,7 @@ export default defineEventHandler(async (event) => {
       topic: body.topic ?? '',
       type,
       visibility: body.visibility,
+      categoryId,
       position,
       huddleMeetingId: null,
       parentId: null,

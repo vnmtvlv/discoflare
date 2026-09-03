@@ -4,9 +4,12 @@ import type { DropdownMenuItem } from '@nuxt/ui'
 import type { MemberDTO, PublicUser } from '~~/shared/types'
 import { Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
+import ChannelFilesPanel from '~/features/attachments/components/ChannelFilesPanel.vue'
+import ChannelThreadsPanel from '~/features/threads/components/ChannelThreadsPanel.vue'
 
 const props = defineProps<{
   workspaceId: string
+  channelId: string
   channelMembers?: PublicUser[]
   isGroupDm?: boolean
 }>()
@@ -30,7 +33,7 @@ const list = computed(() => {
       const m = data.value?.members.find((x) => x.user.id === u.id)
       return m ?? {
         user: u,
-        role: { id: '', workspaceId: props.workspaceId, name: 'member', permissions: 0, position: 99 },
+        role: { id: '', workspaceId: props.workspaceId, key: 'member', name: 'member', permissions: 0, position: 99, isSystem: true },
         nickname: null,
         status: presence.statusOf(u.id),
       } satisfies MemberDTO
@@ -93,18 +96,30 @@ function itemsFor(m: MemberDTO): DropdownMenuItem[][] {
 }
 
 function roleLabel(name: string) {
-  return name === 'owner' ? 'Owner' : name === 'admin' ? 'Admin' : 'Online'
+  if (name === 'owner') return 'Owner'
+  if (name === 'admin') return 'Admin'
+  if (name === 'member') return 'Online'
+  return name
 }
 </script>
 
 <template>
   <aside
-    class="bg-muted overflow-y-auto"
+    class="bg-muted shrink-0 relative flex flex-col min-h-0 overflow-hidden"
     :class="isMobile
-      ? (ui.mobilePane === 'members' ? 'absolute inset-0 z-20 w-full block' : 'hidden')
-      : 'w-60 hidden md:block'"
-    aria-label="Members"
+      ? (ui.mobilePane === 'members' ? 'absolute inset-0 z-20 w-full flex' : 'hidden')
+      : 'hidden md:flex'"
+    :style="!isMobile ? { width: `${ui.rightPanelWidth}px` } : undefined"
+    aria-label="Right panel"
   >
+    <LayoutResizeHandle
+      v-if="!isMobile"
+      v-model="ui.rightPanelWidth"
+      :min="180"
+      :max="640"
+      side="start"
+      label="Resize right panel"
+    />
     <header class="h-12 px-3 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 bg-muted">
       <UButton
         v-if="isMobile"
@@ -116,8 +131,10 @@ function roleLabel(name: string) {
         aria-label="Back"
         @click="ui.mobilePane = 'chat'"
       />
-      <p class="text-xs font-semibold uppercase tracking-wide text-muted hidden lg:block">Members</p>
-      <div class="flex items-center gap-0.5 ms-auto">
+      <LayoutRightPanelTabs v-model="ui.rightPanelTab" />
+    </header>
+    <div v-if="ui.rightPanelTab === 'members'" class="flex-1 min-h-0 overflow-y-auto">
+      <div class="flex items-center gap-0.5 px-3 pt-3" aria-label="Member filter">
         <UButton
           size="xs"
           color="neutral"
@@ -133,17 +150,16 @@ function roleLabel(name: string) {
           @click="ui.memberTab = 'online'"
         />
       </div>
-    </header>
-    <div v-if="isPending && !channelMembers?.length" class="p-3">
-      <USkeleton class="h-24" />
-    </div>
-    <UAlert v-else-if="error && !channelMembers?.length" color="error" title="Could not load members." class="m-3" />
-    <p v-else-if="!list.length" class="p-3 text-sm text-muted">No members.</p>
-    <div v-else class="px-2 py-4 space-y-4">
-      <p v-if="isGroupDm" class="text-[11px] font-semibold uppercase tracking-wide text-muted px-1">Participants — {{ list.length }}</p>
+      <div v-if="isPending && !channelMembers?.length" class="p-3">
+        <USkeleton class="h-24" />
+      </div>
+      <UAlert v-else-if="error && !channelMembers?.length" color="error" title="Could not load members." class="m-3" />
+      <p v-else-if="!list.length" class="p-3 text-sm text-muted">No members.</p>
+      <div v-else class="px-2 py-4 space-y-4">
+      <p v-if="isGroupDm" class="text-xs font-semibold text-muted px-1">Participants — {{ list.length }}</p>
       <template v-if="!isGroupDm">
         <section v-for="[role, group] in grouped.roles" :key="role">
-          <h2 class="text-[11px] font-semibold uppercase tracking-wide text-muted px-2 mb-1">{{ roleLabel(role) }} — {{ group.length }}</h2>
+          <h2 class="text-xs font-semibold text-muted px-2 mb-1">{{ roleLabel(role) }} — {{ group.length }}</h2>
           <ul>
             <li v-for="m in group" :key="m.user.id">
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
@@ -170,7 +186,7 @@ function roleLabel(name: string) {
           </ul>
         </section>
         <section v-if="ui.memberTab === 'all' && grouped.offline.length">
-          <h2 class="text-[11px] font-semibold uppercase tracking-wide text-muted px-2 mb-1">Offline — {{ grouped.offline.length }}</h2>
+          <h2 class="text-xs font-semibold text-muted px-2 mb-1">Offline — {{ grouped.offline.length }}</h2>
           <ul>
             <li v-for="m in grouped.offline" :key="m.user.id">
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
@@ -198,7 +214,14 @@ function roleLabel(name: string) {
           </UChip>
           <span class="truncate text-sm">{{ m.nickname || m.user.displayName }}</span>
         </li>
-      </ul>
+        </ul>
+      </div>
+    </div>
+    <div v-else-if="ui.rightPanelTab === 'threads'" class="flex-1 min-h-0 overflow-y-auto">
+      <ChannelThreadsPanel :channel-id="channelId" />
+    </div>
+    <div v-else class="flex-1 min-h-0 overflow-y-auto">
+      <ChannelFilesPanel :channel-id="channelId" />
     </div>
     <UModal :open="Boolean(kickId)" title="Kick this member?" @update:open="onKickOpen">
       <template #footer>

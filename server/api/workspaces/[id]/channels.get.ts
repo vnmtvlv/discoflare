@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { channelMembers, channelReads, channels } from '../../../../drizzle/schema'
+import { channelCategories, channelMembers, channelReads, channels } from '../../../../drizzle/schema'
 import { requireMember } from '../../../utils/guards'
 import { cf } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -36,6 +36,12 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
+    categories: await db.select({
+      id: channelCategories.id,
+      name: channelCategories.name,
+      position: channelCategories.position,
+      createdAt: channelCategories.createdAt,
+    }).from(channelCategories).orderBy(channelCategories.position),
     channels: list.map((ch) => {
       return {
         id: ch.id,
@@ -44,6 +50,7 @@ export default defineEventHandler(async (event) => {
         topic: ch.topic,
         type: ch.type,
         visibility: ch.visibility,
+        categoryId: ch.categoryId,
         position: ch.position,
         huddleMeetingId: ch.huddleMeetingId,
         parentId: ch.parentId,

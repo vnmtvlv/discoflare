@@ -14,6 +14,8 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE IF NOT EXISTS `users`')
     expect(INIT_SQL).not.toContain('CREATE TABLE IF NOT EXISTS `members`')
     expect(INIT_SQL).toContain('CREATE TABLE IF NOT EXISTS `channel_members`')
+    expect(INIT_SQL).toContain('CREATE TABLE `channel_categories`')
+    expect(INIT_SQL).toContain('`category_id` text REFERENCES channel_categories(id) ON DELETE SET NULL')
     expect(INIT_SQL).toContain('CREATE TABLE IF NOT EXISTS `auth_users`')
     expect(INIT_SQL).toContain('CREATE TABLE IF NOT EXISTS `auth_sessions`')
     expect(INIT_SQL).not.toContain('CREATE TABLE IF NOT EXISTS `sessions`')

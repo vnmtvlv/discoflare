@@ -209,13 +209,27 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     let replyTo: MessageDTO['replyTo'] = null
     if (body.replyToId) {
       const row = await this.env.DB.prepare(
-        'SELECT id, author_id, content FROM messages WHERE id = ? AND channel_id = ?',
-      ).bind(body.replyToId, this.channelId()).first<{ id: string; author_id: string; content: string }>()
+        `SELECT id, author_id, content, deleted_at,
+          (SELECT COUNT(*) FROM attachments WHERE message_id = messages.id) AS attachment_count
+         FROM messages WHERE id = ? AND channel_id = ?`,
+      ).bind(body.replyToId, this.channelId()).first<{
+        id: string
+        author_id: string
+        content: string
+        deleted_at: string | null
+        attachment_count: number
+      }>()
       if (!row) {
         this.send(ws, { t: 'error', code: 'bad_request', message: 'Invalid reply target' })
         return
       }
-      replyTo = { id: row.id, authorId: row.author_id, content: row.content.slice(0, 180) }
+      replyTo = {
+        id: row.id,
+        authorId: row.author_id,
+        content: row.deleted_at ? '' : row.content.slice(0, 180),
+        attachmentCount: row.attachment_count,
+        deleted: Boolean(row.deleted_at),
+      }
     }
 
     const dto: MessageDTO = {

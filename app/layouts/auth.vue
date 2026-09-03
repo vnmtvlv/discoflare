@@ -1,20 +1,53 @@
+<script setup lang="ts">
+import {
+  DEFAULT_APP_NAME,
+  DEFAULT_APP_SUBTITLE,
+  DEFAULT_APP_TITLE,
+} from '~~/shared/app-branding'
+
+const session = useSessionStore()
+
+const appName = computed(() => session.health?.appName || DEFAULT_APP_NAME)
+const appTitle = computed(() => session.health?.appTitle || DEFAULT_APP_TITLE)
+const appSubtitle = computed(() => session.health?.appSubtitle || DEFAULT_APP_SUBTITLE)
+const appTitleLines = computed(() => appTitle.value
+  .split(/\r?\n/)
+  .map(line => line.trim())
+  .filter(Boolean))
+
+useHead(() => ({ title: appName.value }))
+</script>
+
 <template>
   <div class="min-h-dvh bg-default lg:grid lg:grid-cols-[minmax(280px,40%)_1fr]">
-    <aside class="relative hidden lg:flex flex-col p-10 xl:p-12 bg-elevated border-r border-default">
-      <div class="absolute inset-y-0 left-0 w-1 bg-primary" aria-hidden="true" />
-      <BrandWordmark size="lg" />
-      <div class="flex-1 flex flex-col justify-center gap-8">
-        <BrandLogo size="hero" alt="" priority />
-        <p class="max-w-sm text-3xl xl:text-[2.125rem] font-medium tracking-tight text-highlighted leading-[1.15]">
-          Chat that lives on your Cloudflare account.
-        </p>
+    <aside class="auth-stage relative hidden lg:flex flex-col overflow-hidden p-10 xl:p-12 bg-elevated border-r border-default">
+      <BrandWordmark :name="appName" size="lg" class="relative z-10" />
+
+      <div class="relative z-10 flex-1 flex items-center">
+        <div class="max-w-lg">
+          <h1 class="font-brand text-4xl xl:text-5xl font-semibold tracking-[-0.045em] text-highlighted leading-[1] break-words">
+            <span
+              v-for="(line, index) in appTitleLines"
+              :key="`${index}-${line}`"
+              class="block"
+              :class="{ 'text-primary': appTitleLines.length > 1 && index === appTitleLines.length - 1 }"
+            >{{ line }}</span>
+          </h1>
+          <p class="mt-7 max-w-md text-base xl:text-lg leading-relaxed text-muted">
+            {{ appSubtitle }}
+          </p>
+        </div>
       </div>
+
+      <div class="auth-shape auth-shape-one" aria-hidden="true" />
+      <div class="auth-shape auth-shape-two" aria-hidden="true" />
+      <div class="auth-shape auth-shape-three" aria-hidden="true" />
     </aside>
 
     <main class="min-h-dvh flex flex-col">
       <div class="lg:hidden flex items-center gap-3 px-6 py-5 border-b border-default">
         <span class="w-1 h-5 bg-primary rounded-full" aria-hidden="true" />
-        <BrandWordmark compact />
+        <BrandWordmark :name="appName" compact />
       </div>
       <div class="flex-1 flex items-center justify-center px-6 py-12">
         <div class="w-full max-w-[400px]">
@@ -24,3 +57,49 @@
     </main>
   </div>
 </template>
+
+<style scoped>
+.auth-stage {
+  background-image: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ui-text-dimmed) 22%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 28px 28px;
+}
+
+.auth-shape {
+  position: absolute;
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 24%, transparent);
+  background: color-mix(in srgb, var(--ui-primary) 12%, var(--ui-bg-elevated));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, white 12%, transparent);
+}
+
+.auth-shape-one {
+  width: 18rem;
+  height: 9rem;
+  right: -6rem;
+  top: 19%;
+  border-radius: 4.5rem 1.5rem 4.5rem 4.5rem;
+  transform: rotate(-11deg);
+}
+
+.auth-shape-two {
+  width: 12rem;
+  height: 6rem;
+  left: -4rem;
+  bottom: 13%;
+  border-radius: 1.5rem 3rem 3rem 3rem;
+  transform: rotate(14deg);
+}
+
+.auth-shape-three {
+  width: 4.5rem;
+  height: 4.5rem;
+  right: 16%;
+  bottom: 9%;
+  border-radius: 42% 58% 61% 39% / 51% 38% 62% 49%;
+  background: color-mix(in srgb, var(--ui-primary) 72%, var(--ui-bg-elevated));
+  transform: rotate(24deg);
+}
+</style>

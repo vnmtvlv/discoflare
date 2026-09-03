@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     iconR2Key: workspace.iconR2Key,
     ownerId: workspace.ownerId,
     createdAt: workspace.createdAt,
+    updatedAt: workspace.updatedAt,
   }).from(workspace)
   return { workspaces: rows }
 })

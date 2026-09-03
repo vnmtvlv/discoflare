@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { ALL_PERMISSIONS, MemberPermissions } from '../../shared/permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../../shared/ids'
-import { authAccounts, authUsers, auditLog, channels, roles, users, workspace } from '../../drizzle/schema'
+import { authAccounts, authUsers, auditLog, channelCategories, channels, roles, users, workspace } from '../../drizzle/schema'
 import { cf } from './cf'
 import { ensureMigrated, getDb, userCount } from './db'
 import { hashPassword } from './password'
@@ -35,6 +35,7 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const ownerRoleId = newId()
   const adminRoleId = newId()
   const memberRoleId = newId()
+  const channelsCategoryId = newId()
   const generalId = newId()
   const randomId = newId()
   const voiceId = newId()
@@ -88,10 +89,17 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
       createdAt: created,
       updatedAt: created,
     }),
+    db.insert(channelCategories).values({
+      id: channelsCategoryId,
+      name: 'Channels',
+      position: 0,
+      createdAt: created,
+      updatedAt: created,
+    }),
     db.insert(channels).values([
-      { id: generalId, name: 'general', topic: '', type: 'text', visibility: 'workspace', position: 0, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
-      { id: randomId, name: 'random', topic: '', type: 'text', visibility: 'workspace', position: 1, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
-      { id: voiceId, name: 'General', topic: '', type: 'voice', visibility: 'workspace', position: 2, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: generalId, name: 'general', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 0, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: randomId, name: 'random', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 1, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: voiceId, name: 'General', topic: '', type: 'voice', visibility: 'workspace', categoryId: channelsCategoryId, position: 2, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
     ]),
     db.insert(auditLog).values({
       id: auditId,

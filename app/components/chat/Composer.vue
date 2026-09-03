@@ -4,6 +4,7 @@ import { applyMentionTokens } from '~~/shared/mentions'
 import { newId, nowIso } from '~~/shared/ids'
 import { useQueryClient, type InfiniteData } from '@tanstack/vue-query'
 import { useDebounceFn, useFileDialog } from '@vueuse/core'
+import AttachmentDraftPreview from '~/features/attachments/components/AttachmentDraftPreview.vue'
 
 const props = defineProps<{
   channelId: string
@@ -23,6 +24,12 @@ const toast = useToast()
 const files = ref<File[]>([])
 const emojiOpen = ref(false)
 const EMOJI = ['😀', '😂', '❤️', '👍', '🔥', '🎉', '👀', '💯']
+const draft = computed({
+  get: () => ui.composerState(props.channelId).draft,
+  set: value => ui.setComposerDraft(props.channelId, value),
+})
+const replyToId = computed(() => ui.composerState(props.channelId).replyToId)
+const editingId = computed(() => ui.composerState(props.channelId).editingId)
 
 const { open: openFiles, reset: resetFiles, onChange } = useFileDialog({
   multiple: true,
@@ -38,14 +45,13 @@ function onKey(e: KeyboardEvent) {
     void submit()
   }
   if (e.key === 'Escape') {
-    ui.replyToId = null
-    ui.editingId = null
+    ui.cancelComposerIntent(props.channelId)
   }
-  if (e.key === 'ArrowUp' && !ui.composerDraft && !e.shiftKey) emit('last')
+  if (e.key === 'ArrowUp' && !draft.value && !e.shiftKey) emit('last')
 }
 
 function insertEmoji(e: string) {
-  ui.composerDraft = `${ui.composerDraft || ''}${e}`
+  draft.value = `${draft.value || ''}${e}`
   emojiOpen.value = false
 }
 
@@ -55,7 +61,7 @@ function removeFile(i: number) {
 
 async function submit() {
   if (props.disabled) return
-  let content = applyMentionTokens(ui.composerDraft, props.members.map((m) => ({
+  let content = applyMentionTokens(draft.value, props.members.map((m) => ({
     id: m.user.id,
     displayName: m.user.displayName,
     nickname: m.nickname,
@@ -78,10 +84,9 @@ async function submit() {
     return
   }
 
-  if (ui.editingId) {
-    await $fetch(`/api/messages/${ui.editingId}`, { method: 'PATCH', body: { content } })
-    ui.editingId = null
-    ui.composerDraft = ''
+  if (editingId.value) {
+    await $fetch(`/api/messages/${editingId.value}`, { method: 'PATCH', body: { content } })
+    ui.clearComposer(props.channelId)
     return
   }
 
@@ -108,44 +113,34 @@ async function submit() {
     const pages = old.pages.map((p, i) => i === 0 ? { ...p, messages: [...p.messages, optimistic] } : p)
     return { ...old, pages }
   })
-  props.send({ t: 'message.create', content, replyToId: ui.replyToId ?? undefined, clientId, attachmentIds: attachmentIds.length ? attachmentIds : undefined })
-  ui.composerDraft = ''
-  ui.replyToId = null
+  props.send({ t: 'message.create', content, replyToId: replyToId.value ?? undefined, clientId, attachmentIds: attachmentIds.length ? attachmentIds : undefined })
+  ui.clearComposer(props.channelId)
   files.value = []
   resetFiles()
 }
 
 const pingTyping = useDebounceFn(() => {
-  if (!props.disabled && ui.composerDraft) props.send({ t: 'typing' })
+  if (!props.disabled && draft.value) props.send({ t: 'typing' })
 }, 400)
 
-watch(() => ui.composerDraft, () => { pingTyping() })
+watch(draft, () => { pingTyping() })
 </script>
 
 <template>
   <form class="px-4 pb-6 pt-2" @submit.prevent="submit">
     <div
       class="df-composer overflow-hidden"
-      :class="ui.replyToId || ui.editingId ? 'rounded-b-lg' : 'rounded-lg'"
+      :class="replyToId || editingId ? 'rounded-b-lg' : 'rounded-lg'"
     >
-      <div v-if="ui.replyToId" class="flex items-center gap-2 px-3 py-2 bg-muted text-xs text-muted">
+      <div v-if="replyToId" class="flex items-center gap-2 px-3 py-2 bg-muted text-xs text-muted">
         <span class="flex-1">Replying to message</span>
-        <UButton size="xs" color="neutral" variant="ghost" square icon="i-ph-x" aria-label="Cancel reply" @click="ui.replyToId = null" />
+        <UButton size="xs" color="neutral" variant="ghost" square icon="i-ph-x" aria-label="Cancel reply" @click="ui.cancelComposerIntent(channelId)" />
       </div>
-      <div v-else-if="ui.editingId" class="flex items-center gap-2 px-3 py-2 bg-muted text-xs text-primary">
+      <div v-else-if="editingId" class="flex items-center gap-2 px-3 py-2 bg-muted text-xs text-primary">
         <span class="flex-1">Editing message</span>
-        <UButton size="xs" color="neutral" variant="ghost" square icon="i-ph-x" aria-label="Cancel edit" @click="ui.editingId = null; ui.composerDraft = ''" />
+        <UButton size="xs" color="neutral" variant="ghost" square icon="i-ph-x" aria-label="Cancel edit" @click="ui.cancelComposerIntent(channelId, true)" />
       </div>
-      <div v-if="files.length" class="flex flex-wrap gap-2 px-3 pt-3">
-        <div
-          v-for="(f, i) in files"
-          :key="f.name + i"
-          class="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-xs text-default"
-        >
-          <span class="truncate max-w-40">{{ f.name }}</span>
-          <UButton size="xs" variant="ghost" color="neutral" square icon="i-ph-x" :aria-label="`Remove ${f.name}`" @click="removeFile(i)" />
-        </div>
-      </div>
+      <AttachmentDraftPreview v-if="files.length" :files="files" @remove="removeFile" />
       <div class="flex items-end gap-1 px-1.5 min-h-11">
         <UTooltip text="Upload a file">
           <UButton
@@ -161,7 +156,7 @@ watch(() => ui.composerDraft, () => { pingTyping() })
           />
         </UTooltip>
         <UTextarea
-          v-model="ui.composerDraft"
+          v-model="draft"
           autoresize
           :rows="1"
           :maxrows="8"

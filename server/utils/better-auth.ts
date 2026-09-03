@@ -13,6 +13,8 @@ export function createAuth(env: DiscoflareEnv, baseURL: string) {
   const local = ['localhost', '127.0.0.1', '::1'].includes(new URL(baseURL).hostname)
   const secret = env.AUTH_SECRET || (local ? DEV_SECRET : '')
   if (!secret) throw new Error('AUTH_SECRET is required')
+  const twitterClientId = env.TWITTER_CLIENT_ID?.trim()
+  const twitterClientSecret = env.TWITTER_CLIENT_SECRET?.trim()
   return betterAuth({
     secret,
     baseURL,
@@ -33,6 +35,14 @@ export function createAuth(env: DiscoflareEnv, baseURL: string) {
         verify: async ({ password, hash }) => verifyPassword(password, hash),
       },
     },
+    socialProviders: twitterClientId && twitterClientSecret
+      ? {
+          twitter: {
+            clientId: twitterClientId,
+            clientSecret: twitterClientSecret,
+          },
+        }
+      : {},
     trustedOrigins: [baseURL],
     advanced: {
       cookiePrefix: 'df',

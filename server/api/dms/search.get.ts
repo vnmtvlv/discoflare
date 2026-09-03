@@ -20,11 +20,19 @@ export default defineEventHandler(async (event) => {
     .where(and(
       eq(users.status, 'active'),
       q
-        ? or(like(users.displayName, `%${q}%`), like(authUsers.email, `%${q}%`))
+        ? or(
+            like(users.displayName, `%${q}%`),
+            like(users.nickname, `%${q}%`),
+            like(users.handle, `%${q}%`),
+          )
         : undefined,
     ))
     .limit(20)
   return {
-    members: rows.filter((r) => r.user.id !== me.id).map((r) => toPublicUser(r.user)),
+    members: rows.filter((r) => r.user.id !== me.id).map((r) => ({
+      ...toPublicUser(r.user),
+      handle: r.user.handle,
+      nickname: r.user.nickname,
+    })),
   }
 })

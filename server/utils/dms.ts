@@ -52,6 +52,7 @@ export async function toDmDto(
     topic: ch.topic,
     type: 'dm',
     visibility: 'private',
+    categoryId: null,
     position: ch.position,
     huddleMeetingId: ch.huddleMeetingId,
     parentId: ch.parentId,

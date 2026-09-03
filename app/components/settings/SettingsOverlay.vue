@@ -38,7 +38,7 @@ defineShortcuts({
           <div class="w-14 sm:w-16 shrink-0 pt-[60px] pe-2 sm:pe-3">
             <button
               type="button"
-              class="size-9 rounded-full border-2 border-muted flex items-center justify-center text-muted hover:text-highlighted hover:border-default transition-colors"
+              class="size-9 mx-auto rounded-full border-2 border-muted flex items-center justify-center text-muted hover:text-highlighted hover:border-default transition-colors"
               aria-label="Close"
               @click="close"
             >

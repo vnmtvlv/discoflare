@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, rolePermissions } from '../../shared/permissions'
+import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, permissionBitmask, rolePermissions } from '../../shared/permissions'
 
 describe('permissions', () => {
   it('owner has every flag', () => {
@@ -12,5 +12,12 @@ describe('permissions', () => {
     expect(hasPermission(MemberPermissions, Permission.sendMessages)).toBe(true)
     expect(hasPermission(MemberPermissions, Permission.kick)).toBe(false)
     expect(rolePermissions('member')).toBe(MemberPermissions)
+  })
+
+  it('builds a custom role bitmask from grants', () => {
+    const permissions = permissionBitmask(['sendMessages', 'invite'])
+    expect(hasPermission(permissions, Permission.sendMessages)).toBe(true)
+    expect(hasPermission(permissions, Permission.invite)).toBe(true)
+    expect(hasPermission(permissions, Permission.manageRoles)).toBe(false)
   })
 })

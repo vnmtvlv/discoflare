@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query'
+import { onKeyStroke } from '@vueuse/core'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser } from '~~/shared/types'
 import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
@@ -12,6 +13,16 @@ const huddle = useHuddleStore()
 const qc = useQueryClient()
 const { workspaceId } = useWorkspace()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
+
+watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
+
+onKeyStroke(
+  event => event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey),
+  (event) => {
+    event.preventDefault()
+    ui.searchOpen = true
+  },
+)
 
 const membersQ = useQuery({
   queryKey: computed(() => ['members', workspaceId.value]),
@@ -81,14 +92,14 @@ const typingLine = computed(() => {
 })
 
 function onReply(id: string) {
-  ui.replyToId = id
+  ui.startReply(channelId.value, id)
 }
 function onEdit(msg: MessageDTO) {
-  ui.editingId = msg.id
-  ui.composerDraft = msg.content.replace(/<@([0-9a-f-]+)>/gi, (_m, id: string) => {
+  const content = msg.content.replace(/<@([0-9a-f-]+)>/gi, (_m, id: string) => {
     const m = members.value.find((x) => x.user.id === id)
     return `@${m?.user.displayName || id}`
   })
+  ui.startEditing(channelId.value, msg.id, content)
 }
 function onLast() {
   const data = qc.getQueryData<InfiniteData<{ messages: MessageDTO[] }>>(['messages', channelId.value])
@@ -97,7 +108,24 @@ function onLast() {
   if (last) onEdit(last)
 }
 
+function linkThreadToMessage(messageId: string, threadId: string) {
+  qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(
+    ['messages', channelId.value],
+    data => data
+      ? {
+          ...data,
+          pages: data.pages.map(page => ({
+            ...page,
+            messages: page.messages.map(message => message.id === messageId ? { ...message, threadId } : message),
+          })),
+        }
+      : data,
+  )
+}
+
 async function onThread(msg: MessageDTO) {
+  ui.rightPanelOpen = true
+  ui.rightPanelTab = 'threads'
   if (msg.threadId) {
     ui.threadId = msg.threadId
     ui.threadParentId = channelId.value
@@ -107,8 +135,10 @@ async function onThread(msg: MessageDTO) {
     method: 'POST',
     body: { messageId: msg.id },
   })
+  linkThreadToMessage(msg.id, res.channel.id)
   ui.threadId = res.channel.id
   ui.threadParentId = channelId.value
+  await qc.invalidateQueries({ queryKey: ['threads', channelId.value] })
 }
 
 const addOpen = ref(false)
@@ -141,7 +171,7 @@ const huddleMembers = computed<MemberDTO[]>(() => {
   if (!isDm.value) return members.value
   return (channel.value?.participants ?? []).map((u) => ({
     user: u,
-    role: { id: '', workspaceId: workspaceId.value, name: 'member', permissions: 0, position: 0 },
+    role: { id: '', workspaceId: workspaceId.value, key: 'member', name: 'member', permissions: 0, position: 0, isSystem: true },
     nickname: null,
     status: presence.statusOf(u.id),
   }))
@@ -149,9 +179,10 @@ const huddleMembers = computed<MemberDTO[]>(() => {
 
 defineShortcuts({
   escape: () => {
+    ui.searchOpen = false
     ui.huddleSetupOpen = false
-    ui.replyToId = null
-    ui.editingId = null
+    ui.cancelComposerIntent(channelId.value)
+    if (ui.threadId) ui.cancelComposerIntent(ui.threadId)
     ui.threadId = null
     renaming.value = false
     addOpen.value = false
@@ -194,14 +225,16 @@ defineShortcuts({
         <USeparator v-if="!isDm && channel?.topic" orientation="vertical" class="h-4" />
         <p v-if="!isDm" class="text-sm text-muted truncate hidden lg:block min-w-0 flex-1">{{ channel?.topic }}</p>
         <div class="ml-auto flex items-center gap-2">
-          <UInput
-            v-model="ui.searchQuery"
-            icon="i-ph-magnifying-glass"
-            size="sm"
-            placeholder="Search"
-            class="hidden sm:flex w-36"
-            :ui="{ base: 'bg-muted ring-0' }"
-          />
+          <button
+            type="button"
+            class="hidden sm:flex w-40 h-8 items-center gap-2 rounded-md bg-muted px-2 text-xs text-muted hover:text-default"
+            aria-label="Search messages"
+            @click="ui.searchOpen = true"
+          >
+            <UIcon name="i-ph-magnifying-glass" class="size-3.5" />
+            <span class="flex-1 text-start">Search</span>
+            <kbd class="inline-flex h-5 items-center rounded border border-default bg-default/40 px-1.5 font-sans text-[10px] text-toned">⌘ K</kbd>
+          </button>
           <UTooltip v-if="isDm || isVoiceType(type)" text="Start Voice Call">
             <UButton
               icon="i-ph-phone"
@@ -216,27 +249,27 @@ defineShortcuts({
           <UTooltip v-if="isDm" text="Add friends to DM">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-ph-user-plus" aria-label="Add people" @click="addOpen = !addOpen" />
           </UTooltip>
-          <UTooltip text="Member list">
+          <UTooltip text="Right panel">
             <UButton
-              icon="i-ph-users"
+              icon="i-ph-sidebar-simple"
               color="neutral"
-              :variant="ui.memberRailOpen ? 'soft' : 'ghost'"
+              :variant="ui.rightPanelOpen ? 'soft' : 'ghost'"
               size="sm"
               square
               class="hidden md:inline-flex"
-              aria-label="Toggle member list"
-              :aria-pressed="ui.memberRailOpen"
-              @click="ui.memberRailOpen = !ui.memberRailOpen"
+              aria-label="Toggle right panel"
+              :aria-pressed="ui.rightPanelOpen"
+              @click="ui.rightPanelOpen = !ui.rightPanelOpen"
             />
           </UTooltip>
           <UButton
             class="md:hidden"
-            icon="i-ph-users"
+            icon="i-ph-sidebar-simple"
             color="neutral"
             variant="ghost"
             size="sm"
             square
-            aria-label="Members"
+            aria-label="Right panel"
             @click="ui.mobilePane = 'members'"
           />
         </div>
@@ -293,13 +326,18 @@ defineShortcuts({
         @last="onLast"
       />
     </div>
-    <LayoutMemberRail
-      v-if="ui.memberRailOpen || isMobile"
+    <ChatThreadPanel
+      v-if="ui.rightPanelOpen && ui.rightPanelTab === 'threads' && ui.threadId"
       :workspace-id="workspaceId"
+      :members="members"
+    />
+    <LayoutMemberRail
+      v-else-if="ui.rightPanelOpen || isMobile"
+      :workspace-id="workspaceId"
+      :channel-id="channelId"
       :channel-members="isDm ? channel?.participants : undefined"
       :is-group-dm="isGroup"
     />
-    <ChatThreadPanel :workspace-id="workspaceId" :members="members" />
     <HuddleSetupModal />
   </div>
 </template>

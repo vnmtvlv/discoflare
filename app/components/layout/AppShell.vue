@@ -19,10 +19,19 @@ watch(() => route.params.channel, () => {
   <div class="h-dvh overflow-hidden flex bg-default">
     <aside
       v-if="workspaceId && (!isMobile || ui.mobilePane === 'channels')"
-      class="w-60 shrink-0 bg-muted flex flex-col min-h-0"
-      :class="isMobile ? 'absolute inset-y-0 start-0 z-30 shadow-xl' : ''"
+      class="shrink-0 bg-muted flex flex-col min-h-0 relative"
+      :class="isMobile ? 'absolute inset-y-0 start-0 z-30 shadow-xl w-60' : ''"
+      :style="!isMobile ? { width: `${ui.channelPaneWidth}px` } : undefined"
     >
       <LayoutChannelNav :workspace-id="workspaceId" />
+      <LayoutResizeHandle
+        v-if="!isMobile"
+        v-model="ui.channelPaneWidth"
+        :min="200"
+        :max="360"
+        side="end"
+        label="Resize channel panel"
+      />
     </aside>
     <button
       v-if="isMobile && ui.mobilePane === 'channels'"

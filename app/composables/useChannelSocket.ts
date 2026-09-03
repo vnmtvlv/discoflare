@@ -41,6 +41,8 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
       })
       return { ...old, pages }
     })
+    if (msg.attachments.length) void qc.invalidateQueries({ queryKey: ['files'] })
+    void qc.invalidateQueries({ queryKey: ['threads'] })
   }
 
   async function connect(gen = generation) {

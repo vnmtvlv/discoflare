@@ -21,6 +21,11 @@ export type DiscoflareEnv = {
   REALTIMEKIT_PRESET_VOICE?: string
   REALTIMEKIT_PRESET_AV?: string
   AUTH_SECRET?: string
+  TWITTER_CLIENT_ID?: string
+  TWITTER_CLIENT_SECRET?: string
+  APP_NAME?: string
+  APP_TITLE?: string
+  APP_SUBTITLE?: string
   ADMIN_EMAIL?: string
   ADMIN_PASSWORD?: string
   ADMIN_NAME?: string

@@ -1,7 +1,8 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { channels, messages } from '../../../../drizzle/schema'
+import { attachments, channels, messages } from '../../../../drizzle/schema'
 import { newId, nowIso } from '../../../../shared/ids'
+import { threadTitle } from '../../../../shared/threads'
 import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -22,13 +23,14 @@ export default defineEventHandler(async (event) => {
   const msg = (await db.select().from(messages).where(and(eq(messages.id, body.messageId), eq(messages.channelId, parentId))).limit(1))[0]
   if (!msg) fail(404, 'not_found', 'Message not found')
   const existing = (await db.select().from(channels).where(eq(channels.parentMessageId, body.messageId)).limit(1))[0]
-  if (existing) return { channel: existing }
+  const attachmentRows = await db.select({ filename: attachments.filename }).from(attachments).where(eq(attachments.messageId, body.messageId))
+  const title = body.name?.trim() || threadTitle(msg.content, attachmentRows.map(row => row.filename))
+  if (existing) return { channel: { ...existing, title } }
   const id = newId()
   const created = nowIso()
-  const name = body.name?.trim() || (msg.content.slice(0, 40) || 'thread')
   await db.insert(channels).values({
     id,
-    name,
+    name: title,
     topic: '',
     type: 'thread',
     visibility: access.channel.visibility,
@@ -40,5 +42,5 @@ export default defineEventHandler(async (event) => {
     updatedAt: created,
   })
   const row = (await db.select().from(channels).where(eq(channels.id, id)).limit(1))[0]
-  return { channel: row }
+  return { channel: { ...row, title } }
 })

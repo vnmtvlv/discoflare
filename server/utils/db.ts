@@ -1,6 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 import { drizzle } from 'drizzle-orm/d1'
 import initSql from '../../drizzle/migrations/0000_init.sql?raw'
+import categorySql from '../../drizzle/migrations/0001_channel_categories.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -18,7 +19,7 @@ export function d1ExecSql(sql: string): string {
     .join('\n')
 }
 
-export const INIT_SQL = d1ExecSql(initSql)
+export const INIT_SQL = d1ExecSql(`${initSql}\n${categorySql}`)
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */
 export async function ensureMigrated(db: D1Database): Promise<boolean> {

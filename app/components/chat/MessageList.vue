@@ -8,6 +8,7 @@ const props = defineProps<{
   members: MemberDTO[]
   channelName?: string
   isDm?: boolean
+  showIntro?: boolean
 }>()
 const emit = defineEmits<{
   reply: [id: string]
@@ -34,13 +35,16 @@ const q = useInfiniteQuery({
 
 const messages = computed(() => {
   const pages = q.data.value?.pages ?? []
-  const all = [...pages].reverse().flatMap((p) => p.messages)
+  return [...pages].reverse().flatMap((p) => p.messages)
+})
+
+const searchResults = computed(() => {
   const needle = ui.searchQuery.trim().toLowerCase()
-  if (!needle) return all
-  return all.filter((m) =>
+  if (!needle) return []
+  return messages.value.filter((m) =>
     m.content.toLowerCase().includes(needle)
     || m.author.displayName.toLowerCase().includes(needle),
-  )
+  ).slice(0, 20)
 })
 
 const names = computed(() => {
@@ -61,7 +65,7 @@ function compactWith(curr: MessageDTO, prev?: MessageDTO) {
 function markReadIfVisible() {
   const el = scroller.value
   const message = messages.value.at(-1)
-  if (!el || !message || ui.searchQuery || document.hidden || !document.hasFocus()) return
+  if (!el || !message || ui.searchOpen || document.hidden || !document.hasFocus()) return
   if (el.scrollHeight - el.scrollTop - el.clientHeight > 120 || message.id === lastRead || message.id.startsWith('tmp:')) return
   lastRead = message.id
   emit('read', message.id)
@@ -111,6 +115,20 @@ onUnmounted(() => {
   window.removeEventListener('focus', markReadIfVisible)
   document.removeEventListener('visibilitychange', markReadIfVisible)
 })
+
+watch(() => ui.searchOpen, (open) => {
+  if (!open) ui.searchQuery = ''
+})
+
+async function goToResult(id: string) {
+  ui.searchOpen = false
+  await nextTick()
+  document.getElementById(`message-${id}`)?.scrollIntoView({ block: 'center' })
+}
+
+function jumpToMessage(id: string) {
+  document.getElementById(`message-${id}`)?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
 </script>
 
 <template>
@@ -120,7 +138,7 @@ onUnmounted(() => {
       <USkeleton class="h-24" />
     </div>
     <UAlert v-else-if="q.error.value" color="error" title="Could not load messages." class="m-3" />
-    <div v-else class="px-4 pt-4 pb-2">
+    <div v-else-if="showIntro !== false" class="px-4 pt-4 pb-2">
       <div class="size-16 rounded-full bg-accented flex items-center justify-center mb-2">
         <UIcon :name="isDm ? 'i-ph-at' : 'i-ph-hash'" class="size-9 text-highlighted" />
       </div>
@@ -128,7 +146,7 @@ onUnmounted(() => {
         Welcome to {{ isDm ? '' : '#' }}{{ channelName || 'channel' }}{{ isDm ? '' : '!' }}
       </h2>
       <p class="mt-1 text-muted text-[15px]">
-        {{ isDm ? `This is the beginning of your direct message history.` : `This is the start of the #${channelName} channel.` }}
+        {{ isDm ? `This is the beginning of your direct message history.` : `This is the start of the #${channelName || 'channel'} channel.` }}
       </p>
     </div>
     <template v-if="messages.length">
@@ -148,18 +166,48 @@ onUnmounted(() => {
           <span class="text-xs font-semibold text-muted px-1">{{ formatDayLabel(m.createdAt) }}</span>
           <div class="flex-1 border-t border-default" />
         </div>
-        <ChatMessageItem
-          :message="m"
-          :names="names"
-          :mine="m.author.id === session.user?.id"
-          :compact="compactWith(m, messages[i - 1])"
-          @reply="emit('reply', m.id)"
-          @edit="emit('edit', m)"
-          @remove="remove(m.id)"
-          @thread="emit('thread', m)"
-          @react="(emoji) => react(m.id, emoji)"
-        />
+        <div :id="`message-${m.id}`">
+          <ChatMessageItem
+            :message="m"
+            :names="names"
+            :mine="m.author.id === session.user?.id"
+            :compact="compactWith(m, messages[i - 1])"
+            @reply="emit('reply', m.id)"
+            @edit="emit('edit', m)"
+            @remove="remove(m.id)"
+            @thread="emit('thread', m)"
+            @jump="jumpToMessage"
+            @react="(emoji) => react(m.id, emoji)"
+          />
+        </div>
       </template>
     </template>
+    <UModal v-model:open="ui.searchOpen" :ui="{ content: 'sm:max-w-2xl' }">
+      <template #content>
+        <div class="p-3">
+          <UInput
+            v-model="ui.searchQuery"
+            icon="i-ph-magnifying-glass"
+            size="xl"
+            placeholder="Search messages"
+            autofocus
+            class="w-full"
+          />
+          <div v-if="ui.searchQuery.trim()" class="mt-2 max-h-96 overflow-y-auto">
+            <button
+              v-for="message in searchResults"
+              :key="message.id"
+              type="button"
+              class="w-full rounded-md px-3 py-2 text-start hover:bg-elevated"
+              @click="goToResult(message.id)"
+            >
+              <span class="block text-xs font-semibold text-highlighted">{{ message.author.displayName }}</span>
+              <span class="block truncate text-sm text-muted">{{ message.content }}</span>
+            </button>
+            <p v-if="!searchResults.length" class="px-3 py-8 text-center text-sm text-muted">No matches</p>
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

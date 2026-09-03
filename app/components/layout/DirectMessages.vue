@@ -4,6 +4,11 @@ import type { ChannelDTO, PublicUser } from '~~/shared/types'
 import { channelPath } from '~~/shared/paths'
 import { dmTitle } from '~~/shared/dm'
 
+type DmSearchMember = PublicUser & {
+  handle: string | null
+  nickname: string | null
+}
+
 const props = defineProps<{ workspaceId: string }>()
 const route = useRoute()
 const session = useSessionStore()
@@ -20,7 +25,7 @@ const picker = ref(false)
 const picked = ref<string[]>([])
 const searchQ = useQuery({
   queryKey: computed(() => ['dm-search', props.workspaceId, q.value]),
-  queryFn: () => $fetch<{ members: PublicUser[] }>(`/api/dms/search?workspaceId=${props.workspaceId}&q=${encodeURIComponent(q.value)}`),
+  queryFn: () => $fetch<{ members: DmSearchMember[] }>(`/api/dms/search?workspaceId=${props.workspaceId}&q=${encodeURIComponent(q.value)}`),
   enabled: computed(() => picker.value),
 })
 
@@ -72,6 +77,10 @@ function inCall(ch: ChannelDTO) {
 function titleOf(ch: ChannelDTO) {
   return ch.title || dmTitle(ch.name, ch.participants ?? [], session.user?.id || '')
 }
+
+function searchName(member: DmSearchMember) {
+  return member.nickname || member.displayName
+}
 </script>
 
 <template>
@@ -79,11 +88,11 @@ function titleOf(ch: ChannelDTO) {
     <div class="flex items-center pr-2 h-6">
       <button
         type="button"
-        class="flex-1 flex items-center gap-0.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted hover:text-default"
+        class="flex-1 flex items-center gap-1 pl-3 pr-1 text-xs font-semibold text-muted hover:text-default"
         @click="collapsed = !collapsed"
       >
+        <span class="text-start">Direct messages</span>
         <UIcon :name="collapsed ? 'i-ph-caret-right' : 'i-ph-caret-down'" class="size-3" />
-        <span class="flex-1 text-start">Direct Messages</span>
       </button>
       <UButton icon="i-ph-plus" color="neutral" variant="ghost" size="xs" square aria-label="New DM" @click="picker = true" />
     </div>
@@ -118,17 +127,33 @@ function titleOf(ch: ChannelDTO) {
 
     <UModal v-model:open="picker" title="New Message" description="Find someone in this server, or pick two or more for a group.">
       <template #body>
-        <UInput v-model="q" icon="i-ph-magnifying-glass" placeholder="Find or start a conversation" autofocus />
-        <ul class="mt-3 max-h-64 overflow-y-auto space-y-0.5">
+        <UInput
+          v-model="q"
+          icon="i-ph-magnifying-glass"
+          placeholder="Search name, nickname, or handle"
+          autocomplete="off"
+          class="w-full"
+          role="combobox"
+          aria-controls="dm-search-results"
+          :aria-expanded="Boolean(searchQ.data.value?.members.length)"
+          autofocus
+        />
+        <ul id="dm-search-results" class="mt-3 max-h-64 overflow-y-auto space-y-0.5" role="listbox">
           <li v-for="m in searchQ.data.value?.members ?? []" :key="m.id" class="flex items-center gap-2">
             <UCheckbox
               :model-value="picked.includes(m.id)"
-              :aria-label="`Add ${m.displayName} to group`"
+              :aria-label="`Add ${searchName(m)} to group`"
               @update:model-value="togglePick(m.id)"
             />
             <button type="button" class="flex-1 flex items-center gap-2 h-9 px-1 rounded-md hover:bg-elevated text-start" @click="openDm(m.id)">
-              <UAvatar size="xs" :text="m.displayName.slice(0, 1).toUpperCase()" />
-              <span class="text-sm">{{ m.displayName }}</span>
+              <UAvatar size="xs" :text="searchName(m).slice(0, 1).toUpperCase()" />
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-sm">{{ searchName(m) }}</span>
+                <span v-if="m.handle || m.nickname" class="block truncate text-xs text-muted">
+                  <template v-if="m.handle">@{{ m.handle }}</template>
+                  <template v-if="m.nickname && m.nickname !== m.displayName"> · {{ m.displayName }}</template>
+                </span>
+              </span>
             </button>
           </li>
         </ul>

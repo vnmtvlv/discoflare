@@ -29,13 +29,21 @@ export type ReactionDTO = {
   me: boolean
 }
 
+export type ReplyPreviewDTO = {
+  id: string
+  authorId: string
+  content: string
+  attachmentCount: number
+  deleted: boolean
+}
+
 export type MessageDTO = {
   id: string
   channelId: string
   workspaceId: string
   author: PublicUser
   content: string
-  replyTo: { id: string; authorId: string; content: string } | null
+  replyTo: ReplyPreviewDTO | null
   mentions: string[]
   attachments: AttachmentDTO[]
   reactions: ReactionDTO[]
@@ -61,6 +69,32 @@ export type WorkspaceDTO = {
   iconR2Key: string | null
   ownerId: string
   createdAt: string
+  updatedAt: string
+}
+
+export type ChannelCategoryDTO = {
+  id: string
+  name: string
+  position: number
+  createdAt: string
+}
+
+export type RightPanelTab = 'members' | 'threads' | 'files'
+
+export type ChannelThreadDTO = {
+  id: string
+  parentMessageId: string
+  title: string
+  author: PublicUser
+  replyCount: number
+  lastReplyAt: string | null
+  createdAt: string
+}
+
+export type ChannelFileDTO = AttachmentDTO & {
+  messageId: string
+  uploader: PublicUser
+  createdAt: string
 }
 
 export type ChannelDTO = {
@@ -70,6 +104,7 @@ export type ChannelDTO = {
   topic: string
   type: ChannelType
   visibility: ChannelVisibility
+  categoryId: string | null
   position: number
   huddleMeetingId: string | null
   parentId: string | null
@@ -86,9 +121,12 @@ export type ChannelDTO = {
 export type RoleDTO = {
   id: string
   workspaceId: string
+  key: string
   name: string
   permissions: number
   position: number
+  isSystem: boolean
+  memberCount?: number
 }
 
 export type MemberDTO = {
@@ -133,6 +171,10 @@ export type SetupHealth = {
     rateLimitDo: boolean
   }
   realtimekit: boolean
+  twitterAuth: boolean
+  appName: string
+  appTitle: string
+  appSubtitle: string
 }
 
 export type ClientMsg =

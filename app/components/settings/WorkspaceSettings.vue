@@ -2,12 +2,12 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import * as z from 'zod'
 import type { FormSubmitEvent, TableColumn } from '@nuxt/ui'
-import type { AuditEntryDTO, ChannelDTO, WorkspaceDTO, MemberDTO } from '~~/shared/types'
-import { Permission } from '~~/shared/permissions'
+import type { AuditEntryDTO, ChannelCategoryDTO, ChannelDTO, WorkspaceDTO, MemberDTO, RoleDTO } from '~~/shared/types'
+import { hasPermission, MemberPermissions, Permission, permissionBitmask, PermissionGrants, type PermissionGrantKey } from '~~/shared/permissions'
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'roles' | 'members' | 'invites' | 'audit'
+type Section = 'overview' | 'channels' | 'roles' | 'members' | 'invites' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
 const open = defineModel<boolean>('open', { default: false })
@@ -32,9 +32,14 @@ const membersQ = useQuery({
   queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
   enabled: computed(() => open.value),
 })
+const rolesQ = useQuery({
+  queryKey: computed(() => ['roles', props.workspaceId]),
+  queryFn: () => $fetch<{ roles: RoleDTO[] }>(`/api/workspaces/${props.workspaceId}/roles`),
+  enabled: computed(() => open.value),
+})
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', props.workspaceId]),
-  queryFn: () => $fetch<{ channels: ChannelDTO[] }>(`/api/workspaces/${props.workspaceId}/channels`),
+  queryFn: () => $fetch<{ categories: ChannelCategoryDTO[]; channels: ChannelDTO[] }>(`/api/workspaces/${props.workspaceId}/channels`),
   enabled: computed(() => open.value),
 })
 const invitesQ = useQuery({
@@ -47,13 +52,14 @@ const auditQ = useQuery({
   queryFn: () => $fetch<{ entries: AuditEntryDTO[] }>(`/api/workspaces/${props.workspaceId}/audit`),
   enabled: computed(() => open.value && section.value === 'audit'),
 })
-const { can } = usePermissions(computed(() => membersQ.data.value?.members))
+const { can, mine } = usePermissions(computed(() => membersQ.data.value?.members))
 
 watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = n }, { immediate: true })
 watch(open, (v) => { if (v) section.value = 'overview' })
 
 const workspaceNav = [
   { id: 'overview' as const, label: 'Overview' },
+  { id: 'channels' as const, label: 'Channels' },
   { id: 'roles' as const, label: 'Roles' },
   { id: 'audit' as const, label: 'Audit Log' },
 ]
@@ -65,21 +71,71 @@ const userNav = [
 const inviteUrl = ref('')
 const inviting = ref(false)
 const kickId = ref<string | null>(null)
+const selectedRoleId = ref<string | null>(null)
+const roleName = ref('')
+const rolePermissions = ref(0)
+const roleSaving = ref(false)
+const roleCreating = ref(false)
+const roleDeleteId = ref<string | null>(null)
+const assigningId = ref<string | null>(null)
+const workspaceIconInput = ref<HTMLInputElement | null>(null)
+const workspaceIconBusy = ref(false)
+const createCategoryOpen = ref(false)
+const newCategoryName = ref('')
+const categoryCreating = ref(false)
+const selectedCategoryId = ref<string | null>(null)
+const categoryName = ref('')
+const categorySaving = ref(false)
+const categoryDeleteId = ref<string | null>(null)
+const channelAssigningId = ref<string | null>(null)
 
-const roles = computed(() => {
-  const map = new Map<string, { name: string; position: number; count: number }>()
-  for (const m of membersQ.data.value?.members ?? []) {
-    const cur = map.get(m.role.id) ?? { name: m.role.name, position: m.role.position, count: 0 }
-    cur.count += 1
-    map.set(m.role.id, cur)
+const roles = computed(() => rolesQ.data.value?.roles ?? [])
+const categories = computed(() => channelsQ.data.value?.categories ?? [])
+const workspaceChannels = computed(() => (channelsQ.data.value?.channels ?? []).filter(channel => channel.type !== 'dm' && channel.type !== 'thread'))
+const selectedCategory = computed(() => categories.value.find(category => category.id === selectedCategoryId.value) ?? null)
+const categoryOptions = computed(() => [
+  { label: 'Uncategorized', value: 'uncategorized' },
+  ...categories.value.map(category => ({ label: category.name, value: category.id })),
+])
+const selectedRole = computed(() => roles.value.find(role => role.id === selectedRoleId.value) ?? null)
+const isOwner = computed(() => mine.value?.role.key === 'owner')
+const roleOptions = computed(() => roles.value
+  .filter(role => role.key !== 'owner' && (role.key !== 'admin' || isOwner.value))
+  .map(role => ({ label: roleLabel(role.name), value: role.id })))
+
+watch([roles, section], ([list, activeSection]) => {
+  if (activeSection !== 'roles' || !list.length) return
+  if (!selectedRoleId.value || !list.some(role => role.id === selectedRoleId.value)) {
+    selectedRoleId.value = list.find(role => role.key === 'member')?.id ?? list[0]!.id
   }
-  return [...map.values()].sort((a, b) => a.position - b.position)
-})
+}, { immediate: true })
+
+watch(selectedRole, (role) => {
+  if (!role) return
+  roleName.value = roleLabel(role.name)
+  rolePermissions.value = role.permissions
+}, { immediate: true })
+
+watch([categories, section], ([list, activeSection]) => {
+  if (activeSection !== 'channels') return
+  if (!selectedCategoryId.value || !list.some(category => category.id === selectedCategoryId.value)) {
+    selectedCategoryId.value = list[0]?.id ?? null
+  }
+}, { immediate: true })
+
+watch(selectedCategory, (category) => {
+  categoryName.value = category?.name ?? ''
+}, { immediate: true })
 
 const memberCount = computed(() => membersQ.data.value?.members.length ?? 0)
-const channelCount = computed(() => (channelsQ.data.value?.channels ?? []).filter((c) => c.type !== 'dm' && c.type !== 'thread').length)
+const channelCount = computed(() => workspaceChannels.value.length)
 const workspaceName = computed(() => workspaceQ.data.value?.workspace.name || 'Workspace')
 const workspaceInitial = computed(() => workspaceName.value.slice(0, 1).toUpperCase())
+const workspaceIconUrl = computed(() => {
+  const workspace = workspaceQ.data.value?.workspace
+  if (!workspace?.iconR2Key) return undefined
+  return `/api/workspaces/${props.workspaceId}/icon?v=${encodeURIComponent(workspace.updatedAt)}`
+})
 
 async function onSave(event: FormSubmitEvent<Schema>) {
   saving.value = true
@@ -93,6 +149,124 @@ async function onSave(event: FormSubmitEvent<Schema>) {
   }
   finally {
     saving.value = false
+  }
+}
+
+async function uploadWorkspaceIcon(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  workspaceIconBusy.value = true
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    await $fetch(`/api/workspaces/${props.workspaceId}/icon`, { method: 'PUT', body })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['workspace', props.workspaceId] }),
+      qc.invalidateQueries({ queryKey: ['workspaces'] }),
+    ])
+    toast.add({ title: 'Workspace icon updated', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    workspaceIconBusy.value = false
+    input.value = ''
+  }
+}
+
+async function removeWorkspaceIcon() {
+  workspaceIconBusy.value = true
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/icon`, { method: 'DELETE' })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['workspace', props.workspaceId] }),
+      qc.invalidateQueries({ queryKey: ['workspaces'] }),
+    ])
+    toast.add({ title: 'Workspace icon removed', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    workspaceIconBusy.value = false
+  }
+}
+
+async function createCategory() {
+  const name = newCategoryName.value.trim()
+  if (!name) return
+  categoryCreating.value = true
+  try {
+    const result = await $fetch<{ category: ChannelCategoryDTO }>(`/api/workspaces/${props.workspaceId}/categories`, {
+      method: 'POST',
+      body: { name },
+    })
+    await qc.invalidateQueries({ queryKey: ['channels', props.workspaceId] })
+    selectedCategoryId.value = result.category.id
+    newCategoryName.value = ''
+    createCategoryOpen.value = false
+    toast.add({ title: 'Category created', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    categoryCreating.value = false
+  }
+}
+
+async function saveCategory() {
+  const category = selectedCategory.value
+  const name = categoryName.value.trim()
+  if (!category || !name) return
+  categorySaving.value = true
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/categories/${category.id}`, {
+      method: 'PATCH',
+      body: { name },
+    })
+    await qc.invalidateQueries({ queryKey: ['channels', props.workspaceId] })
+    toast.add({ title: 'Category updated', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    categorySaving.value = false
+  }
+}
+
+async function confirmDeleteCategory() {
+  const categoryId = categoryDeleteId.value
+  if (!categoryId) return
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/categories/${categoryId}`, { method: 'DELETE' })
+    categoryDeleteId.value = null
+    selectedCategoryId.value = null
+    await qc.invalidateQueries({ queryKey: ['channels', props.workspaceId] })
+    toast.add({ title: 'Category deleted', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+}
+
+async function assignChannelCategory(channelId: string, categoryId: string) {
+  channelAssigningId.value = channelId
+  try {
+    await $fetch(`/api/channels/${channelId}`, {
+      method: 'PATCH',
+      body: { categoryId: categoryId === 'uncategorized' ? null : categoryId },
+    })
+    await qc.invalidateQueries({ queryKey: ['channels', props.workspaceId] })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    channelAssigningId.value = null
   }
 }
 
@@ -126,6 +300,93 @@ async function confirmKick() {
   toast.add({ title: 'Member kicked', color: 'success' })
 }
 
+async function createRole() {
+  roleCreating.value = true
+  try {
+    const names = new Set(roles.value.map(role => role.name.toLocaleLowerCase()))
+    let name = 'New role'
+    let suffix = 2
+    while (names.has(name.toLocaleLowerCase())) name = `New role ${suffix++}`
+    const res = await $fetch<{ role: RoleDTO }>(`/api/workspaces/${props.workspaceId}/roles`, {
+      method: 'POST',
+      body: { name, permissions: MemberPermissions },
+    })
+    await qc.invalidateQueries({ queryKey: ['roles', props.workspaceId] })
+    selectedRoleId.value = res.role.id
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    roleCreating.value = false
+  }
+}
+
+function toggleGrant(key: PermissionGrantKey, enabled: boolean) {
+  const active = PermissionGrants.filter(grant => grant.key !== key && hasPermission(rolePermissions.value, grant.flag)).map(grant => grant.key)
+  if (enabled) active.push(key)
+  rolePermissions.value = permissionBitmask(active)
+}
+
+async function saveRole() {
+  const role = selectedRole.value
+  if (!role || role.isSystem || !roleName.value.trim()) return
+  roleSaving.value = true
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/roles/${role.id}`, {
+      method: 'PATCH',
+      body: { name: roleName.value.trim(), permissions: rolePermissions.value },
+    })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['roles', props.workspaceId] }),
+      qc.invalidateQueries({ queryKey: ['members', props.workspaceId] }),
+    ])
+    toast.add({ title: 'Role saved', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    roleSaving.value = false
+  }
+}
+
+async function confirmDeleteRole() {
+  const roleId = roleDeleteId.value
+  if (!roleId) return
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/roles/${roleId}`, { method: 'DELETE' })
+    roleDeleteId.value = null
+    selectedRoleId.value = null
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['roles', props.workspaceId] }),
+      qc.invalidateQueries({ queryKey: ['members', props.workspaceId] }),
+    ])
+    toast.add({ title: 'Role deleted', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+}
+
+async function assignRole(userId: string, roleId: string) {
+  assigningId.value = userId
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/members/${userId}`, { method: 'PATCH', body: { roleId } })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['members', props.workspaceId] }),
+      qc.invalidateQueries({ queryKey: ['roles', props.workspaceId] }),
+    ])
+    toast.add({ title: 'Member role updated', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    assigningId.value = null
+  }
+}
+
 const columns: TableColumn<AuditEntryDTO>[] = [
   { accessorKey: 'createdAt', header: 'When', cell: ({ row }) => formatDateTime(row.original.createdAt) },
   { accessorKey: 'actorName', header: 'Actor' },
@@ -136,7 +397,8 @@ const columns: TableColumn<AuditEntryDTO>[] = [
 function roleLabel(name: string) {
   if (name === 'owner') return 'Owner'
   if (name === 'admin') return 'Admin'
-  return 'Member'
+  if (name === 'member') return 'Member'
+  return name
 }
 
 function navClass(id: Section) {
@@ -183,7 +445,37 @@ function navClass(id: Section) {
     <template v-if="section === 'overview'">
       <h1 class="text-xl font-semibold text-highlighted">Workspace Overview</h1>
       <div class="mt-8 flex items-start gap-6">
-        <UAvatar size="3xl" :text="workspaceInitial" />
+        <div class="flex shrink-0 flex-col items-center gap-2">
+          <UAvatar size="3xl" :src="workspaceIconUrl" :text="workspaceInitial" :alt="workspaceName" />
+          <input
+            ref="workspaceIconInput"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            class="hidden"
+            @change="uploadWorkspaceIcon"
+          >
+          <div v-if="can(Permission.manageWorkspace)" class="flex items-center gap-1">
+            <UButton
+              size="xs"
+              color="neutral"
+              variant="soft"
+              label="Change icon"
+              :loading="workspaceIconBusy"
+              @click="workspaceIconInput?.click()"
+            />
+            <UTooltip v-if="workspaceQ.data.value?.workspace.iconR2Key" text="Remove icon">
+              <UButton
+                size="xs"
+                color="error"
+                variant="ghost"
+                icon="i-ph-trash"
+                aria-label="Remove workspace icon"
+                :disabled="workspaceIconBusy"
+                @click="removeWorkspaceIcon"
+              />
+            </UTooltip>
+          </div>
+        </div>
         <UForm :schema="schema" :state="state" class="flex-1 max-w-md space-y-4" @submit="onSave">
           <UFormField name="name" label="Workspace Name">
             <UInput v-model="state.name" class="w-full" :disabled="!can(Permission.manageWorkspace)" />
@@ -204,18 +496,123 @@ function navClass(id: Section) {
       <p class="mt-6 text-sm text-muted">This install is a single workspace. There is no server switcher.</p>
     </template>
 
-    <template v-else-if="section === 'roles'">
-      <h1 class="text-xl font-semibold text-highlighted">Roles</h1>
-      <p class="mt-1 text-sm text-muted">Default roles for this workspace. Owner and admin have full permissions.</p>
-      <ul class="mt-6 divide-y divide-default">
-        <li v-for="r in roles" :key="r.name" class="flex items-center gap-3 py-3">
-          <span class="size-3 rounded-full bg-primary" />
-          <div class="min-w-0 flex-1">
-            <p class="font-medium text-highlighted">{{ roleLabel(r.name) }}</p>
-            <p class="text-xs text-muted">{{ r.count }} {{ r.count === 1 ? 'member' : 'members' }}</p>
+    <template v-else-if="section === 'channels'">
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl font-semibold text-highlighted">Channel categories</h1>
+        <UButton
+          v-if="can(Permission.manageChannels)"
+          icon="i-ph-plus"
+          label="Add category"
+          size="sm"
+          @click="createCategoryOpen = true"
+        />
+      </div>
+      <div class="mt-6 grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <div class="space-y-1">
+          <button
+            v-for="category in categories"
+            :key="category.id"
+            type="button"
+            class="w-full rounded-md px-3 py-2 text-start hover:bg-elevated"
+            :class="selectedCategoryId === category.id ? 'bg-accented text-highlighted' : 'text-muted'"
+            @click="selectedCategoryId = category.id"
+          >
+            <span class="block truncate text-sm font-medium">{{ category.name }}</span>
+            <span class="block text-xs text-muted">
+              {{ workspaceChannels.filter(channel => channel.categoryId === category.id).length }} channels
+            </span>
+          </button>
+          <p v-if="!categories.length" class="px-3 py-2 text-sm text-muted">No categories</p>
+        </div>
+        <div v-if="selectedCategory" class="min-w-0">
+          <UFormField label="Category name">
+            <UInput
+              v-model="categoryName"
+              class="w-full"
+              :disabled="!can(Permission.manageChannels)"
+              @keyup.enter="saveCategory"
+            />
+          </UFormField>
+          <div v-if="can(Permission.manageChannels)" class="mt-4 flex items-center justify-between gap-3">
+            <UButton color="error" variant="ghost" label="Delete category" @click="categoryDeleteId = selectedCategory.id" />
+            <UButton label="Save changes" :loading="categorySaving" :disabled="!categoryName.trim()" @click="saveCategory" />
           </div>
+        </div>
+      </div>
+      <h2 class="mt-10 text-sm font-semibold text-highlighted">Channels</h2>
+      <ul class="mt-2 divide-y divide-default">
+        <li v-for="channel in workspaceChannels" :key="channel.id" class="flex items-center gap-3 py-3">
+          <UIcon :name="channel.type === 'voice' ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 shrink-0 text-muted" />
+          <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ channel.name }}</span>
+          <USelect
+            :model-value="channel.categoryId || 'uncategorized'"
+            :items="categoryOptions"
+            value-key="value"
+            label-key="label"
+            size="sm"
+            class="w-48"
+            :disabled="!can(Permission.manageChannels)"
+            :loading="channelAssigningId === channel.id"
+            :aria-label="`Category for ${channel.name}`"
+            @update:model-value="assignChannelCategory(channel.id, String($event))"
+          />
         </li>
       </ul>
+    </template>
+
+    <template v-else-if="section === 'roles'">
+      <div class="flex items-center justify-between gap-3">
+        <h1 class="text-xl font-semibold text-highlighted">Roles</h1>
+        <UButton
+          v-if="can(Permission.manageRoles)"
+          icon="i-ph-plus"
+          label="Add role"
+          size="sm"
+          :loading="roleCreating"
+          @click="createRole"
+        />
+      </div>
+      <div class="mt-6 grid min-h-[520px] gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+        <div class="space-y-1">
+          <button
+            v-for="role in roles"
+            :key="role.id"
+            type="button"
+            class="w-full rounded-md px-3 py-2 text-start hover:bg-elevated"
+            :class="selectedRoleId === role.id ? 'bg-accented text-highlighted' : 'text-muted'"
+            @click="selectedRoleId = role.id"
+          >
+            <span class="block truncate text-sm font-medium">{{ roleLabel(role.name) }}</span>
+            <span class="block text-xs text-muted">{{ role.memberCount ?? 0 }} {{ (role.memberCount ?? 0) === 1 ? 'member' : 'members' }}</span>
+          </button>
+        </div>
+        <div v-if="selectedRole" class="min-w-0">
+          <div class="flex items-start gap-3">
+            <UFormField label="Role name" class="min-w-0 flex-1">
+              <UInput v-model="roleName" class="w-full" :disabled="selectedRole.isSystem || !can(Permission.manageRoles)" />
+            </UFormField>
+            <UBadge v-if="selectedRole.isSystem" label="System" color="neutral" variant="subtle" class="mt-7" />
+          </div>
+          <div class="mt-6 divide-y divide-default">
+            <div v-for="grant in PermissionGrants" :key="grant.key" class="flex items-start justify-between gap-6 py-3">
+              <div class="min-w-0">
+                <p class="text-sm font-medium text-highlighted">{{ grant.label }}</p>
+                <p class="mt-0.5 text-xs text-muted">{{ grant.description }}</p>
+              </div>
+              <USwitch
+                :model-value="hasPermission(rolePermissions, grant.flag)"
+                :disabled="selectedRole.isSystem || !can(Permission.manageRoles)"
+                :aria-label="grant.label"
+                @update:model-value="toggleGrant(grant.key, Boolean($event))"
+              />
+            </div>
+          </div>
+          <div v-if="!selectedRole.isSystem && can(Permission.manageRoles)" class="mt-6 flex items-center justify-between gap-3">
+            <UButton color="error" variant="ghost" label="Delete role" @click="roleDeleteId = selectedRole.id" />
+            <UButton label="Save changes" :loading="roleSaving" :disabled="!roleName.trim()" @click="saveRole" />
+          </div>
+        </div>
+      </div>
     </template>
 
     <template v-else-if="section === 'members'">
@@ -228,6 +625,18 @@ function navClass(id: Section) {
             <p class="font-medium truncate">{{ m.nickname || m.user.displayName }}</p>
             <p class="text-xs text-muted">{{ roleLabel(m.role.name) }}</p>
           </div>
+          <USelect
+            v-if="can(Permission.manageRoles) && m.role.key !== 'owner'"
+            :model-value="m.role.id"
+            :items="roleOptions"
+            value-key="value"
+            label-key="label"
+            size="sm"
+            class="w-40"
+            :loading="assigningId === m.user.id"
+            aria-label="Assign role"
+            @update:model-value="assignRole(m.user.id, String($event))"
+          />
           <UButton
             v-if="can(Permission.kick) && m.role.name !== 'owner'"
             size="xs"
@@ -275,6 +684,39 @@ function navClass(id: Section) {
     <template #footer>
       <UButton color="neutral" variant="outline" label="Cancel" @click="kickId = null" />
       <UButton color="error" label="Kick" @click="confirmKick" />
+    </template>
+  </UModal>
+  <UModal :open="Boolean(roleDeleteId)" title="Delete this role?" @update:open="(v: boolean) => { if (!v) roleDeleteId = null }">
+    <template #body>
+      <p class="text-sm text-muted">Members using it will move to the Member role.</p>
+    </template>
+    <template #footer>
+      <UButton color="neutral" variant="outline" label="Cancel" @click="roleDeleteId = null" />
+      <UButton color="error" label="Delete role" @click="confirmDeleteRole" />
+    </template>
+  </UModal>
+  <UModal v-model:open="createCategoryOpen" title="Add category">
+    <template #body>
+      <UFormField label="Category name">
+        <UInput v-model="newCategoryName" class="w-full" autofocus @keyup.enter="createCategory" />
+      </UFormField>
+    </template>
+    <template #footer>
+      <UButton color="neutral" variant="outline" label="Cancel" @click="createCategoryOpen = false" />
+      <UButton label="Add category" :loading="categoryCreating" :disabled="!newCategoryName.trim()" @click="createCategory" />
+    </template>
+  </UModal>
+  <UModal
+    :open="Boolean(categoryDeleteId)"
+    title="Delete this category?"
+    @update:open="(value: boolean) => { if (!value) categoryDeleteId = null }"
+  >
+    <template #body>
+      <p class="text-sm text-muted">Its channels will become uncategorized.</p>
+    </template>
+    <template #footer>
+      <UButton color="neutral" variant="outline" label="Cancel" @click="categoryDeleteId = null" />
+      <UButton color="error" label="Delete category" @click="confirmDeleteCategory" />
     </template>
   </UModal>
 </template>

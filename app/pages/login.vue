@@ -8,6 +8,7 @@ const session = useSessionStore()
 const route = useRoute()
 const toast = useToast()
 const busy = ref(false)
+const twitterBusy = ref(false)
 const error = ref<string | null>(null)
 
 const schema = z.object({
@@ -19,6 +20,10 @@ const state = reactive<Partial<Schema>>({ email: '', password: '' })
 
 onMounted(async () => {
   await session.refresh()
+  if (session.user) {
+    await navigateTo(safeNextPath())
+    return
+  }
   if (session.health && session.health.users === 0) await navigateTo('/setup')
 })
 
@@ -38,6 +43,35 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     busy.value = false
   }
 }
+
+function safeNextPath() {
+  const next = typeof route.query.next === 'string' ? route.query.next : '/'
+  return next.startsWith('/') && !next.startsWith('//') ? next : '/'
+}
+
+async function signInWithX() {
+  twitterBusy.value = true
+  error.value = null
+  try {
+    const callbackURL = new URL(safeNextPath(), window.location.origin).toString()
+    const res = await $fetch<{ url?: string }>('/api/auth/sign-in/social', {
+      method: 'POST',
+      body: {
+        provider: 'twitter',
+        callbackURL,
+        errorCallbackURL: `${window.location.origin}/login`,
+        disableRedirect: true,
+      },
+    })
+    if (!res.url) throw new Error('X sign-in did not return a redirect')
+    window.location.assign(res.url)
+  }
+  catch (err) {
+    error.value = errorMessage(err)
+    toast.add({ title: error.value, color: 'error' })
+    twitterBusy.value = false
+  }
+}
 </script>
 
 <template>
@@ -52,7 +86,22 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       class="mt-6"
     />
 
-    <UForm :schema="schema" :state="state" class="mt-8 space-y-4" @submit="onSubmit">
+    <template v-if="session.health?.twitterAuth">
+      <UButton
+        class="mt-8"
+        size="lg"
+        color="neutral"
+        variant="outline"
+        icon="i-ph-x-logo"
+        label="Continue with X"
+        block
+        :loading="twitterBusy"
+        @click="signInWithX"
+      />
+      <USeparator label="or" class="my-6" />
+    </template>
+
+    <UForm :schema="schema" :state="state" :class="session.health?.twitterAuth ? 'space-y-4' : 'mt-8 space-y-4'" @submit="onSubmit">
       <UFormField name="email" label="Email">
         <UInput
           v-model="state.email"

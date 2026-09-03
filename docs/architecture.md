@@ -31,8 +31,9 @@ RealtimeKit
 
 ## Local vs production
 
-- `pnpm dev` — Nuxt + wrangler `getPlatformProxy` (D1/KV/R2; DO stubs via `wrangler.dev.jsonc`).
-- `pnpm dev:full` / `pnpm preview` — `nuxt build && wrangler dev` (WebSockets + hibernation as in production).
+- `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
+- `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
+- `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 
 ## Threads and reads

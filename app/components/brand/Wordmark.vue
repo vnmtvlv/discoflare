@@ -1,9 +1,11 @@
 <script setup lang="ts">
 const props = withDefaults(defineProps<{
   compact?: boolean
+  name?: string
   size?: 'sm' | 'md' | 'lg'
 }>(), {
   compact: false,
+  name: 'Discoflare',
   size: 'md',
 })
 
@@ -31,6 +33,6 @@ const gapClass = computed(() => {
 <template>
   <div class="flex items-center" :class="gapClass">
     <BrandLogo :size="logoSize" alt="" :priority="variant !== 'sm'" />
-    <span class="font-medium tracking-tight text-highlighted" :class="textClass">Discoflare</span>
+    <span class="font-brand font-semibold tracking-tight text-highlighted" :class="textClass">{{ props.name }}</span>
   </div>
 </template>

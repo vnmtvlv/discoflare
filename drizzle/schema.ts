@@ -105,12 +105,22 @@ export const workspace = sqliteTable('workspace', {
   check('workspace_singleton_check', sql`${table.id} = 'main'`),
 ])
 
+export const channelCategories = sqliteTable('channel_categories', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  position: integer('position').notNull().default(0),
+  ...isoTimestamps(),
+}, table => [
+  index('channel_categories_position_idx').on(table.position),
+])
+
 export const channels = sqliteTable('channels', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   topic: text('topic').notNull().default(''),
   type: text('type', { enum: ['text', 'voice', 'thread', 'dm'] }).notNull(),
   visibility: text('visibility', { enum: ['workspace', 'private'] }).notNull().default('workspace'),
+  categoryId: text('category_id').references(() => channelCategories.id, { onDelete: 'set null' }),
   position: integer('position').notNull().default(0),
   huddleMeetingId: text('huddle_meeting_id'),
   parentId: text('parent_id').references((): AnySQLiteColumn => channels.id, { onDelete: 'cascade' }),
@@ -119,6 +129,7 @@ export const channels = sqliteTable('channels', {
 }, table => [
   index('channels_position_idx').on(table.position),
   index('channels_type_idx').on(table.type),
+  index('channels_category_id_idx').on(table.categoryId),
   index('channels_parent_id_idx').on(table.parentId),
   uniqueIndex('channels_thread_root_unique').on(table.parentMessageId).where(sql`${table.type} = 'thread'`),
   check('channels_type_check', sql`${table.type} in ('text', 'voice', 'thread', 'dm')`),
@@ -235,6 +246,7 @@ export const schema = {
   users,
   workspace,
   roles,
+  channelCategories,
   channels,
   channelMembers,
   messages,

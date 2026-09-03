@@ -43,7 +43,8 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
     mentions.set(m.messageId, list)
   }
 
-  const attRows = await db.select().from(attachments).where(inArray(attachments.messageId, ids))
+  const attachmentMessageIds = [...new Set([...ids, ...replyIds])]
+  const attRows = await db.select().from(attachments).where(inArray(attachments.messageId, attachmentMessageIds))
   const atts = new Map<string, AttachmentDTO[]>()
   for (const a of attRows) {
     if (!a.messageId) continue
@@ -52,11 +53,17 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
     atts.set(a.messageId, list)
   }
 
-  const replies = new Map<string, { id: string; authorId: string; content: string }>()
+  const replies = new Map<string, NonNullable<MessageDTO['replyTo']>>()
   if (replyIds.length) {
     const replyRows = await db.select().from(messages).where(inArray(messages.id, replyIds))
     for (const r of replyRows) {
-      replies.set(r.id, { id: r.id, authorId: r.authorId, content: (r.deletedAt ? '' : r.content).slice(0, 180) })
+      replies.set(r.id, {
+        id: r.id,
+        authorId: r.authorId,
+        content: (r.deletedAt ? '' : r.content).slice(0, 180),
+        attachmentCount: atts.get(r.id)?.length ?? 0,
+        deleted: Boolean(r.deletedAt),
+      })
     }
   }
 

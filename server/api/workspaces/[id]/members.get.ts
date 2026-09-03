@@ -37,9 +37,11 @@ export default defineEventHandler(async (event) => {
       role: {
         id: r.role.id,
         workspaceId: id,
+        key: r.role.key,
         name: r.role.name,
         permissions: r.role.permissionsBitmask,
         position: r.role.position,
+        isSystem: r.role.isSystem,
       },
       nickname: r.nickname,
       status: statusMap.get(r.user.id) ?? 'offline',

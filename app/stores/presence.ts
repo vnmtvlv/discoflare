@@ -3,6 +3,7 @@ import type { PresenceStatus } from '~~/shared/types'
 
 export const usePresenceStore = defineStore('presence', () => {
   const byUser = ref<Record<string, PresenceStatus>>({})
+  const selfUserId = ref<string | null>(null)
   const typing = ref<Record<string, Record<string, boolean>>>({})
   const typingTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
@@ -32,8 +33,12 @@ export const usePresenceStore = defineStore('presence', () => {
   }
 
   function statusOf(userId: string): PresenceStatus {
-    return byUser.value[userId] ?? 'offline'
+    return byUser.value[userId] ?? (userId === selfUserId.value ? 'online' : 'offline')
   }
 
-  return { byUser, typing, apply, markTyping, typingIn, statusOf }
+  function setSelf(userId: string | null) {
+    selfUserId.value = userId
+  }
+
+  return { byUser, typing, apply, markTyping, typingIn, statusOf, setSelf }
 })

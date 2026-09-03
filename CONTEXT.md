@@ -5,23 +5,27 @@ Self-hosted team chat that runs on a Cloudflare account. One operator, many memb
 ## Language
 
 **Workspace**:
-The single named space in a Discoflare installation. It owns the installation's members, roles, channels, and invites. Its fixed id is `main`; owned tables do not repeat `workspace_id`.
+The single named space in a Discoflare installation. It owns the installation's members, roles, channels, and invites.
 _Avoid_: Guild, server, team (in data), tenant
 
 **Channel**:
 A named stream inside the workspace. Type is `text`, `voice`, `thread`, or `dm`; visibility is `workspace` or `private`.
 _Avoid_: Room, chat, conversation
 
+**Channel Category**:
+An ordered, collapsible sidebar group for workspace text and voice Channels. A Channel may be uncategorized. Direct Messages and Threads do not belong to Channel Categories.
+_Avoid_: Folder, section as a separate data model, category as a Channel type
+
 **Channel Member**:
-A workspace member granted access to a private Channel. Stored in `channel_members`; Direct Message participants use the same relation. Threads inherit access from their parent Channel.
+A workspace member granted access to a private Channel. Direct Message participants are Channel Members, and Threads inherit access from their parent Channel.
 _Avoid_: DM participant as a separate entity, channel role
 
 **Direct Message**:
-A private Channel among workspace members. Two members is 1:1; three to twenty-five is a group. Its access list is stored in `channel_members`.
+A private Channel among workspace members. Two members is 1:1; three to twenty-five is a group.
 _Avoid_: Friend chat, private message, Group DM as a separate kind, DM voice channel
 
 **Huddle**:
-A live voice (optional camera) session on a voice channel or on a Direct Message. Media is a RealtimeKit meeting; Discoflare only stores meeting id and participants.
+A live voice session, optionally with camera, on a Voice Channel or Direct Message.
 _Avoid_: Call, meeting (except UI copy), a second conversation entity
 
 **Voice channel**:
@@ -41,21 +45,25 @@ An active User, as presented in workspace member lists. It is a state of User, n
 _Avoid_: User-in-server record, participant (except huddle media peers)
 
 **Role**:
-Named installation-wide permission set: `owner`, `admin`, or `member`.
+Named reusable set of workspace Grants assigned to Members. Owner, Admin, and Member are protected system Roles; operators may add custom Roles.
 _Avoid_: Rank, group
+
+**Grant**:
+A workspace permission included in a Role. A Member receives the Grants held by their assigned Role; the workspace owner always has every Grant.
+_Avoid_: Capability, privilege
 
 **Invite**:
 A code that grants membership in the workspace with the default member role.
 _Avoid_: Link (alone), invite URL as the entity
 
 **Message**:
-A chat event in a channel. Soft-deleted via `deleted_at`. Live path is the Channel Durable Object; history source of truth is D1.
+A written chat event in a Channel.
 _Avoid_: Post, comment
 
 **Attachment**:
-A file blob in R2 referenced by a message.
+A file shared with a Message.
 _Avoid_: Upload, blob (in product language)
 
 **Presence**:
-Ephemeral online / idle / offline for a member. Lives in the workspace presence Durable Object, not D1.
+A Member's ephemeral online, idle, or offline state.
 _Avoid_: User status, membership status, availability

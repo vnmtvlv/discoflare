@@ -17,6 +17,7 @@
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, monospace;
 }
 
@@ -43,7 +44,7 @@
 }
 
 .df-panel {
-  background-color: #232428;
+  background-color: color-mix(in oklab, var(--ui-bg-muted) 72%, var(--ui-bg-accented));
 }
 
 .df-composer {
