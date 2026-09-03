@@ -82,4 +82,36 @@ Full realtime locally:
 pnpm dev:full
 ```
 
+## Docker / Coolify
+
+The root `docker-compose.yml` pulls the versioned multi-architecture image from `ghcr.io/vnmtvlv/discoflare`. It runs the built Nuxt Worker through local Wrangler/Miniflare and stores the simulated D1, R2, KV, and Durable Object state together in the `discoflare-data` volume.
+
+Create a `.env` beside the Compose file:
+
+```dotenv
+PUBLIC_ORIGIN=https://chat.example.com
+AUTH_SECRET=replace-with-a-random-32-character-or-longer-secret
+ADMIN_EMAIL=owner@example.com
+ADMIN_PASSWORD=replace-with-a-strong-password
+ADMIN_NAME=Owner
+```
+
+Then start it:
+
+```bash
+docker compose up -d
+```
+
+For Coolify:
+
+1. Create an application from this Git repository and choose the Docker Compose build pack.
+2. Use `/` as the base directory and `/docker-compose.yml` as the Compose location.
+3. Keep Raw Compose disabled.
+4. Set the required environment variables and route the `discoflare` service domain to container port `3000`.
+5. Deploy and verify `/api/setup/health` before signing in.
+
+`PUBLIC_ORIGIN` must exactly match the browser-facing origin, including `https://` and any non-default port, with no path. Do not scale the service above one replica: every live binding is owned by that one process and one volume. Stop the container before taking a file-level volume backup so SQLite-backed state is quiescent. Restores must replace the whole volume as one unit.
+
+The Docker mode does not require a Cloudflare account. RealtimeKit huddles and X sign-in remain external integrations and require network access when configured. Miniflare is Cloudflare's local development simulator, so this repository pins and tests the runtime version used by each Discoflare container release.
+
 Sandbox-backed development is documented separately in [Sandbox development](sandbox-development.md).

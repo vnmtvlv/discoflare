@@ -35,6 +35,7 @@ RealtimeKit
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
 - `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
+- Docker Compose — one local Wrangler/Miniflare process owns the Worker and all bindings, persisted together in one volume. It is a single-node topology and must not be replicated.
 
 ## Threads and reads
 

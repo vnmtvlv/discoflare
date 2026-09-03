@@ -1,0 +1,42 @@
+services:
+  discoflare:
+    image: ghcr.io/vnmtvlv/discoflare:${DISCOFLARE_VERSION:-0.0.1}
+    restart: unless-stopped
+    stop_grace_period: 30s
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the public URL, for example https://chat.example.com}
+      AUTH_SECRET: ${AUTH_SECRET:?Set a random secret of at least 32 characters}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?Set the initial owner email}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set the initial owner password}
+      ADMIN_NAME: ${ADMIN_NAME:?Set the initial owner name}
+      ADMIN_HANDLE: ${ADMIN_HANDLE:-}
+      ADMIN_WORKSPACE: ${ADMIN_WORKSPACE:-HQ}
+      APP_NAME: ${APP_NAME:-Discoflare}
+      APP_TITLE: ${APP_TITLE:-One workspace for humans, agents, and tasks.}
+      APP_SUBTITLE: ${APP_SUBTITLE:-Built on your own server.}
+      TWITTER_CLIENT_ID: ${TWITTER_CLIENT_ID:-}
+      TWITTER_CLIENT_SECRET: ${TWITTER_CLIENT_SECRET:-}
+      REALTIMEKIT_ACCOUNT_ID: ${REALTIMEKIT_ACCOUNT_ID:-}
+      REALTIMEKIT_APP_ID: ${REALTIMEKIT_APP_ID:-}
+      REALTIMEKIT_API_KEY: ${REALTIMEKIT_API_KEY:-}
+      REALTIMEKIT_API_SECRET: ${REALTIMEKIT_API_SECRET:-}
+      REALTIMEKIT_PRESET_VOICE: ${REALTIMEKIT_PRESET_VOICE:-voice}
+      REALTIMEKIT_PRESET_AV: ${REALTIMEKIT_PRESET_AV:-group_call_host}
+    volumes:
+      - discoflare-data:/data
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/setup/health').then(r=>r.json()).then(v=>process.exit(v.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 45s
+
+volumes:
+  discoflare-data:
+

@@ -51,7 +51,33 @@ export function createAuth(env: DiscoflareEnv, baseURL: string) {
   })
 }
 
+export function resolveAuthBaseURL(configuredOrigin: string | undefined, requestOrigin: string) {
+  const value = configuredOrigin?.trim()
+  if (!value) return new URL(requestOrigin).origin
+
+  let url: URL
+  try {
+    url = new URL(value)
+  }
+  catch {
+    throw new Error('PUBLIC_ORIGIN must be an absolute HTTP or HTTPS origin')
+  }
+
+  if (
+    !['http:', 'https:'].includes(url.protocol)
+    || url.username
+    || url.password
+    || url.pathname !== '/'
+    || url.search
+    || url.hash
+  ) {
+    throw new Error('PUBLIC_ORIGIN must contain only an HTTP or HTTPS origin')
+  }
+
+  return url.origin
+}
+
 export function authFromEvent(event: H3Event) {
   const { env } = cf(event)
-  return createAuth(env, getRequestURL(event).origin)
+  return createAuth(env, resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin))
 }

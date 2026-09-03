@@ -47,6 +47,18 @@ pnpm install
 pnpm deploy
 ```
 
+### Docker / Coolify
+
+The published container runs the same built Worker locally with persistent D1, R2, KV, and Durable Object simulations:
+
+```bash
+docker compose up -d
+```
+
+Set `PUBLIC_ORIGIN`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME` before starting. In Coolify, deploy the root `docker-compose.yml` in normal Docker Compose mode and route the `discoflare` service to port `3000`; Coolify supplies the proxy labels. Keep exactly one replica and back up the `discoflare-data` volume with the container stopped.
+
+The multi-architecture image is published at `ghcr.io/vnmtvlv/discoflare`. Huddles still require RealtimeKit connectivity; text chat and attachments use the local persistent volume. See the [deployment guide](docs/deployment.md#docker--coolify).
+
 ## Local development
 
 ```bash
