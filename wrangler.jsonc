@@ -1,0 +1,56 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discoflare",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "discoflare",
+      "database_id": "REPLACE_ON_DEPLOY",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "discoflare-files"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "REPLACE_ON_DEPLOY"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
+      { "name": "GUILD_DO", "class_name": "GuildDurableObject" },
+      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ChannelDurableObject",
+        "GuildDurableObject",
+        "RateLimitDurableObject"
+      ]
+    }
+  ],
+  "vars": {
+    "REALTIMEKIT_PRESET_VOICE": "voice",
+    "REALTIMEKIT_PRESET_AV": "group_call_host",
+    "AUTH_SECRET": "discoflare-dev-secret-do-not-use-in-prod!!"
+  }
+}

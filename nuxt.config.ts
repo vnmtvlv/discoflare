@@ -1,0 +1,81 @@
+export default defineNuxtConfig({
+  compatibilityDate: '2026-09-02',
+  devtools: { enabled: false },
+  css: ['~/assets/css/main.css'],
+  modules: ['@nuxt/ui', '@pinia/nuxt', '@vueuse/nuxt', '@nuxt/eslint'],
+  colorMode: {
+    preference: 'dark',
+    fallback: 'dark',
+  },
+  icon: {
+    serverBundle: {
+      collections: ['ph'],
+    },
+  },
+  nitro: {
+    preset: 'cloudflare-module',
+    entry: process.env.NODE_ENV === 'development' ? undefined : './cloudflare-entry.ts',
+    errorHandler: './server/error',
+    cloudflare: {
+      nodeCompat: true,
+      deployConfig: false,
+      dev: {
+        configPath: 'wrangler.dev.jsonc',
+      },
+    },
+    typescript: {
+      tsConfig: {
+        compilerOptions: {
+          types: ['@cloudflare/workers-types'],
+        },
+      },
+    },
+    routeRules: {
+      '/**': {
+        headers: {
+          'X-Content-Type-Options': 'nosniff',
+          'Referrer-Policy': 'strict-origin-when-cross-origin',
+          'X-Frame-Options': 'DENY',
+          'Permissions-Policy': 'camera=(self), microphone=(self), display-capture=(self)',
+        },
+      },
+    },
+  },
+  vite: {
+    optimizeDeps: {
+      include: ['@cloudflare/realtimekit'],
+    },
+  },
+  app: {
+    head: {
+      title: 'Discoflare',
+      htmlAttrs: { lang: 'en' },
+      meta: [
+        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'color-scheme', content: 'dark' },
+        { name: 'theme-color', content: '#F6821F' },
+        { name: 'description', content: 'Chat that lives on your Cloudflare account.' },
+        { name: 'application-name', content: 'Discoflare' },
+        { name: 'apple-mobile-web-app-title', content: 'Discoflare' },
+      ],
+      link: [
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' },
+        { rel: 'shortcut icon', href: '/favicon.ico' },
+        { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+        { rel: 'manifest', href: '/site.webmanifest' },
+      ],
+    },
+  },
+  typescript: {
+    strict: true,
+    typeCheck: false,
+    tsConfig: {
+      compilerOptions: {
+        types: ['@cloudflare/workers-types'],
+      },
+      include: ['../types/**/*.d.ts', '../workers/**/*.ts', '../shared/**/*.ts'],
+    },
+  },
+})

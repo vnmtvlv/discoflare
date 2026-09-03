@@ -1,0 +1,22 @@
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { user as baUser, users } from '../../drizzle/schema'
+import { requireUser } from '../utils/auth'
+import { cf } from '../utils/cf'
+import { getDb } from '../utils/db'
+import { parseBody } from '../utils/validate'
+
+const bodySchema = z.object({
+  displayName: z.string().min(1).max(80),
+})
+
+export default defineEventHandler(async (event) => {
+  const me = await requireUser(event)
+  const body = parseBody(bodySchema, await readBody(event))
+  const { env } = cf(event)
+  const db = getDb(env.DB)
+  const displayName = body.displayName.trim()
+  await db.update(users).set({ displayName }).where(eq(users.id, me.id))
+  await db.update(baUser).set({ name: displayName, updatedAt: new Date() }).where(eq(baUser.id, me.id)).catch(() => undefined)
+  return { user: { ...me, displayName } }
+})

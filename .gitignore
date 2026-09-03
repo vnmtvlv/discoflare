@@ -1,0 +1,32 @@
+# Nuxt / Nitro
+.output
+.data
+.nuxt
+.nitro
+.cache
+dist
+
+# Node
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+.vscode
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+.dev.vars
+
+# Wrangler local state
+.wrangler
+
+# Tests
+coverage

@@ -1,0 +1,147 @@
+<script setup lang="ts">
+import { useQuery, useQueryClient } from '@tanstack/vue-query'
+import type { ChannelDTO, PublicUser } from '~~/shared/types'
+import { channelPath } from '~~/shared/paths'
+import { dmTitle } from '~~/shared/dm'
+
+const props = defineProps<{ guildId: string }>()
+const route = useRoute()
+const session = useSessionStore()
+const qc = useQueryClient()
+const huddle = useHuddleStore()
+
+const dmsQ = useQuery({
+  queryKey: ['dms'],
+  queryFn: () => $fetch<{ channels: ChannelDTO[] }>('/api/dms'),
+})
+
+const q = ref('')
+const picker = ref(false)
+const picked = ref<string[]>([])
+const searchQ = useQuery({
+  queryKey: computed(() => ['dm-search', props.guildId, q.value]),
+  queryFn: () => $fetch<{ members: PublicUser[] }>(`/api/dms/search?guildId=${props.guildId}&q=${encodeURIComponent(q.value)}`),
+  enabled: computed(() => picker.value),
+})
+
+const selected = computed(() => String(route.params.channel || route.params.channelId || ''))
+const collapsed = ref(false)
+
+function initials(ch: ChannelDTO) {
+  const others = (ch.participants ?? []).filter((p) => p.id !== session.user?.id)
+  if (others.length === 0) return '?'
+  return others.slice(0, 2).map((p) => p.displayName.slice(0, 1).toUpperCase()).join('')
+}
+
+function togglePick(id: string) {
+  picked.value = picked.value.includes(id) ? picked.value.filter((x) => x !== id) : [...picked.value, id]
+}
+
+async function openDm(userId: string) {
+  const res = await $fetch<{ channel: ChannelDTO }>('/api/dms', { method: 'POST', body: { userId, guildId: props.guildId } })
+  await qc.invalidateQueries({ queryKey: ['dms'] })
+  picker.value = false
+  q.value = ''
+  picked.value = []
+  await navigateTo(channelPath(res.channel))
+}
+
+async function startGroup() {
+  if (picked.value.length < 2) return
+  const res = await $fetch<{ channel: ChannelDTO }>('/api/dms/group', {
+    method: 'POST',
+    body: { userIds: picked.value, guildId: props.guildId },
+  })
+  await qc.invalidateQueries({ queryKey: ['dms'] })
+  picker.value = false
+  q.value = ''
+  picked.value = []
+  await navigateTo(channelPath(res.channel))
+}
+
+async function hide(id: string) {
+  await $fetch(`/api/dms/${id}/hide`, { method: 'POST' })
+  await qc.invalidateQueries({ queryKey: ['dms'] })
+  if (selected.value === id) await navigateTo('/channels')
+}
+
+function inCall(ch: ChannelDTO) {
+  return Boolean(ch.huddle?.active || (huddle.state?.active && selected.value === ch.id && huddle.state.participantIds.length))
+}
+
+function titleOf(ch: ChannelDTO) {
+  return ch.title || dmTitle(ch.name, ch.participants ?? [], session.user?.id || '')
+}
+</script>
+
+<template>
+  <section class="mt-3">
+    <div class="flex items-center pr-2 h-6">
+      <button
+        type="button"
+        class="flex-1 flex items-center gap-0.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted hover:text-default"
+        @click="collapsed = !collapsed"
+      >
+        <UIcon :name="collapsed ? 'i-ph-caret-right' : 'i-ph-caret-down'" class="size-3" />
+        <span class="flex-1 text-start">Direct Messages</span>
+      </button>
+      <UButton icon="i-ph-plus" color="neutral" variant="ghost" size="xs" square aria-label="New DM" @click="picker = true" />
+    </div>
+    <ul v-show="!collapsed" class="px-2" role="listbox" aria-label="Direct messages">
+      <li v-for="ch in dmsQ.data.value?.channels ?? []" :key="ch.id" class="group relative">
+        <NuxtLink
+          :to="channelPath(ch)"
+          class="flex items-center gap-2 h-8 px-2 rounded-md text-[15px]"
+          :class="selected === ch.id ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
+          role="option"
+          :aria-selected="selected === ch.id"
+        >
+          <UAvatar size="2xs" :text="initials(ch)" />
+          <span class="truncate flex-1">{{ titleOf(ch) }}</span>
+          <UChip v-if="ch.unread" size="sm" color="primary" standalone />
+        </NuxtLink>
+        <UButton
+          icon="i-ph-x"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          square
+          class="absolute end-1 top-1 opacity-0 group-hover:opacity-100"
+          title="Close"
+          @click.prevent="hide(ch.id)"
+        />
+        <div v-if="inCall(ch)" class="pl-8 flex gap-1 pb-1 text-success">
+          <UIcon name="i-ph-speaker-high" class="size-3" />
+        </div>
+      </li>
+    </ul>
+
+    <UModal v-model:open="picker" title="New Message" description="Find someone in this server, or pick two or more for a group.">
+      <template #body>
+        <UInput v-model="q" icon="i-ph-magnifying-glass" placeholder="Find or start a conversation" autofocus />
+        <ul class="mt-3 max-h-64 overflow-y-auto space-y-0.5">
+          <li v-for="m in searchQ.data.value?.members ?? []" :key="m.id" class="flex items-center gap-2">
+            <UCheckbox
+              :model-value="picked.includes(m.id)"
+              :aria-label="`Add ${m.displayName} to group`"
+              @update:model-value="togglePick(m.id)"
+            />
+            <button type="button" class="flex-1 flex items-center gap-2 h-9 px-1 rounded-md hover:bg-elevated text-start" @click="openDm(m.id)">
+              <UAvatar size="xs" :text="m.displayName.slice(0, 1).toUpperCase()" />
+              <span class="text-sm">{{ m.displayName }}</span>
+            </button>
+          </li>
+        </ul>
+      </template>
+      <template #footer>
+        <UButton
+          v-if="picked.length >= 2"
+          block
+          icon="i-ph-users"
+          :label="`Create Group DM (${picked.length + 1})`"
+          @click="startGroup"
+        />
+      </template>
+    </UModal>
+  </section>
+</template>

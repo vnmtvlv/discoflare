@@ -1,0 +1,19 @@
+import { eq } from 'drizzle-orm'
+import { channels } from '../../../drizzle/schema'
+import { Permission } from '../../../shared/permissions'
+import { requireChannelMember } from '../../utils/guards'
+import { cf, fail } from '../../utils/cf'
+import { getDb } from '../../utils/db'
+import { writeAudit } from '../../utils/messages'
+
+export default defineEventHandler(async (event) => {
+  const id = getRouterParam(event, 'id')!
+  const member = await requireChannelMember(event, id, Permission.manageChannels)
+  const { env } = cf(event)
+  const db = getDb(env.DB)
+  const remaining = await db.select().from(channels).where(eq(channels.guildId, member.guildId))
+  if (remaining.length <= 1) fail(400, 'bad_request', 'Cannot delete the last channel')
+  await db.delete(channels).where(eq(channels.id, id))
+  await writeAudit(env, { guildId: member.guildId, actorId: member.user.id, action: 'channel.delete', targetType: 'channel', targetId: id })
+  return { ok: true }
+})
