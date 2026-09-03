@@ -50,17 +50,12 @@ defineShortcuts({
       side="start"
       label="Resize thread panel"
     />
-    <header class="shrink-0 border-b border-default bg-elevated">
-      <div class="flex h-12 items-center gap-2 px-3">
-        <LayoutRightPanelTabs v-model="ui.rightPanelTab" />
-      </div>
-      <div class="flex min-w-0 items-center gap-2 px-3 pb-2">
-        <span class="truncate text-sm font-semibold">{{ threadTitle }}</span>
-        <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
-        <UTooltip text="Back to threads">
-          <UButton class="ml-auto shrink-0" size="xs" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back to threads" @click="close" />
-        </UTooltip>
-      </div>
+    <header class="flex h-12 shrink-0 min-w-0 items-center gap-2 border-b border-default bg-elevated px-3">
+      <span class="truncate text-sm font-semibold">{{ threadTitle }}</span>
+      <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
+      <UTooltip text="Back to threads">
+        <UButton class="ml-auto shrink-0" size="xs" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back to threads" @click="close" />
+      </UTooltip>
     </header>
     <ChatMessageList
       :channel-id="threadId"
