@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
+import { claimComposerSubmission, type ComposerSubmission } from '~~/shared/composer'
 import { applyMentionTokens } from '~~/shared/mentions'
 import { newId, nowIso } from '~~/shared/ids'
 import { useQueryClient, type InfiniteData } from '@tanstack/vue-query'
@@ -59,9 +60,37 @@ function removeFile(i: number) {
   files.value = files.value.filter((_, idx) => idx !== i)
 }
 
+function restoreSubmission(channelId: string, submission: ComposerSubmission<File>) {
+  const state = ui.composerState(channelId)
+  if (!state.draft && !state.replyToId && !state.editingId) {
+    if (submission.editingId) ui.startEditing(channelId, submission.editingId, submission.draft)
+    else {
+      ui.setComposerDraft(channelId, submission.draft)
+      if (submission.replyToId) ui.startReply(channelId, submission.replyToId)
+    }
+  }
+  if (props.channelId === channelId) files.value = [...submission.files, ...files.value].slice(0, 8)
+}
+
 async function submit() {
   if (props.disabled) return
-  let content = applyMentionTokens(draft.value, props.members.map((m) => ({
+  const channelId = props.channelId
+  const submission = claimComposerSubmission<File>({
+    read: () => ({
+      draft: draft.value,
+      files: files.value,
+      replyToId: replyToId.value,
+      editingId: editingId.value,
+    }),
+    clear: () => {
+      ui.clearComposer(channelId)
+      files.value = []
+      resetFiles()
+    },
+  })
+  if (!submission) return
+
+  let content = applyMentionTokens(submission.draft, props.members.map((m) => ({
     id: m.user.id,
     displayName: m.user.displayName,
     nickname: m.nickname,
@@ -69,10 +98,10 @@ async function submit() {
   content = content.trim()
   const attachmentIds: string[] = []
   try {
-    for (const file of files.value) {
+    for (const file of submission.files) {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await $fetch<{ attachment: { id: string } }>(`/api/channels/${props.channelId}/attachments`, {
+      const res = await $fetch<{ attachment: { id: string } }>(`/api/channels/${channelId}/attachments`, {
         method: 'POST',
         body: fd,
       })
@@ -80,13 +109,19 @@ async function submit() {
     }
   }
   catch (err) {
+    restoreSubmission(channelId, submission)
     toast.add({ title: errorMessage(err), color: 'error' })
     return
   }
 
-  if (editingId.value) {
-    await $fetch(`/api/messages/${editingId.value}`, { method: 'PATCH', body: { content } })
-    ui.clearComposer(props.channelId)
+  if (submission.editingId) {
+    try {
+      await $fetch(`/api/messages/${submission.editingId}`, { method: 'PATCH', body: { content } })
+    }
+    catch (err) {
+      restoreSubmission(channelId, submission)
+      toast.add({ title: errorMessage(err), color: 'error' })
+    }
     return
   }
 
@@ -94,7 +129,7 @@ async function submit() {
   const clientId = newId()
   const optimistic: MessageDTO = {
     id: `tmp:${clientId}`,
-    channelId: props.channelId,
+    channelId,
     workspaceId: props.workspaceId,
     author: session.user!,
     content,
@@ -108,15 +143,12 @@ async function submit() {
     createdAt: nowIso(),
     clientId,
   }
-  qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(['messages', props.channelId], (old) => {
+  qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(['messages', channelId], (old) => {
     if (!old?.pages?.length) return { pages: [{ messages: [optimistic], nextCursor: null }], pageParams: [undefined] }
     const pages = old.pages.map((p, i) => i === 0 ? { ...p, messages: [...p.messages, optimistic] } : p)
     return { ...old, pages }
   })
-  props.send({ t: 'message.create', content, replyToId: replyToId.value ?? undefined, clientId, attachmentIds: attachmentIds.length ? attachmentIds : undefined })
-  ui.clearComposer(props.channelId)
-  files.value = []
-  resetFiles()
+  props.send({ t: 'message.create', content, replyToId: submission.replyToId ?? undefined, clientId, attachmentIds: attachmentIds.length ? attachmentIds : undefined })
 }
 
 const pingTyping = useDebounceFn(() => {
