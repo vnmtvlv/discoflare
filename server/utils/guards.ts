@@ -1,9 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { H3Event } from 'h3'
-import { channels, dmParticipants, guildMembers, guilds, roles, users } from '../../drizzle/schema'
+import { channels, channelMembers, roles, users, workspace } from '../../drizzle/schema'
+import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
 import type { PublicUser } from '../../shared/types'
-import { isDmType, normalizeChannelType } from '../../shared/dm'
 import { requireUser } from './auth'
 import { cf, fail } from './cf'
 import { getDb } from './db'
@@ -11,7 +11,7 @@ import { toPublicUser } from './messages'
 
 export type Membership = {
   user: PublicUser
-  guildId: string
+  workspaceId: string
   roleId: string
   roleName: string
   perms: number
@@ -25,35 +25,36 @@ export type ChannelAccess = Membership & {
   participants: PublicUser[]
 }
 
-export async function requireMember(event: H3Event, guildId: string, flag?: PermissionFlag): Promise<Membership> {
+export async function requireMember(event: H3Event, workspaceId: string, flag?: PermissionFlag): Promise<Membership> {
+  if (workspaceId !== WORKSPACE_ID) fail(404, 'not_found', 'Workspace not found')
   const user = await requireUser(event)
   const { env } = cf(event)
   const db = getDb(env.DB)
   const rows = await db.select({
-    roleId: guildMembers.roleId,
+    roleId: users.roleId,
     roleName: roles.name,
     perms: roles.permissionsBitmask,
-    ownerId: guilds.ownerId,
-  }).from(guildMembers)
-    .innerJoin(roles, eq(roles.id, guildMembers.roleId))
-    .innerJoin(guilds, eq(guilds.id, guildMembers.guildId))
-    .where(and(eq(guildMembers.guildId, guildId), eq(guildMembers.userId, user.id)))
+  }).from(users)
+    .innerJoin(roles, eq(roles.id, users.roleId))
+    .where(and(eq(users.id, user.id), eq(users.status, 'active')))
     .limit(1)
 
   const row = rows[0]
-  if (!row) fail(403, 'forbidden', 'Not a member of this guild')
-  const isOwner = row.ownerId === user.id
+  if (!row) fail(403, 'forbidden', 'Not a member of this workspace')
+  const home = (await db.select({ ownerId: workspace.ownerId }).from(workspace).where(eq(workspace.id, WORKSPACE_ID)).limit(1))[0]
+  if (!home) fail(404, 'not_found', 'Workspace not found')
+  const isOwner = home.ownerId === user.id
   const perms = isOwner ? ALL_PERMISSIONS : row.perms
   if (flag !== undefined && !hasPermission(perms, flag)) {
     fail(403, 'forbidden', 'Missing permission')
   }
   return {
     user,
-    guildId,
-    roleId: row.roleId,
+    workspaceId,
+    roleId: row.roleId!,
     roleName: row.roleName,
     perms,
-    ownerId: row.ownerId,
+    ownerId: home.ownerId,
     isOwner,
   }
 }
@@ -69,28 +70,30 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   const channel = (await db.select().from(channels).where(eq(channels.id, channelId)).limit(1))[0]
   if (!channel) fail(404, 'not_found', 'Channel not found')
 
-  const type = normalizeChannelType(channel.type)
-  let dmRootId = channel.id
+  const type = channel.type
+  let accessRoot = channel
   if (type === 'thread' && channel.parentId) {
     const parent = (await db.select().from(channels).where(eq(channels.id, channel.parentId)).limit(1))[0]
-    if (parent && isDmType(parent.type)) dmRootId = parent.id
-    else {
-      const member = await requireMember(event, channel.guildId, flag)
-      return { ...member, channel, frozen: false, participants: [] }
-    }
+    if (!parent) fail(404, 'not_found', 'Parent channel not found')
+    accessRoot = parent
   }
 
-  if (type === 'dm' || (type === 'thread' && dmRootId !== channel.id)) {
-    const part = (await db.select().from(dmParticipants).where(and(eq(dmParticipants.channelId, dmRootId), eq(dmParticipants.userId, user.id))).limit(1))[0]
+  const rootType = accessRoot.type
+  const baseMember = await requireMember(event, WORKSPACE_ID, rootType === 'dm' ? undefined : flag)
+
+  if (accessRoot.visibility === 'private') {
+    const part = (await db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1))[0]
     if (!part) fail(404, 'not_found', 'Channel not found')
-    const parts = await db.select().from(dmParticipants).where(eq(dmParticipants.channelId, dmRootId))
+  }
+
+  if (rootType === 'dm') {
+    const parts = await db.select().from(channelMembers).where(eq(channelMembers.channelId, accessRoot.id))
     const userRows = await db.select().from(users).where(inArray(users.id, parts.map((p) => p.userId)))
     const participants = userRows.map(toPublicUser)
-    const memberRows = await db.select({ userId: guildMembers.userId }).from(guildMembers)
-      .where(and(eq(guildMembers.guildId, channel.guildId), inArray(guildMembers.userId, parts.map((p) => p.userId))))
+    const memberRows = await db.select({ userId: users.id }).from(users)
+      .where(and(inArray(users.id, parts.map((p) => p.userId)), eq(users.status, 'active')))
     const stillIn = new Set(memberRows.map((m) => m.userId))
     const frozen = parts.some((p) => !stillIn.has(p.userId))
-    const guild = (await db.select().from(guilds).where(eq(guilds.id, channel.guildId)).limit(1))[0]
     const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
     if (flag !== undefined && !frozen && !hasPermission(perms, flag) && flag !== Permission.sendMessages) {
       fail(403, 'forbidden', 'Missing permission')
@@ -98,18 +101,17 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     if (flag === Permission.sendMessages && frozen) fail(403, 'forbidden', 'You can no longer send messages to this user')
     return {
       user,
-      guildId: channel.guildId,
+      workspaceId: WORKSPACE_ID,
       roleId: '',
       roleName: 'member',
       perms,
-      ownerId: guild?.ownerId ?? '',
-      isOwner: guild?.ownerId === user.id,
+      ownerId: baseMember.ownerId,
+      isOwner: baseMember.isOwner,
       channel,
       frozen,
       participants,
     }
   }
 
-  const member = await requireMember(event, channel.guildId, flag)
-  return { ...member, channel, frozen: false, participants: [] }
+  return { ...baseMember, channel, frozen: false, participants: [] }
 }

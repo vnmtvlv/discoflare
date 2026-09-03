@@ -7,7 +7,7 @@ import { useDebounceFn, useFileDialog } from '@vueuse/core'
 
 const props = defineProps<{
   channelId: string
-  guildId: string
+  workspaceId: string
   members: MemberDTO[]
   send: (msg: ClientMsg) => void
   placeholder?: string
@@ -90,7 +90,7 @@ async function submit() {
   const optimistic: MessageDTO = {
     id: `tmp:${clientId}`,
     channelId: props.channelId,
-    guildId: props.guildId,
+    workspaceId: props.workspaceId,
     author: session.user!,
     content,
     replyTo: null,

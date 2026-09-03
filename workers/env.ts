@@ -9,9 +9,9 @@ export function asRpc<T>(stub: unknown): Rpc<T> {
 export type DiscoflareEnv = {
   DB: D1Database
   FILES: R2Bucket
-  SESSIONS: KVNamespace
+  TICKETS: KVNamespace
   CHANNEL_DO: DurableObjectNamespace
-  GUILD_DO: DurableObjectNamespace
+  WORKSPACE_DO: DurableObjectNamespace
   RATE_LIMIT_DO: DurableObjectNamespace
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
@@ -26,17 +26,4 @@ export type DiscoflareEnv = {
   ADMIN_NAME?: string
   ADMIN_HANDLE?: string
   ADMIN_WORKSPACE?: string
-}
-
-export const SESSION_COOKIE = 'df_session'
-
-export function readCookie(header: string | null, name: string): string | null {
-  if (!header) return null
-  for (const part of header.split(';')) {
-    const idx = part.indexOf('=')
-    if (idx === -1) continue
-    const key = part.slice(0, idx).trim()
-    if (key === name) return decodeURIComponent(part.slice(idx + 1).trim())
-  }
-  return null
 }

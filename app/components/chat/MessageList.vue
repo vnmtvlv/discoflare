@@ -13,12 +13,14 @@ const emit = defineEmits<{
   reply: [id: string]
   edit: [msg: MessageDTO]
   thread: [msg: MessageDTO]
+  read: [messageId: string]
 }>()
 
 const session = useSessionStore()
 const ui = useUiStore()
 const prefs = usePrefsStore()
 const scroller = ref<HTMLElement | null>(null)
+let lastRead = ''
 
 const q = useInfiniteQuery({
   queryKey: computed(() => ['messages', props.channelId]),
@@ -56,13 +58,23 @@ function compactWith(curr: MessageDTO, prev?: MessageDTO) {
   return dt < 7 * 60 * 1000
 }
 
-watch(() => messages.value.length, async () => {
+function markReadIfVisible() {
+  const el = scroller.value
+  const message = messages.value.at(-1)
+  if (!el || !message || ui.searchQuery || document.hidden || !document.hasFocus()) return
+  if (el.scrollHeight - el.scrollTop - el.clientHeight > 120 || message.id === lastRead || message.id.startsWith('tmp:')) return
+  lastRead = message.id
+  emit('read', message.id)
+}
+
+watch(() => messages.value.at(-1)?.id, async () => {
   await nextTick()
   const el = scroller.value
   if (!el) return
   if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) {
     el.scrollTop = el.scrollHeight
   }
+  markReadIfVisible()
 })
 
 function onScroll() {
@@ -75,6 +87,7 @@ function onScroll() {
       if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight - prev
     })
   }
+  markReadIfVisible()
 }
 
 async function remove(id: string) {
@@ -88,7 +101,15 @@ async function react(id: string, emoji: string) {
 onMounted(() => {
   nextTick(() => {
     if (scroller.value) scroller.value.scrollTop = scroller.value.scrollHeight
+    markReadIfVisible()
   })
+  window.addEventListener('focus', markReadIfVisible)
+  document.addEventListener('visibilitychange', markReadIfVisible)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('focus', markReadIfVisible)
+  document.removeEventListener('visibilitychange', markReadIfVisible)
 })
 </script>
 

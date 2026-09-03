@@ -1,5 +1,5 @@
 export const Permission = {
-  manageGuild: 1 << 0,
+  manageWorkspace: 1 << 0,
   manageChannels: 1 << 1,
   manageRoles: 1 << 2,
   invite: 1 << 3,
@@ -12,7 +12,7 @@ export const Permission = {
 export type PermissionFlag = (typeof Permission)[keyof typeof Permission]
 
 export const ALL_PERMISSIONS =
-  Permission.manageGuild
+  Permission.manageWorkspace
   | Permission.manageChannels
   | Permission.manageRoles
   | Permission.invite

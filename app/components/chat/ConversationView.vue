@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser } from '~~/shared/types'
-import { dmTitle, isDmType, isVoiceType, normalizeChannelType } from '~~/shared/dm'
+import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 
 const route = useRoute()
@@ -10,18 +10,18 @@ const session = useSessionStore()
 const presence = usePresenceStore()
 const huddle = useHuddleStore()
 const qc = useQueryClient()
-const { guildId } = useWorkspace()
+const { workspaceId } = useWorkspace()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
 
 const membersQ = useQuery({
-  queryKey: computed(() => ['members', guildId.value]),
-  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/guilds/${guildId.value}/members`),
-  enabled: computed(() => Boolean(guildId.value)),
+  queryKey: computed(() => ['members', workspaceId.value]),
+  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${workspaceId.value}/members`),
+  enabled: computed(() => Boolean(workspaceId.value)),
 })
 const channelsQ = useQuery({
-  queryKey: computed(() => ['channels', guildId.value]),
-  queryFn: () => $fetch<{ channels: ChannelDTO[] }>(`/api/guilds/${guildId.value}/channels`),
-  enabled: computed(() => Boolean(guildId.value)),
+  queryKey: computed(() => ['channels', workspaceId.value]),
+  queryFn: () => $fetch<{ channels: ChannelDTO[] }>(`/api/workspaces/${workspaceId.value}/channels`),
+  enabled: computed(() => Boolean(workspaceId.value)),
 })
 const dmsQ = useQuery({
   queryKey: ['dms'],
@@ -39,7 +39,7 @@ const channel = computed(() => {
     ?? channelsQ.data.value?.channels.find((c) => c.id === channelId.value)
 })
 const members = computed(() => membersQ.data.value?.members ?? [])
-const type = computed(() => normalizeChannelType(channel.value?.type || 'text'))
+const type = computed(() => channel.value?.type || 'text')
 const isDm = computed(() => isDmType(type.value))
 const isGroup = computed(() => isDm.value && (channel.value?.participants?.length ?? 0) > 2)
 const others = computed(() => (channel.value?.participants ?? []).filter((p) => p.id !== session.user?.id))
@@ -56,11 +56,11 @@ const composerPlaceholder = computed(() => {
 })
 
 const { send } = useChannelSocket(channelId)
-useGuildSocket(guildId)
+useWorkspaceSocket(workspaceId)
 const { start, join } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
 
-watch([guildId, channelId], () => {
-  ui.remember(guildId.value, channelId.value)
+watch([workspaceId, channelId], () => {
+  ui.remember(workspaceId.value, channelId.value)
   huddle.setState(null)
   ui.threadId = null
 }, { immediate: true })
@@ -73,8 +73,7 @@ watch(() => oneQ.data.value?.channel, (ch) => {
 })
 
 const typingLine = computed(() => {
-  const now = Date.now()
-  const ids = Object.entries(presence.typing).filter(([, exp]) => exp > now).map(([id]) => id).filter((id) => id !== session.user?.id)
+  const ids = presence.typingIn(channelId.value).filter((id) => id !== session.user?.id)
   const names = ids.map((id) => (channel.value?.participants ?? members.value.map((m) => m.user)).find((u) => u.id === id)?.displayName || 'someone')
   if (!names.length) return ''
   if (names.length === 1) return `${names[0]} is typing…`
@@ -115,8 +114,8 @@ async function onThread(msg: MessageDTO) {
 const addOpen = ref(false)
 const addQ = ref('')
 const addSearch = useQuery({
-  queryKey: computed(() => ['dm-add', guildId.value, addQ.value]),
-  queryFn: () => $fetch<{ members: PublicUser[] }>(`/api/dms/search?guildId=${guildId.value}&q=${encodeURIComponent(addQ.value)}`),
+  queryKey: computed(() => ['dm-add', workspaceId.value, addQ.value]),
+  queryFn: () => $fetch<{ members: PublicUser[] }>(`/api/dms/search?workspaceId=${workspaceId.value}&q=${encodeURIComponent(addQ.value)}`),
   enabled: computed(() => addOpen.value),
 })
 
@@ -142,9 +141,8 @@ const huddleMembers = computed<MemberDTO[]>(() => {
   if (!isDm.value) return members.value
   return (channel.value?.participants ?? []).map((u) => ({
     user: u,
-    role: { id: '', guildId: guildId.value, name: 'member', permissions: 0, position: 0 },
+    role: { id: '', workspaceId: workspaceId.value, name: 'member', permissions: 0, position: 0 },
     nickname: null,
-    lastSeenAt: '',
     status: presence.statusOf(u.id),
   }))
 })
@@ -275,6 +273,7 @@ defineShortcuts({
         @reply="onReply"
         @edit="onEdit"
         @thread="onThread"
+        @read="(messageId) => send({ t: 'read', messageId })"
       />
       <UAlert v-if="frozen" color="neutral" variant="subtle" title="You can no longer send messages to this user." class="rounded-none shrink-0" />
       <p v-if="typingLine" class="px-4 text-xs text-muted h-5 shrink-0">{{ typingLine }}</p>
@@ -286,7 +285,7 @@ defineShortcuts({
       />
       <ChatComposer
         :channel-id="channelId"
-        :guild-id="guildId"
+        :workspace-id="workspaceId"
         :members="members"
         :send="send"
         :disabled="frozen"
@@ -296,11 +295,11 @@ defineShortcuts({
     </div>
     <LayoutMemberRail
       v-if="ui.memberRailOpen || isMobile"
-      :guild-id="guildId"
-      :dm-participants="isDm ? channel?.participants : undefined"
+      :workspace-id="workspaceId"
+      :channel-members="isDm ? channel?.participants : undefined"
       :is-group-dm="isGroup"
     />
-    <ChatThreadPanel :guild-id="guildId" :members="members" />
+    <ChatThreadPanel :workspace-id="workspaceId" :members="members" />
     <HuddleSetupModal />
   </div>
 </template>

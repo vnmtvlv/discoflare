@@ -35,7 +35,7 @@ async function accept() {
   }
   busy.value = true
   try {
-    const res = await $fetch<{ guildId: string; channelId: string | null }>(`/api/invites/${code.value}/accept`, { method: 'POST' })
+    const res = await $fetch<{ workspaceId: string; channelId: string | null }>(`/api/invites/${code.value}/accept`, { method: 'POST' })
     await navigateTo(res.channelId ? channelPath(res.channelId) : '/channels')
   }
   catch (err) {
@@ -50,11 +50,11 @@ async function accept() {
 
 <template>
   <div>
-    <h1 class="text-xl font-medium tracking-tight text-highlighted">Join guild</h1>
+    <h1 class="text-xl font-medium tracking-tight text-highlighted">Join workspace</h1>
     <USkeleton v-if="loading" class="mt-4 h-12 w-full" />
     <template v-else>
       <p v-if="invite" class="mt-1.5 text-sm text-muted">
-        Invite to <span class="text-default font-medium">{{ invite.guildName }}</span>.
+        Invite to <span class="text-default font-medium">{{ invite.workspaceName }}</span>.
       </p>
       <UAlert v-else-if="error" color="error" variant="subtle" :title="error" class="mt-6" />
       <UButton

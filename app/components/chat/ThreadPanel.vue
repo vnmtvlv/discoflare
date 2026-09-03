@@ -2,7 +2,7 @@
 import type { ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
 
 defineProps<{
-  guildId: string
+  workspaceId: string
   members: MemberDTO[]
 }>()
 const ui = useUiStore()
@@ -35,10 +35,10 @@ defineShortcuts({
       <span class="font-semibold text-sm">Thread</span>
       <UButton class="ml-auto" size="xs" color="neutral" variant="ghost" icon="i-ph-x" @click="close" />
     </header>
-    <ChatMessageList :channel-id="threadId" :members="members" @reply="onReply" @edit="onEdit" />
+    <ChatMessageList :channel-id="threadId" :members="members" @reply="onReply" @edit="onEdit" @read="(messageId) => send({ t: 'read', messageId })" />
     <ChatComposer
       :channel-id="threadId"
-      :guild-id="guildId"
+      :workspace-id="workspaceId"
       :members="members"
       :send="send as (msg: ClientMsg) => void"
       placeholder="Reply in thread"

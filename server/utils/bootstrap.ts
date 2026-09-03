@@ -1,7 +1,7 @@
 import type { H3Event } from 'h3'
 import { ALL_PERMISSIONS, MemberPermissions } from '../../shared/permissions'
-import { newId, nowIso } from '../../shared/ids'
-import { account, auditLog, channels, guildMembers, guilds, roles, user, users } from '../../drizzle/schema'
+import { newId, nowIso, WORKSPACE_ID } from '../../shared/ids'
+import { authAccounts, authUsers, auditLog, channels, roles, users, workspace } from '../../drizzle/schema'
 import { cf } from './cf'
 import { ensureMigrated, getDb, userCount } from './db'
 import { hashPassword } from './password'
@@ -10,17 +10,20 @@ import type { DiscoflareEnv } from '../../workers/env'
 export type AdminSeed = {
   email: string
   password: string
+  handle: string
   displayName: string
-  guildName: string
+  workspaceName: string
 }
 
 export function readAdminEnv(env: Pick<DiscoflareEnv, 'ADMIN_EMAIL' | 'ADMIN_PASSWORD' | 'ADMIN_NAME' | 'ADMIN_HANDLE' | 'ADMIN_WORKSPACE'>): AdminSeed | null {
   const email = env.ADMIN_EMAIL?.trim().toLowerCase() || ''
   const password = env.ADMIN_PASSWORD || ''
   if (!email.includes('@') || password.length < 8) return null
-  const displayName = (env.ADMIN_NAME?.trim() || env.ADMIN_HANDLE?.trim() || email.split('@')[0] || 'Admin').slice(0, 80)
-  const guildName = (env.ADMIN_WORKSPACE?.trim() || 'HQ').slice(0, 80)
-  return { email, password, displayName, guildName }
+  const localPart = email.split('@')[0] || 'admin'
+  const handle = (env.ADMIN_HANDLE?.trim() || localPart).slice(0, 32)
+  const displayName = (env.ADMIN_NAME?.trim() || handle).slice(0, 80)
+  const workspaceName = (env.ADMIN_WORKSPACE?.trim() || 'HQ').slice(0, 80)
+  return { email, password, handle, displayName, workspaceName }
 }
 
 export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
@@ -28,7 +31,7 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const db = getDb(env.DB)
   const userId = newId()
   const accountId = newId()
-  const guildId = newId()
+  const workspaceId = WORKSPACE_ID
   const ownerRoleId = newId()
   const adminRoleId = newId()
   const memberRoleId = newId()
@@ -41,7 +44,7 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const passwordHash = await hashPassword(seed.password)
 
   await db.batch([
-    db.insert(user).values({
+    db.insert(authUsers).values({
       id: userId,
       name: seed.displayName,
       email: seed.email,
@@ -50,7 +53,7 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
       createdAt: authCreated,
       updatedAt: authCreated,
     }),
-    db.insert(account).values({
+    db.insert(authAccounts).values({
       id: accountId,
       issuer: 'local:credential',
       accountId: userId,
@@ -60,51 +63,48 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
       createdAt: authCreated,
       updatedAt: authCreated,
     }),
+    db.insert(roles).values([
+      { id: ownerRoleId, key: 'owner', name: 'owner', permissionsBitmask: ALL_PERMISSIONS, position: 0, isSystem: true, createdAt: created, updatedAt: created },
+      { id: adminRoleId, key: 'admin', name: 'admin', permissionsBitmask: ALL_PERMISSIONS, position: 1, isSystem: true, createdAt: created, updatedAt: created },
+      { id: memberRoleId, key: 'member', name: 'member', permissionsBitmask: MemberPermissions, position: 2, isSystem: true, createdAt: created, updatedAt: created },
+    ]),
     db.insert(users).values({
       id: userId,
-      email: seed.email,
-      passwordHash,
+      handle: seed.handle,
       displayName: seed.displayName,
       avatarR2Key: null,
+      status: 'active',
+      roleId: ownerRoleId,
+      nickname: null,
+      joinedAt: created,
       createdAt: created,
+      updatedAt: created,
     }),
-    db.insert(guilds).values({
-      id: guildId,
-      name: seed.guildName,
+    db.insert(workspace).values({
+      id: workspaceId,
+      name: seed.workspaceName,
       iconR2Key: null,
       ownerId: userId,
       createdAt: created,
-    }),
-    db.insert(roles).values([
-      { id: ownerRoleId, guildId, name: 'owner', permissionsBitmask: ALL_PERMISSIONS, position: 0, createdAt: created },
-      { id: adminRoleId, guildId, name: 'admin', permissionsBitmask: ALL_PERMISSIONS, position: 1, createdAt: created },
-      { id: memberRoleId, guildId, name: 'member', permissionsBitmask: MemberPermissions, position: 2, createdAt: created },
-    ]),
-    db.insert(guildMembers).values({
-      guildId,
-      userId,
-      roleId: ownerRoleId,
-      lastSeenAt: created,
-      nickname: null,
+      updatedAt: created,
     }),
     db.insert(channels).values([
-      { id: generalId, guildId, name: 'general', topic: '', type: 'text', position: 0, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created },
-      { id: randomId, guildId, name: 'random', topic: '', type: 'text', position: 1, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created },
-      { id: voiceId, guildId, name: 'General', topic: '', type: 'voice', position: 2, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created },
+      { id: generalId, name: 'general', topic: '', type: 'text', visibility: 'workspace', position: 0, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: randomId, name: 'random', topic: '', type: 'text', visibility: 'workspace', position: 1, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: voiceId, name: 'General', topic: '', type: 'voice', visibility: 'workspace', position: 2, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
     ]),
     db.insert(auditLog).values({
       id: auditId,
-      guildId,
       actorId: userId,
-      action: 'guild.create',
-      targetType: 'guild',
-      targetId: guildId,
-      metaJson: JSON.stringify({ name: seed.guildName }),
+      action: 'workspace.create',
+      targetType: 'workspace',
+      targetId: workspaceId,
+      metaJson: JSON.stringify({ name: seed.workspaceName }),
       createdAt: created,
     }),
   ])
 
-  return { userId, guildId, channelId: generalId }
+  return { userId, workspaceId, channelId: generalId }
 }
 
 export async function ensureAdminFromEnv(event: H3Event): Promise<{ users: number; provisioned: boolean }> {

@@ -12,6 +12,10 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   let closed = false
   let attempt = 0
   let connecting = false
+  let generation = 0
+  let authenticated = false
+  const pending: ClientMsg[] = []
+  const outstanding = new Map<string, Extract<ClientMsg, { t: 'message.create' }>>()
 
   function queryClient(): QueryClient | undefined {
     return nuxt.$queryClient as QueryClient | undefined
@@ -39,26 +43,31 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     })
   }
 
-  async function connect() {
+  async function connect(gen = generation) {
     const id = toValue(channelId)
     if (!id || !import.meta.client || connecting || closed) return
     connecting = true
     try {
       const { token } = await $fetch<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
-      if (closed) return
+      if (closed || gen !== generation) return
       const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      ws = new WebSocket(`${proto}://${location.host}/ws/channel/${id}`)
-      ws.addEventListener('open', () => {
+      const socket = new WebSocket(`${proto}://${location.host}/ws/channel/${id}`)
+      ws = socket
+      socket.addEventListener('open', () => {
+        if (gen !== generation) return socket.close()
         attempt = 0
-        ws?.send(JSON.stringify({ t: 'auth', token } satisfies ClientMsg))
+        socket.send(JSON.stringify({ t: 'auth', token } satisfies ClientMsg))
       })
-      ws.addEventListener('message', (ev) => {
+      socket.addEventListener('message', (ev) => {
         if (typeof ev.data !== 'string' || ev.data === 'pong') return
         let parsed: ServerMsg
         try { parsed = JSON.parse(ev.data) as ServerMsg }
         catch { return }
         switch (parsed.t) {
           case 'hello':
+            authenticated = true
+            for (const message of outstanding.values()) socket.send(JSON.stringify(message))
+            for (const queued of pending.splice(0)) socket.send(JSON.stringify(queued))
             if (parsed.huddle) huddle.setState(parsed.huddle)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
             break
@@ -83,9 +92,10 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             break
           }
           case 'ack':
+            outstanding.delete(parsed.clientId)
             break
           case 'typing':
-            presence.markTyping(parsed.userId)
+            presence.markTyping(id, parsed.userId)
             break
           case 'presence':
             presence.apply(parsed.users)
@@ -136,36 +146,58 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             break
         }
       })
-      ws.addEventListener('close', () => {
-        ws = null
-        if (!closed) {
+      socket.addEventListener('close', () => {
+        authenticated = false
+        if (ws === socket) ws = null
+        if (!closed && gen === generation) {
           const delay = Math.min(12_000, 1500 * 2 ** attempt)
           attempt += 1
-          setTimeout(() => { void connect() }, delay)
+          setTimeout(() => { void connect(gen) }, delay)
         }
       })
     }
     catch {
-      if (!closed) setTimeout(() => { void connect() }, 3000)
+      if (!closed && gen === generation) setTimeout(() => { void connect(gen) }, 3000)
     }
     finally {
       connecting = false
+      if (!closed && gen !== generation) void connect(generation)
     }
   }
 
   function send(msg: ClientMsg) {
-    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg))
+    if (msg.t === 'message.create') outstanding.set(msg.clientId, msg)
+    if (authenticated && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(msg))
+      return
+    }
+    if (msg.t === 'typing' || msg.t === 'auth' || msg.t === 'message.create') return
+    if (msg.t === 'read') {
+      const existing = pending.findIndex(item => item.t === 'read')
+      if (existing >= 0) pending.splice(existing, 1)
+    }
+    if (pending.length < 100) pending.push(msg)
   }
 
   function disconnect() {
+    generation += 1
     closed = true
+    authenticated = false
+    pending.splice(0)
+    outstanding.clear()
     ws?.close()
     ws = null
   }
 
   watch(() => toValue(channelId), () => {
-    disconnect()
-    void connect()
+    generation += 1
+    closed = false
+    authenticated = false
+    pending.splice(0)
+    outstanding.clear()
+    ws?.close()
+    ws = null
+    void connect(generation)
   }, { immediate: true })
 
   onUnmounted(disconnect)

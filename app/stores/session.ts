@@ -1,8 +1,8 @@
 import { defineStore } from 'pinia'
-import type { PublicUser, SetupHealth } from '~~/shared/types'
+import type { SessionUser, SetupHealth } from '~~/shared/types'
 
 export const useSessionStore = defineStore('session', () => {
-  const user = ref<PublicUser | null>(null)
+  const user = ref<SessionUser | null>(null)
   const health = ref<SetupHealth | null>(null)
   const ready = ref(false)
 
@@ -14,7 +14,7 @@ export const useSessionStore = defineStore('session', () => {
       health.value = null
     }
     try {
-      const res = await $fetch<{ user: PublicUser }>('/api/me')
+      const res = await $fetch<{ user: SessionUser }>('/api/me')
       user.value = res.user
     }
     catch {
@@ -24,7 +24,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function login(email: string, password: string) {
-    const res = await $fetch<{ user: PublicUser }>('/api/auth/login', { method: 'POST', body: { email, password } })
+    const res = await $fetch<{ user: SessionUser }>('/api/auth/login', { method: 'POST', body: { email, password } })
     user.value = res.user
   }
 

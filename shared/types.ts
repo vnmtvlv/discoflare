@@ -1,11 +1,16 @@
 export type PresenceStatus = 'online' | 'idle' | 'offline'
+export type UserStatus = 'pending' | 'active' | 'removed'
 export type ChannelType = 'text' | 'voice' | 'thread' | 'dm'
+export type ChannelVisibility = 'workspace' | 'private'
 
 export type PublicUser = {
   id: string
   displayName: string
-  email: string
   avatarR2Key: string | null
+}
+
+export type SessionUser = PublicUser & {
+  email: string
 }
 
 export type AttachmentDTO = {
@@ -27,7 +32,7 @@ export type ReactionDTO = {
 export type MessageDTO = {
   id: string
   channelId: string
-  guildId: string
+  workspaceId: string
   author: PublicUser
   content: string
   replyTo: { id: string; authorId: string; content: string } | null
@@ -50,7 +55,7 @@ export type HuddleState = {
   startedAt: string | null
 }
 
-export type GuildDTO = {
+export type WorkspaceDTO = {
   id: string
   name: string
   iconR2Key: string | null
@@ -60,10 +65,11 @@ export type GuildDTO = {
 
 export type ChannelDTO = {
   id: string
-  guildId: string
+  workspaceId: string
   name: string
   topic: string
   type: ChannelType
+  visibility: ChannelVisibility
   position: number
   huddleMeetingId: string | null
   parentId: string | null
@@ -79,7 +85,7 @@ export type ChannelDTO = {
 
 export type RoleDTO = {
   id: string
-  guildId: string
+  workspaceId: string
   name: string
   permissions: number
   position: number
@@ -89,13 +95,12 @@ export type MemberDTO = {
   user: PublicUser
   role: RoleDTO
   nickname: string | null
-  lastSeenAt: string
   status: PresenceStatus
 }
 
 export type AuditEntryDTO = {
   id: string
-  guildId: string
+  workspaceId: string
   actorId: string
   actorName: string
   action: string
@@ -107,8 +112,8 @@ export type AuditEntryDTO = {
 
 export type InvitePreviewDTO = {
   code: string
-  guildId: string
-  guildName: string
+  workspaceId: string
+  workspaceName: string
   expiresAt: string | null
   uses: number
   maxUses: number
@@ -124,7 +129,7 @@ export type SetupHealth = {
     r2: boolean
     kv: boolean
     channelDo: boolean
-    guildDo: boolean
+    workspaceDo: boolean
     rateLimitDo: boolean
   }
   realtimekit: boolean
@@ -160,9 +165,9 @@ export type ServerMsg =
   | { t: 'error'; code: string; message: string }
   | { t: 'ack'; clientId: string; id: string }
 
-export type GuildClientMsg = { t: 'auth'; token: string } | { t: 'activity' }
+export type WorkspaceClientMsg = { t: 'auth'; token: string } | { t: 'activity' }
 
-export type GuildServerMsg =
-  | { t: 'hello'; guildId: string }
+export type WorkspaceServerMsg =
+  | { t: 'hello'; workspaceId: string }
   | { t: 'presence'; users: Array<{ userId: string; status: PresenceStatus }> }
   | { t: 'error'; code: string; message: string }

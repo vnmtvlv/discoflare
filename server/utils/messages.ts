@@ -2,12 +2,12 @@ import { inArray } from 'drizzle-orm'
 import { attachments, channels, messageMentions, messageReactions, messages, users } from '../../drizzle/schema'
 import type { AttachmentDTO, MessageDTO, PublicUser, ReactionDTO } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
+import { WORKSPACE_ID } from '../../shared/ids'
 import { getDb } from './db'
 
 export function toPublicUser(row: typeof users.$inferSelect): PublicUser {
   return {
     id: row.id,
-    email: row.email,
     displayName: row.displayName,
     avatarR2Key: row.avatarR2Key,
   }
@@ -84,8 +84,8 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
   return rows.map((row) => ({
     id: row.id,
     channelId: row.channelId,
-    guildId: row.guildId,
-    author: authors.get(row.authorId) ?? { id: row.authorId, email: '', displayName: 'Unknown', avatarR2Key: null },
+    workspaceId: WORKSPACE_ID,
+    author: authors.get(row.authorId) ?? { id: row.authorId, displayName: 'Unknown', avatarR2Key: null },
     content: row.deletedAt ? '' : row.content,
     replyTo: row.replyToId ? replies.get(row.replyToId) ?? null : null,
     mentions: mentions.get(row.id) ?? [],
@@ -100,14 +100,13 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
 
 export async function writeAudit(
   env: DiscoflareEnv,
-  input: { guildId: string; actorId: string; action: string; targetType: string; targetId: string; meta?: Record<string, unknown> },
+  input: { workspaceId: string; actorId: string; action: string; targetType: string; targetId: string; meta?: Record<string, unknown> },
 ) {
   const { newId, nowIso } = await import('../../shared/ids')
   await env.DB.prepare(
-    'INSERT INTO audit_log (id, guild_id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).bind(
     newId(),
-    input.guildId,
     input.actorId,
     input.action,
     input.targetType,

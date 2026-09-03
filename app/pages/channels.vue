@@ -1,10 +1,10 @@
 <script setup lang="ts">
 definePageMeta({ middleware: ['auth'] })
-const { guildId } = useWorkspace()
+const { workspaceId } = useWorkspace()
 </script>
 
 <template>
-  <LayoutAppShell :guild-id="guildId || undefined">
+  <LayoutAppShell :workspace-id="workspaceId || undefined">
     <NuxtPage />
   </LayoutAppShell>
 </template>

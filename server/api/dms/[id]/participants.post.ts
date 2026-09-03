@@ -1,12 +1,12 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { channels, dmParticipants } from '../../../../drizzle/schema'
+import { channels, channelMembers } from '../../../../drizzle/schema'
 import { DM_GROUP_MAX } from '../../../../shared/dm'
 import { nowIso } from '../../../../shared/ids'
 import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
-import { fanoutDm, loadParticipants, requireGuildUser, toDmDto } from '../../../utils/dms'
+import { fanoutDm, loadParticipants, requireWorkspaceUser, toDmDto } from '../../../utils/dms'
 import { parseBody } from '../../../utils/validate'
 
 const bodySchema = z.object({
@@ -20,14 +20,14 @@ export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
   const db = getDb(env.DB)
-  const inGuild = await requireGuildUser(env, access.guildId, body.userId)
-  if (!inGuild) fail(403, 'forbidden', 'User is not in this workspace')
+  const inWorkspace = await requireWorkspaceUser(env, body.userId)
+  if (!inWorkspace) fail(403, 'forbidden', 'User is not in this workspace')
 
-  const existing = (await db.select().from(dmParticipants).where(and(eq(dmParticipants.channelId, id), eq(dmParticipants.userId, body.userId))).limit(1))[0]
+  const existing = (await db.select().from(channelMembers).where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, body.userId))).limit(1))[0]
   if (!existing) {
-    const count = (await db.select().from(dmParticipants).where(eq(dmParticipants.channelId, id))).length
+    const count = (await db.select().from(channelMembers).where(eq(channelMembers.channelId, id))).length
     if (count >= DM_GROUP_MAX) fail(400, 'bad_request', 'Group is full')
-    await db.insert(dmParticipants).values({
+    await db.insert(channelMembers).values({
       channelId: id,
       userId: body.userId,
       hiddenAt: null,
@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     })
   }
   else if (existing.hiddenAt) {
-    await db.update(dmParticipants).set({ hiddenAt: null }).where(and(eq(dmParticipants.channelId, id), eq(dmParticipants.userId, body.userId)))
+    await db.update(channelMembers).set({ hiddenAt: null }).where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, body.userId)))
   }
 
   const participants = await loadParticipants(env, id)

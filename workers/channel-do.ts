@@ -2,15 +2,15 @@ import { DurableObject } from 'cloudflare:workers'
 import { z } from 'zod'
 import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
 import { extractMentionIds } from '../shared/mentions'
-import { isDmType, isVoiceType, normalizeChannelType } from '../shared/dm'
+import { isDmType, isVoiceType } from '../shared/dm'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '../shared/permissions'
-import { newId, nowIso } from '../shared/ids'
-import { asRpc, readCookie, SESSION_COOKIE, type DiscoflareEnv } from './env'
+import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
+import { asRpc, type DiscoflareEnv } from './env'
 import { createMeeting, endMeeting, realtimekitConfigured } from './realtimekit'
-import { userFromSession } from './session'
+import { userFromTicket } from './ticket'
 
 type Sock = { userId: string; user: PublicUser }
-type Authz = { guildId: string; perms: number; ownerId: string; type: string; frozen: boolean }
+type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean }
 
 const createSchema = z.object({
   t: z.literal('message.create'),
@@ -52,11 +52,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
     const pair = new WebSocketPair()
     this.ctx.acceptWebSocket(pair[1])
-    const token = readCookie(request.headers.get('Cookie'), SESSION_COOKIE)
-    if (token) {
-      const user = await userFromSession(this.env, token)
-      if (user) await this.hello(pair[1], user)
-    }
     this.ctx.waitUntil(this.authTimeout(pair[1]))
     return new Response(null, { status: 101, webSocket: pair[0] })
   }
@@ -74,7 +69,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
     const sock = ws.deserializeAttachment() as Sock | null
     if (msg.t === 'auth' && typeof msg.token === 'string') {
-      const user = await userFromSession(this.env, msg.token)
+      const user = await userFromTicket(this.env, msg.token)
       if (!user) {
         this.send(ws, { t: 'error', code: 'unauthorized', message: 'Invalid session' })
         ws.close(4001, 'unauthorized')
@@ -109,17 +104,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       if (huddle.participantIds.length === 0) {
         await this.ctx.storage.setAlarm(Date.now() + 30_000)
       }
-    }
-    const guildId = (await this.loadAuthz(sock.userId))?.guildId
-    if (guildId) {
-      this.ctx.waitUntil(
-        this.env.GUILD_DO.getByName(`guild:${guildId}`).fetch(
-          new Request('https://do/disconnect', {
-            method: 'POST',
-            body: JSON.stringify({ userId: sock.userId }),
-          }),
-        ).catch(() => this.notifyGuild(guildId, 'disconnect', sock.userId)),
-      )
     }
   }
 
@@ -161,7 +145,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         break
       case 'typing':
         this.broadcast({ t: 'typing', userId: sock.userId }, ws)
-        this.ctx.waitUntil(this.notifyGuild(authz.guildId, 'activity', sock.userId))
         break
       case 'read':
         await this.onRead(sock, authz, (JSON.parse(raw) as { messageId: string }).messageId)
@@ -212,20 +195,33 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
     const id = newId()
     const createdAt = nowIso()
-    const mentions = extractMentionIds(body.content)
-    const attachments = await this.bindAttachments(id, body.attachmentIds ?? [])
+    const mentions = await this.validMentions(extractMentionIds(body.content))
+    const attachmentIds = [...new Set(body.attachmentIds ?? [])]
+    if (attachmentIds.length !== (body.attachmentIds?.length ?? 0)) {
+      this.send(ws, { t: 'error', code: 'bad_request', message: 'Duplicate attachment' })
+      return
+    }
+    const attachments = await this.loadAttachments(sock.userId, attachmentIds)
+    if (attachments.length !== attachmentIds.length) {
+      this.send(ws, { t: 'error', code: 'bad_request', message: 'Invalid attachment' })
+      return
+    }
     let replyTo: MessageDTO['replyTo'] = null
     if (body.replyToId) {
       const row = await this.env.DB.prepare(
         'SELECT id, author_id, content FROM messages WHERE id = ? AND channel_id = ?',
       ).bind(body.replyToId, this.channelId()).first<{ id: string; author_id: string; content: string }>()
-      if (row) replyTo = { id: row.id, authorId: row.author_id, content: row.content.slice(0, 180) }
+      if (!row) {
+        this.send(ws, { t: 'error', code: 'bad_request', message: 'Invalid reply target' })
+        return
+      }
+      replyTo = { id: row.id, authorId: row.author_id, content: row.content.slice(0, 180) }
     }
 
     const dto: MessageDTO = {
       id,
       channelId: this.channelId(),
-      guildId: authz.guildId,
+      workspaceId: authz.workspaceId,
       author: sock.user,
       content: body.content,
       replyTo,
@@ -239,24 +235,22 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       clientId: body.clientId,
     }
 
+    await this.persistMessage(dto, body.replyToId ?? null)
     await this.ctx.storage.put(`idem:${idemKey}`, id)
     this.broadcast({ t: 'message', message: dto })
     this.send(ws, { t: 'ack', clientId: body.clientId, id })
-    this.ctx.waitUntil(this.persistMessage(dto, body.replyToId ?? null))
-    this.ctx.waitUntil(this.notifyGuild(authz.guildId, 'activity', sock.userId))
     if (isDmType(authz.type)) {
-      this.ctx.waitUntil(this.env.DB.prepare('UPDATE dm_participants SET hidden_at = NULL WHERE channel_id = ?').bind(this.channelId()).run())
+      this.ctx.waitUntil(this.env.DB.prepare('UPDATE channel_members SET hidden_at = NULL WHERE channel_id = ?').bind(this.channelId()).run())
     }
   }
 
   private async onUpdate(ws: WebSocket, sock: Sock, body: z.infer<typeof updateSchema>) {
     const row = await this.env.DB.prepare(
-      'SELECT id, author_id, channel_id, guild_id, content, reply_to_id, created_at, deleted_at FROM messages WHERE id = ?',
+      'SELECT id, author_id, channel_id, content, reply_to_id, created_at, deleted_at FROM messages WHERE id = ?',
     ).bind(body.id).first<{
       id: string
       author_id: string
       channel_id: string
-      guild_id: string
       content: string
       reply_to_id: string | null
       created_at: string
@@ -272,12 +266,14 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
     if (row.deleted_at) return
     const editedAt = nowIso()
-    const mentions = extractMentionIds(body.content)
-    await this.env.DB.prepare('UPDATE messages SET content = ?, edited_at = ? WHERE id = ?').bind(body.content, editedAt, body.id).run()
-    await this.env.DB.prepare('DELETE FROM message_mentions WHERE message_id = ?').bind(body.id).run()
-    for (const uid of mentions) {
-      await this.env.DB.prepare('INSERT OR IGNORE INTO message_mentions (message_id, user_id) VALUES (?, ?)').bind(body.id, uid).run()
-    }
+    const mentions = await this.validMentions(extractMentionIds(body.content))
+    await this.env.DB.batch([
+      this.env.DB.prepare('UPDATE messages SET content = ?, edited_at = ? WHERE id = ?').bind(body.content, editedAt, body.id),
+      this.env.DB.prepare('DELETE FROM message_mentions WHERE message_id = ?').bind(body.id),
+      ...mentions.map((userId) => this.env.DB.prepare(
+        'INSERT OR IGNORE INTO message_mentions (message_id, user_id) VALUES (?, ?)',
+      ).bind(body.id, userId)),
+    ])
     const dto = await this.loadMessage(body.id)
     if (dto) this.broadcast({ t: 'message.update', message: dto })
   }
@@ -299,12 +295,19 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     this.broadcast({ t: 'message.delete', id })
   }
 
-  private async onRead(sock: Sock, authz: Authz, messageId: string) {
+  private async onRead(sock: Sock, _authz: Authz, messageId: string) {
+    const message = await this.env.DB.prepare(
+      'SELECT id FROM messages WHERE id = ? AND channel_id = ?',
+    ).bind(messageId, this.channelId()).first<{ id: string }>()
+    if (!message) return
     await this.env.DB.prepare(
-      `INSERT INTO channel_reads (guild_id, channel_id, user_id, last_read_message_id, updated_at)
-       VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(channel_id, user_id) DO UPDATE SET last_read_message_id = excluded.last_read_message_id, updated_at = excluded.updated_at`,
-    ).bind(authz.guildId, this.channelId(), sock.userId, messageId, nowIso()).run()
+      `INSERT INTO channel_reads (channel_id, user_id, last_read_message_id, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(channel_id, user_id) DO UPDATE
+       SET last_read_message_id = excluded.last_read_message_id, updated_at = excluded.updated_at
+       WHERE channel_reads.last_read_message_id IS NULL
+          OR channel_reads.last_read_message_id < excluded.last_read_message_id`,
+    ).bind(this.channelId(), sock.userId, messageId, nowIso()).run()
   }
 
   private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz) {
@@ -346,8 +349,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     await this.setHuddle(huddle)
     await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = ? WHERE id = ?').bind(meeting.id, this.channelId()).run()
     await this.env.DB.prepare(
-      'INSERT INTO audit_log (id, guild_id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-    ).bind(newId(), authz.guildId, sock.userId, 'huddle.start', 'channel', this.channelId(), '{}', nowIso()).run()
+      'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).bind(newId(), sock.userId, 'huddle.start', 'channel', this.channelId(), '{}', nowIso()).run()
     this.broadcast({ t: 'huddle', huddle })
     this.broadcast({ t: 'voice', voice: huddle })
   }
@@ -390,7 +393,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       participants = await this.loadDmParticipants()
     }
     this.send(ws, { t: 'hello', channelId: this.channelId(), you: user, huddle, frozen: authz.frozen, participants })
-    this.ctx.waitUntil(this.notifyGuild(authz.guildId, 'connect', user.id))
   }
 
   private async authTimeout(ws: WebSocket) {
@@ -404,44 +406,49 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   private async loadAuthz(userId: string): Promise<Authz | null> {
     const ch = await this.env.DB.prepare(
-      'SELECT id, guild_id, type, parent_id FROM channels WHERE id = ?',
-    ).bind(this.channelId()).first<{ id: string; guild_id: string; type: string; parent_id: string | null }>()
+      'SELECT id, type, visibility, parent_id FROM channels WHERE id = ?',
+    ).bind(this.channelId()).first<{ id: string; type: string; visibility: string; parent_id: string | null }>()
     if (!ch) return null
-    const type = normalizeChannelType(ch.type)
-    let dmId: string | null = type === 'dm' ? ch.id : null
+    const type = ch.type
+    let accessRoot = ch
     if (type === 'thread' && ch.parent_id) {
-      const parent = await this.env.DB.prepare('SELECT id, type FROM channels WHERE id = ?').bind(ch.parent_id).first<{ id: string; type: string }>()
-      if (parent && isDmType(parent.type)) dmId = parent.id
+      const parent = await this.env.DB.prepare('SELECT id, type, visibility, parent_id FROM channels WHERE id = ?').bind(ch.parent_id).first<{ id: string; type: string; visibility: string; parent_id: string | null }>()
+      if (!parent) return null
+      accessRoot = parent
     }
-    if (dmId) {
+
+    const membership = await this.env.DB.prepare(
+      `SELECT r.permissions_bitmask as perms, w.owner_id as ownerId
+       FROM users u
+       JOIN roles r ON r.id = u.role_id
+       JOIN workspace w ON w.id = 'main'
+       WHERE u.id = ? AND u.status = 'active'`,
+    ).bind(userId).first<{ perms: number; ownerId: string }>()
+    if (!membership) return null
+
+    if (accessRoot.visibility === 'private') {
       const part = await this.env.DB.prepare(
-        'SELECT user_id FROM dm_participants WHERE channel_id = ? AND user_id = ?',
-      ).bind(dmId, userId).first()
+        'SELECT user_id FROM channel_members WHERE channel_id = ? AND user_id = ?',
+      ).bind(accessRoot.id, userId).first()
       if (!part) return null
-      const parts = await this.env.DB.prepare('SELECT user_id FROM dm_participants WHERE channel_id = ?').bind(dmId).all<{ user_id: string }>()
+    }
+
+    if (isDmType(accessRoot.type)) {
+      const parts = await this.env.DB.prepare('SELECT user_id FROM channel_members WHERE channel_id = ?').bind(accessRoot.id).all<{ user_id: string }>()
       const ids = (parts.results ?? []).map((p) => p.user_id)
       let frozen = false
       if (ids.length) {
         const placeholders = ids.map(() => '?').join(',')
         const still = await this.env.DB.prepare(
-          `SELECT user_id FROM guild_members WHERE guild_id = ? AND user_id IN (${placeholders})`,
-        ).bind(ch.guild_id, ...ids).all<{ user_id: string }>()
+          `SELECT id FROM users WHERE id IN (${placeholders}) AND status = 'active'`,
+        ).bind(...ids).all<{ id: string }>()
         frozen = (still.results ?? []).length !== ids.length
       }
       const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
-      return { guildId: ch.guild_id, type: dmId === ch.id ? 'dm' : type, perms, ownerId: '', frozen }
+      return { workspaceId: WORKSPACE_ID, type: accessRoot.id === ch.id ? 'dm' : type, perms, ownerId: membership.ownerId, frozen }
     }
-    const row = await this.env.DB.prepare(
-      `SELECT c.guild_id as guildId, c.type as type, r.permissions_bitmask as perms, g.owner_id as ownerId
-       FROM channels c
-       JOIN guild_members m ON m.guild_id = c.guild_id AND m.user_id = ?
-       JOIN roles r ON r.id = m.role_id
-       JOIN guilds g ON g.id = c.guild_id
-       WHERE c.id = ?`,
-    ).bind(userId, this.channelId()).first<{ guildId: string; type: string; perms: number; ownerId: string }>()
-    if (!row) return null
-    const perms = row.ownerId === userId ? ALL_PERMISSIONS : row.perms
-    return { guildId: row.guildId, type: normalizeChannelType(row.type), perms, ownerId: row.ownerId, frozen: false }
+    const perms = membership.ownerId === userId ? ALL_PERMISSIONS : membership.perms
+    return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false }
   }
 
   private async loadDmParticipants(): Promise<PublicUser[]> {
@@ -450,33 +457,34 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     const dmId = isDmType(ch.type) ? ch.id : ch.parent_id
     if (!dmId) return []
     const rows = await this.env.DB.prepare(
-      `SELECT u.id, u.email, u.display_name, u.avatar_r2_key
-       FROM dm_participants p JOIN users u ON u.id = p.user_id WHERE p.channel_id = ?`,
-    ).bind(dmId).all<{ id: string; email: string; display_name: string; avatar_r2_key: string | null }>()
-    return (rows.results ?? []).map((r) => ({ id: r.id, email: r.email, displayName: r.display_name, avatarR2Key: r.avatar_r2_key }))
+      `SELECT u.id, u.display_name, u.avatar_r2_key
+       FROM channel_members p JOIN users u ON u.id = p.user_id WHERE p.channel_id = ?`,
+    ).bind(dmId).all<{ id: string; display_name: string; avatar_r2_key: string | null }>()
+    return (rows.results ?? []).map((r) => ({ id: r.id, displayName: r.display_name, avatarR2Key: r.avatar_r2_key }))
   }
 
   private async persistMessage(dto: MessageDTO, replyToId: string | null) {
-    try {
-      await this.env.DB.prepare(
-        'INSERT INTO messages (id, channel_id, guild_id, author_id, content, reply_to_id, edited_at, deleted_at, created_at) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, ?)',
-      ).bind(dto.id, dto.channelId, dto.guildId, dto.author.id, dto.content, replyToId, dto.createdAt).run()
-      for (const uid of dto.mentions) {
-        await this.env.DB.prepare('INSERT OR IGNORE INTO message_mentions (message_id, user_id) VALUES (?, ?)').bind(dto.id, uid).run()
-      }
-    }
-    catch (err) {
-      console.error('persist message failed', err)
-    }
+    const statements = [
+      this.env.DB.prepare(
+        'INSERT INTO messages (id, channel_id, author_id, content, reply_to_id, edited_at, deleted_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)',
+      ).bind(dto.id, dto.channelId, dto.author.id, dto.content, replyToId, dto.createdAt),
+      ...dto.attachments.map((attachment) => this.env.DB.prepare(
+        'UPDATE attachments SET message_id = ? WHERE id = ? AND message_id IS NULL AND channel_id = ? AND uploader_id = ?',
+      ).bind(dto.id, attachment.id, dto.channelId, dto.author.id)),
+      ...dto.mentions.map((uid) => this.env.DB.prepare(
+        'INSERT OR IGNORE INTO message_mentions (message_id, user_id) VALUES (?, ?)',
+      ).bind(dto.id, uid)),
+    ]
+    await this.env.DB.batch(statements)
   }
 
-  private async bindAttachments(messageId: string, ids: string[]): Promise<AttachmentDTO[]> {
+  private async loadAttachments(userId: string, ids: string[]): Promise<AttachmentDTO[]> {
     if (!ids.length) return []
     const out: AttachmentDTO[] = []
     for (const id of ids) {
       const row = await this.env.DB.prepare(
-        'SELECT id, r2_key, filename, content_type, size_bytes, width, height FROM attachments WHERE id = ? AND (message_id IS NULL OR message_id = ?)',
-      ).bind(id, messageId).first<{
+        'SELECT id, r2_key, filename, content_type, size_bytes, width, height FROM attachments WHERE id = ? AND message_id IS NULL AND channel_id = ? AND uploader_id = ?',
+      ).bind(id, this.channelId(), userId).first<{
         id: string
         r2_key: string
         filename: string
@@ -486,7 +494,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         height: number | null
       }>()
       if (!row) continue
-      await this.env.DB.prepare('UPDATE attachments SET message_id = ? WHERE id = ?').bind(messageId, id).run()
       out.push({
         id: row.id,
         filename: row.filename,
@@ -500,22 +507,29 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     return out
   }
 
+  private async validMentions(ids: string[]): Promise<string[]> {
+    if (!ids.length) return []
+    const placeholders = ids.map(() => '?').join(',')
+    const rows = await this.env.DB.prepare(
+      `SELECT id FROM users WHERE id IN (${placeholders}) AND status = 'active'`,
+    ).bind(...ids).all<{ id: string }>()
+    return (rows.results ?? []).map((row) => row.id)
+  }
+
   private async loadMessage(id: string): Promise<MessageDTO | null> {
     const row = await this.env.DB.prepare(
-      `SELECT m.id, m.channel_id, m.guild_id, m.content, m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
-              u.id as uid, u.email, u.display_name, u.avatar_r2_key
+      `SELECT m.id, m.channel_id, m.content, m.reply_to_id, m.edited_at, m.deleted_at, m.created_at,
+              u.id as uid, u.display_name, u.avatar_r2_key
        FROM messages m JOIN users u ON u.id = m.author_id WHERE m.id = ?`,
     ).bind(id).first<{
       id: string
       channel_id: string
-      guild_id: string
       content: string
       reply_to_id: string | null
       edited_at: string | null
       deleted_at: string | null
       created_at: string
       uid: string
-      email: string
       display_name: string
       avatar_r2_key: string | null
     }>()
@@ -535,8 +549,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     return {
       id: row.id,
       channelId: row.channel_id,
-      guildId: row.guild_id,
-      author: { id: row.uid, email: row.email, displayName: row.display_name, avatarR2Key: row.avatar_r2_key },
+      workspaceId: WORKSPACE_ID,
+      author: { id: row.uid, displayName: row.display_name, avatarR2Key: row.avatar_r2_key },
       content: row.deleted_at ? '' : row.content,
       replyTo: null,
       mentions: (mentionRows.results ?? []).map((r) => r.user_id),
@@ -559,22 +573,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   private async setHuddle(huddle: HuddleState) {
     await this.ctx.storage.put('huddle', huddle)
-  }
-
-  private async notifyGuild(guildId: string, kind: 'connect' | 'disconnect' | 'activity', userId: string) {
-    try {
-      const stub = asRpc<{
-        userConnected: (id: string) => Promise<void>
-        userDisconnected: (id: string) => Promise<void>
-        userActivity: (id: string) => Promise<void>
-      }>(this.env.GUILD_DO.getByName(`guild:${guildId}`))
-      if (kind === 'connect') await stub.userConnected(userId)
-      else if (kind === 'disconnect') await stub.userDisconnected(userId)
-      else await stub.userActivity(userId)
-    }
-    catch (err) {
-      console.error('guild notify failed', err)
-    }
   }
 
   private channelId(): string {

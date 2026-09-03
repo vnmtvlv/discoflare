@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { channels, guildMembers } from '../../../drizzle/schema'
+import { channels, users } from '../../../drizzle/schema'
+import { WORKSPACE_ID } from '../../../shared/ids'
 import { requireUser } from '../../utils/auth'
 import { cf, fail } from '../../utils/cf'
 import { getDb } from '../../utils/db'
@@ -9,7 +10,7 @@ import { parseBody } from '../../utils/validate'
 
 const bodySchema = z.object({
   userId: z.string().min(8),
-  guildId: z.string().min(8).optional(),
+  workspaceId: z.literal(WORKSPACE_ID).optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -19,17 +20,12 @@ export default defineEventHandler(async (event) => {
   const { env } = cf(event)
   const db = getDb(env.DB)
 
-  let guildId = body.guildId
-  if (!guildId) {
-    const mine = await db.select({ guildId: guildMembers.guildId }).from(guildMembers).where(eq(guildMembers.userId, me.id)).limit(1)
-    guildId = mine[0]?.guildId
-  }
-  if (!guildId) fail(400, 'bad_request', 'No workspace')
-
-  const both = await db.select().from(guildMembers).where(and(eq(guildMembers.guildId, guildId), eq(guildMembers.userId, body.userId))).limit(1)
+  const mine = await db.select().from(users).where(and(eq(users.id, me.id), eq(users.status, 'active'))).limit(1)
+  if (!mine[0]) fail(403, 'forbidden', 'You are not in this workspace')
+  const both = await db.select().from(users).where(and(eq(users.id, body.userId), eq(users.status, 'active'))).limit(1)
   if (!both[0]) fail(403, 'forbidden', 'User is not in this workspace')
 
-  const id = await openPairDm(env, guildId, me.id, body.userId)
+  const id = await openPairDm(env, me.id, body.userId)
   const ch = (await db.select().from(channels).where(eq(channels.id, id)).limit(1))[0]!
   return { channel: await toDmDto(env, ch, me.id, false) }
 })

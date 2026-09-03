@@ -1,0 +1,48 @@
+import { eq } from 'drizzle-orm'
+import { roles, users } from '../../../../drizzle/schema'
+import { requireMember } from '../../../utils/guards'
+import { cf } from '../../../utils/cf'
+import { getDb } from '../../../utils/db'
+import { toPublicUser } from '../../../utils/messages'
+
+export default defineEventHandler(async (event) => {
+  const id = getRouterParam(event, 'id')!
+  await requireMember(event, id)
+  const { env } = cf(event)
+  const db = getDb(env.DB)
+
+  let presence: Array<{ userId: string; status: 'online' | 'idle' | 'offline' }> = []
+  try {
+    const stub = asRpc<{
+      snapshot: () => Promise<Array<{ userId: string; status: 'online' | 'idle' | 'offline' }>>
+    }>(env.WORKSPACE_DO.getByName(`workspace:${id}`))
+    presence = await stub.snapshot()
+  }
+  catch {
+    // Workspace presence DO may be cold in nuxt-only local dev
+  }
+  const statusMap = new Map(presence.map((p) => [p.userId, p.status]))
+
+  const rows = await db.select({
+    user: users,
+    role: roles,
+    nickname: users.nickname,
+  }).from(users)
+    .innerJoin(roles, eq(roles.id, users.roleId))
+    .where(eq(users.status, 'active'))
+
+  return {
+    members: rows.map((r) => ({
+      user: toPublicUser(r.user),
+      role: {
+        id: r.role.id,
+        workspaceId: id,
+        name: r.role.name,
+        permissions: r.role.permissionsBitmask,
+        position: r.role.position,
+      },
+      nickname: r.nickname,
+      status: statusMap.get(r.user.id) ?? 'offline',
+    })),
+  }
+})

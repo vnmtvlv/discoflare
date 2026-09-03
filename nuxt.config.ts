@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-02',
   devtools: { enabled: false },
@@ -15,6 +17,16 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'cloudflare-module',
     entry: process.env.NODE_ENV === 'development' ? undefined : './cloudflare-entry.ts',
+    rollupConfig: {
+      plugins: [{
+        name: 'discoflare-raw-sql',
+        async load(id) {
+          if (!id.endsWith('.sql?raw')) return null
+          const sql = await readFile(id.slice(0, -4), 'utf8')
+          return `export default ${JSON.stringify(sql)}`
+        },
+      }],
+    },
     errorHandler: './server/error',
     cloudflare: {
       nodeCompat: true,

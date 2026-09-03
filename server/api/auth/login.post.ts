@@ -1,11 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { account, user, users } from '../../../drizzle/schema'
-import { createSession, publicUser } from '../../utils/auth'
+import { users } from '../../../drizzle/schema'
+import { nowIso } from '../../../shared/ids'
+import { publicUser } from '../../utils/auth'
 import { authFromEvent } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
 import { ensureMigrated, getDb } from '../../utils/db'
-import { verifyPassword } from '../../utils/password'
 import { parseBody } from '../../utils/validate'
 
 const bodySchema = z.object({
@@ -28,50 +28,35 @@ export default defineEventHandler(async (event) => {
   }
   if (!allowed) fail(429, 'rate_limited', 'Too many login attempts')
 
-  const db = getDb(env.DB)
   const email = body.email.trim().toLowerCase()
-  const row = (await db.select().from(users).where(eq(users.email, email)).limit(1))[0]
-  const dummy = 'scrypt$16384$8$1$00000000000000000000000000000000$0000000000000000000000000000000000000000000000000000000000000000'
-  const ok = row ? await verifyPassword(body.password, row.passwordHash) : await verifyPassword(body.password, dummy)
-  if (!row || !ok) fail(401, 'invalid_credentials', 'Invalid email or password')
-
-  const now = Date.now()
-  try {
-    await db.insert(user).values({
-      id: row.id,
-      name: row.displayName,
-      email: row.email,
-      emailVerified: true,
-      image: row.avatarR2Key,
-      createdAt: new Date(now),
-      updatedAt: new Date(now),
-    }).onConflictDoNothing()
-    await db.insert(account).values({
-      id: row.id,
-      issuer: 'local:credential',
-      accountId: row.id,
-      providerId: 'credential',
-      userId: row.id,
-      password: row.passwordHash,
-      createdAt: new Date(now),
-      updatedAt: new Date(now),
-    }).onConflictDoNothing()
-    const origin = getRequestURL(event).origin
-    const res = await authFromEvent(event).handler(new Request(`${origin}/api/auth/sign-in/email`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        cookie: getHeader(event, 'cookie') || '',
-      },
-      body: JSON.stringify({ email, password: body.password }),
-    }))
-    const setCookie = res.headers.getSetCookie?.() ?? []
-    for (const cookie of setCookie) appendResponseHeader(event, 'set-cookie', cookie)
-    if (!res.ok) await createSession(event, row.id)
-  }
-  catch {
-    await createSession(event, row.id)
+  const res = await authFromEvent(event).api.signInEmail({
+    headers: event.headers,
+    body: {
+      email,
+      password: body.password,
+    },
+    asResponse: true,
+  })
+  if (!res.ok) fail(401, 'invalid_credentials', 'Invalid email or password')
+  for (const cookie of res.headers.getSetCookie?.() ?? []) appendResponseHeader(event, 'set-cookie', cookie)
+  const signedIn = await res.json() as { user: { id: string; email: string; name: string; image?: string | null } }
+  const db = getDb(env.DB)
+  let row = (await db.select().from(users).where(eq(users.id, signedIn.user.id)).limit(1))[0]
+  if (!row) {
+    const created = nowIso()
+    await db.insert(users).values({
+      id: signedIn.user.id,
+      displayName: signedIn.user.name || signedIn.user.email.split('@')[0] || 'member',
+      avatarR2Key: signedIn.user.image ?? null,
+      status: 'pending',
+      roleId: null,
+      nickname: null,
+      joinedAt: null,
+      createdAt: created,
+      updatedAt: created,
+    })
+    row = (await db.select().from(users).where(eq(users.id, signedIn.user.id)).limit(1))[0]!
   }
 
-  return { user: publicUser(row) }
+  return { user: { ...publicUser(row), email: signedIn.user.email } }
 })

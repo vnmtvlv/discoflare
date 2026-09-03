@@ -1,9 +1,9 @@
 import type { DiscoflareEnv } from './env'
 import { ChannelDurableObject } from './channel-do'
-import { GuildDurableObject } from './guild-do'
+import { WorkspaceDurableObject } from './workspace-do'
 import { RateLimitDurableObject } from './rate-limit-do'
 
-export { ChannelDurableObject, GuildDurableObject, RateLimitDurableObject }
+export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject }
 
 export default {
   async fetch(request: Request, env: DiscoflareEnv): Promise<Response> {
@@ -13,9 +13,9 @@ export default {
       if (channel?.[1]) {
         return env.CHANNEL_DO.getByName(`channel:${channel[1]}`).fetch(request)
       }
-      const guild = url.pathname.match(/^\/ws\/guild\/([^/]+)/)
-      if (guild?.[1]) {
-        return env.GUILD_DO.getByName(`guild:${guild[1]}`).fetch(request)
+      const workspace = url.pathname.match(/^\/ws\/workspace\/([^/]+)/)
+      if (workspace?.[1]) {
+        return env.WORKSPACE_DO.getByName(`workspace:${workspace[1]}`).fetch(request)
       }
     }
     return new Response('discoflare durable objects', { status: 200 })

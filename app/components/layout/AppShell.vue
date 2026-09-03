@@ -1,14 +1,14 @@
 <script setup lang="ts">
 const ui = useUiStore()
 const props = defineProps<{
-  guildId?: string
+  workspaceId?: string
 }>()
 const route = useRoute()
-const { guildId: workspaceId } = useWorkspace()
+const { workspaceId: defaultWorkspaceId } = useWorkspace()
 
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
-const guildId = computed(() => props.guildId || workspaceId.value || ui.last()?.guildId)
+const workspaceId = computed(() => props.workspaceId || defaultWorkspaceId.value || ui.last()?.workspaceId)
 
 watch(() => route.params.channel, () => {
   if (isMobile.value) ui.mobilePane = 'chat'
@@ -18,11 +18,11 @@ watch(() => route.params.channel, () => {
 <template>
   <div class="h-dvh overflow-hidden flex bg-default">
     <aside
-      v-if="guildId && (!isMobile || ui.mobilePane === 'channels')"
+      v-if="workspaceId && (!isMobile || ui.mobilePane === 'channels')"
       class="w-60 shrink-0 bg-muted flex flex-col min-h-0"
       :class="isMobile ? 'absolute inset-y-0 start-0 z-30 shadow-xl' : ''"
     >
-      <LayoutChannelNav :guild-id="guildId" />
+      <LayoutChannelNav :workspace-id="workspaceId" />
     </aside>
     <button
       v-if="isMobile && ui.mobilePane === 'channels'"

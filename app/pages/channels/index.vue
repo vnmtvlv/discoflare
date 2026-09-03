@@ -3,7 +3,7 @@ import { channelPath } from '~~/shared/paths'
 
 definePageMeta({ middleware: ['auth'] })
 const ui = useUiStore()
-const { guildId } = useWorkspace()
+const { workspaceId } = useWorkspace()
 
 onMounted(async () => {
   const last = ui.last()
@@ -11,8 +11,8 @@ onMounted(async () => {
     await navigateTo(`/channels/${last.channelId}`, { replace: true })
     return
   }
-  if (!guildId.value) return
-  const { channels } = await $fetch<{ channels: Array<{ id: string; name: string; type: string }> }>(`/api/guilds/${guildId.value}/channels`)
+  if (!workspaceId.value) return
+  const { channels } = await $fetch<{ channels: Array<{ id: string; name: string; type: string }> }>(`/api/workspaces/${workspaceId.value}/channels`)
   const first = channels.find((c) => c.type === 'text') ?? channels[0]
   if (first) await navigateTo(channelPath(first), { replace: true })
 })

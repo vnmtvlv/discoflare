@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { dmParticipants } from '../../../../drizzle/schema'
+import { channelMembers } from '../../../../drizzle/schema'
 import { nowIso } from '../../../../shared/ids'
 import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
@@ -11,6 +11,6 @@ export default defineEventHandler(async (event) => {
   if (access.channel.type !== 'dm') fail(404, 'not_found', 'Channel not found')
   const { env } = cf(event)
   const db = getDb(env.DB)
-  await db.update(dmParticipants).set({ hiddenAt: nowIso() }).where(and(eq(dmParticipants.channelId, id), eq(dmParticipants.userId, access.user.id)))
+  await db.update(channelMembers).set({ hiddenAt: nowIso() }).where(and(eq(channelMembers.channelId, id), eq(channelMembers.userId, access.user.id)))
   return { ok: true }
 })

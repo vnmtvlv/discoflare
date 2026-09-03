@@ -15,7 +15,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       users: 0,
       migrated: false,
       adminEnv: false,
-      bindings: { db: false, r2: false, kv: false, channelDo: false, guildDo: false, rateLimitDo: false },
+      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false },
       realtimekit: false,
     }
   }
@@ -23,9 +23,9 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
   const bindings = {
     db: Boolean(env.DB),
     r2: Boolean(env.FILES),
-    kv: Boolean(env.SESSIONS),
+    kv: Boolean(env.TICKETS),
     channelDo: Boolean(env.CHANNEL_DO),
-    guildDo: Boolean(env.GUILD_DO),
+    workspaceDo: Boolean(env.WORKSPACE_DO),
     rateLimitDo: Boolean(env.RATE_LIMIT_DO),
   }
 

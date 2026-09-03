@@ -15,15 +15,9 @@ export function dmTitle(name: string | null | undefined, participants: PublicUse
 }
 
 export function isVoiceType(type: string): boolean {
-  return type === 'voice' || type === 'huddle'
+  return type === 'voice'
 }
 
 export function isDmType(type: string): boolean {
   return type === 'dm'
-}
-
-export function normalizeChannelType(type: string): 'text' | 'voice' | 'thread' | 'dm' {
-  if (type === 'huddle') return 'voice'
-  if (type === 'voice' || type === 'thread' || type === 'dm') return type
-  return 'text'
 }

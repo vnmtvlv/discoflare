@@ -8,16 +8,25 @@
     "dev": "nuxt dev",
     "dev:full": "nuxt build && wrangler dev",
     "preview": "nuxt build && wrangler dev",
-    "deploy": "nuxt build && wrangler deploy",
+    "deploy": "nuxt build && pnpm db:migrate && wrangler deploy",
+    "env:init": "node scripts/init-env.mjs",
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:migrate:local": "wrangler d1 migrations apply discoflare --local -c wrangler.dev.jsonc",
-    "db:migrate": "wrangler d1 migrations apply discoflare --remote",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.dev.jsonc",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
     "db:seed": "node scripts/seed.mjs",
     "cf:types": "wrangler types"
+  },
+  "cloudflare": {
+    "bindings": {
+      "AUTH_SECRET": { "description": "Generate a random 32+ character value. This signs login sessions." },
+      "ADMIN_EMAIL": { "description": "Email for the first owner account." },
+      "ADMIN_PASSWORD": { "description": "Strong password for the first owner account (8+ characters)." },
+      "ADMIN_NAME": { "description": "Display name for the first owner account." }
+    }
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.2",

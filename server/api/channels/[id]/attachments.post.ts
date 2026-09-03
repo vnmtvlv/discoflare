@@ -21,13 +21,15 @@ export default defineEventHandler(async (event) => {
 
   const id = newId()
   const safeName = (file.filename || 'file').replace(/[^\w.-]+/g, '_').slice(0, 80)
-  const key = `${member.guildId}/${channelId}/${id}-${safeName}`
+  const key = `${member.workspaceId}/${channelId}/${id}-${safeName}`
   await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
 
   const db = getDb(env.DB)
   const row = {
     id,
     messageId: null,
+    channelId,
+    uploaderId: member.user.id,
     r2Key: key,
     filename: safeName,
     contentType: mime,

@@ -4,14 +4,17 @@ Discoflare is a self-hosted team chat for custom domains and Cloudflare accounts
 
 MIT licensed. One Worker. No origin server.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/discoflare/discoflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)
 
-After deploy, set `ADMIN_EMAIL` and `ADMIN_PASSWORD` (and optional `ADMIN_NAME`). The first request creates the owner and workspace. Or open `/setup` and create the owner by hand. Invite a second browser with a workspace invite link.
+The deploy form asks for `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME`. The first health request applies the bootstrap and creates the owner and workspace. `/setup` only reports readiness; it cannot be used to claim an unconfigured installation.
+
+The repository must be public before the Deploy to Cloudflare button can clone it. It is safe to keep private while developing locally.
 
 ## Local
 
 ```
 pnpm install
+pnpm env:init
 pnpm db:migrate:local
 pnpm dev
 ```
@@ -22,7 +25,7 @@ WebSockets and Durable Object hibernation match production with:
 pnpm dev:full
 ```
 
-Copy `.env.example` to `.dev.vars` for a local owner (`ADMIN_EMAIL` / `ADMIN_PASSWORD`). Optional extra seed users (`owner@local.test` / `member@local.test`, password `password12`):
+`pnpm env:init` creates or completes `.env` from `.env.example`, generates `AUTH_SECRET`, and preserves existing values. Edit the owner values before first boot. Optional extra seed users (`owner@local.test` / `member@local.test`, password `password12`):
 
 ```
 pnpm db:seed
@@ -52,7 +55,7 @@ See [docs/architecture.md](docs/architecture.md).
 ```
 Browser ──HTTP /api/*──► Nuxt Worker ── D1 / R2 / KV
         ──WS /ws/channel/:id──► ChannelDO (live text, typing, huddle flag)
-        ──WS /ws/guild/:id────► GuildDO (presence)
+        ──WS /ws/workspace/:id► WorkspaceDO (presence)
 Huddle media ── RealtimeKit (token minted by Worker)
 ```
 
@@ -68,7 +71,8 @@ RealtimeKit huddles are billed per participant-minute (voice is cheaper than A/V
 |---|---|
 | `pnpm dev` | Nuxt + local bindings |
 | `pnpm dev:full` | wrangler dev on the built Worker |
-| `pnpm deploy` | build + wrangler deploy |
+| `pnpm env:init` | safely initialize `.env` from `.env.example` |
+| `pnpm deploy` | build + remote D1 migration + wrangler deploy |
 | `pnpm db:migrate:local` | apply D1 SQL locally |
 | `pnpm typecheck` | `nuxt typecheck` |
 | `pnpm test` | unit tests |

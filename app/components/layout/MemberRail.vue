@@ -6,8 +6,8 @@ import { Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
 
 const props = defineProps<{
-  guildId: string
-  dmParticipants?: PublicUser[]
+  workspaceId: string
+  channelMembers?: PublicUser[]
   isGroupDm?: boolean
 }>()
 const presence = usePresenceStore()
@@ -19,20 +19,19 @@ const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
 
 const { data, isPending, error } = useQuery({
-  queryKey: computed(() => ['members', props.guildId]),
-  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/guilds/${props.guildId}/members`),
+  queryKey: computed(() => ['members', props.workspaceId]),
+  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
 })
 const { can } = usePermissions(computed(() => data.value?.members))
 
 const list = computed(() => {
-  if (props.dmParticipants?.length) {
-    return props.dmParticipants.map((u) => {
+  if (props.channelMembers?.length) {
+    return props.channelMembers.map((u) => {
       const m = data.value?.members.find((x) => x.user.id === u.id)
       return m ?? {
         user: u,
-        role: { id: '', guildId: props.guildId, name: 'member', permissions: 0, position: 99 },
+        role: { id: '', workspaceId: props.workspaceId, name: 'member', permissions: 0, position: 99 },
         nickname: null,
-        lastSeenAt: '',
         status: presence.statusOf(u.id),
       } satisfies MemberDTO
     })
@@ -60,14 +59,14 @@ const kickId = ref<string | null>(null)
 
 async function confirmKick() {
   if (!kickId.value) return
-  await $fetch(`/api/guilds/${props.guildId}/members/${kickId.value}`, { method: 'DELETE' })
-  await qc.invalidateQueries({ queryKey: ['members', props.guildId] })
+  await $fetch(`/api/workspaces/${props.workspaceId}/members/${kickId.value}`, { method: 'DELETE' })
+  await qc.invalidateQueries({ queryKey: ['members', props.workspaceId] })
   toast.add({ title: 'Member kicked', color: 'success' })
   kickId.value = null
 }
 
 async function message(userId: string) {
-  const res = await $fetch<{ channel: { id: string } }>('/api/dms', { method: 'POST', body: { userId, guildId: props.guildId } })
+  const res = await $fetch<{ channel: { id: string } }>('/api/dms', { method: 'POST', body: { userId, workspaceId: props.workspaceId } })
   await qc.invalidateQueries({ queryKey: ['dms'] })
   await navigateTo(channelPath(res.channel))
 }
@@ -135,10 +134,10 @@ function roleLabel(name: string) {
         />
       </div>
     </header>
-    <div v-if="isPending && !dmParticipants?.length" class="p-3">
+    <div v-if="isPending && !channelMembers?.length" class="p-3">
       <USkeleton class="h-24" />
     </div>
-    <UAlert v-else-if="error && !dmParticipants?.length" color="error" title="Could not load members." class="m-3" />
+    <UAlert v-else-if="error && !channelMembers?.length" color="error" title="Could not load members." class="m-3" />
     <p v-else-if="!list.length" class="p-3 text-sm text-muted">No members.</p>
     <div v-else class="px-2 py-4 space-y-4">
       <p v-if="isGroupDm" class="text-[11px] font-semibold uppercase tracking-wide text-muted px-1">Participants — {{ list.length }}</p>

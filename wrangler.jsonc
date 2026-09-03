@@ -27,14 +27,14 @@
   ],
   "kv_namespaces": [
     {
-      "binding": "SESSIONS",
+      "binding": "TICKETS",
       "id": "REPLACE_ON_DEPLOY"
     }
   ],
   "durable_objects": {
     "bindings": [
       { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
-      { "name": "GUILD_DO", "class_name": "GuildDurableObject" },
+      { "name": "WORKSPACE_DO", "class_name": "WorkspaceDurableObject" },
       { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" }
     ]
   },
@@ -43,14 +43,13 @@
       "tag": "v1",
       "new_sqlite_classes": [
         "ChannelDurableObject",
-        "GuildDurableObject",
+        "WorkspaceDurableObject",
         "RateLimitDurableObject"
       ]
     }
   ],
   "vars": {
     "REALTIMEKIT_PRESET_VOICE": "voice",
-    "REALTIMEKIT_PRESET_AV": "group_call_host",
-    "AUTH_SECRET": "discoflare-dev-secret-do-not-use-in-prod!!"
+    "REALTIMEKIT_PRESET_AV": "group_call_host"
   }
 }

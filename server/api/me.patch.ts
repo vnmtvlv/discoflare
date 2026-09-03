@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { user as baUser, users } from '../../drizzle/schema'
+import { authUsers, users } from '../../drizzle/schema'
 import { requireUser } from '../utils/auth'
 import { cf } from '../utils/cf'
 import { getDb } from '../utils/db'
@@ -17,6 +17,6 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const displayName = body.displayName.trim()
   await db.update(users).set({ displayName }).where(eq(users.id, me.id))
-  await db.update(baUser).set({ name: displayName, updatedAt: new Date() }).where(eq(baUser.id, me.id)).catch(() => undefined)
+  await db.update(authUsers).set({ name: displayName, updatedAt: new Date() }).where(eq(authUsers.id, me.id)).catch(() => undefined)
   return { user: { ...me, displayName } }
 })

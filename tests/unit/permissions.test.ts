@@ -4,7 +4,7 @@ import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, rolePerm
 describe('permissions', () => {
   it('owner has every flag', () => {
     expect(hasPermission(ALL_PERMISSIONS, Permission.kick)).toBe(true)
-    expect(hasPermission(ALL_PERMISSIONS, Permission.manageGuild)).toBe(true)
+    expect(hasPermission(ALL_PERMISSIONS, Permission.manageWorkspace)).toBe(true)
     expect(rolePermissions('owner')).toBe(ALL_PERMISSIONS)
   })
 

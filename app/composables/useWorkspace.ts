@@ -1,12 +1,12 @@
 import { useQuery } from '@tanstack/vue-query'
-import type { GuildDTO } from '~~/shared/types'
+import type { WorkspaceDTO } from '~~/shared/types'
 
 export function useWorkspace() {
-  const guildsQ = useQuery({
-    queryKey: ['guilds'],
-    queryFn: () => $fetch<{ guilds: GuildDTO[] }>('/api/guilds'),
+  const workspacesQ = useQuery({
+    queryKey: ['workspaces'],
+    queryFn: () => $fetch<{ workspaces: WorkspaceDTO[] }>('/api/workspaces'),
   })
-  const guild = computed(() => guildsQ.data.value?.guilds[0] ?? null)
-  const guildId = computed(() => guild.value?.id ?? '')
-  return { guildsQ, guild, guildId }
+  const workspace = computed(() => workspacesQ.data.value?.workspaces[0] ?? null)
+  const workspaceId = computed(() => workspace.value?.id ?? '')
+  return { workspacesQ, workspace, workspaceId }
 }

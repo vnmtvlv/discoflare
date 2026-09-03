@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { dmTitle, normalizeChannelType } from '../../shared/dm'
+import { dmTitle } from '../../shared/dm'
 import { formatBytes } from '../../shared/format'
 
 describe('dmTitle', () => {
   const users = [
-    { id: '1', displayName: 'Ada', email: 'a@x', avatarR2Key: null },
-    { id: '2', displayName: 'Bob', email: 'b@x', avatarR2Key: null },
-    { id: '3', displayName: 'Cara', email: 'c@x', avatarR2Key: null },
-    { id: '4', displayName: 'Dan', email: 'd@x', avatarR2Key: null },
+    { id: '1', displayName: 'Ada', avatarR2Key: null },
+    { id: '2', displayName: 'Bob', avatarR2Key: null },
+    { id: '3', displayName: 'Cara', avatarR2Key: null },
+    { id: '4', displayName: 'Dan', avatarR2Key: null },
   ]
   it('uses explicit name', () => {
     expect(dmTitle('Core', users, '1')).toBe('Core')
@@ -20,12 +20,6 @@ describe('dmTitle', () => {
   })
   it('group lists names then others', () => {
     expect(dmTitle(null, users, '1')).toBe('Bob, Cara, Dan')
-  })
-})
-
-describe('normalizeChannelType', () => {
-  it('maps huddle to voice', () => {
-    expect(normalizeChannelType('huddle')).toBe('voice')
   })
 })
 

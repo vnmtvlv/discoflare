@@ -4,7 +4,7 @@ import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'
 import type { DiscoflareEnv } from '../workers/env'
 
 export { ChannelDurableObject } from '../workers/channel-do'
-export { GuildDurableObject } from '../workers/guild-do'
+export { WorkspaceDurableObject } from '../workers/workspace-do'
 export { RateLimitDurableObject } from '../workers/rate-limit-do'
 
 const nitroApp = useNitroApp()
@@ -17,9 +17,9 @@ export default {
       if (channel?.[1]) {
         return env.CHANNEL_DO.getByName(`channel:${channel[1]}`).fetch(request)
       }
-      const guild = url.pathname.match(/^\/ws\/guild\/([^/]+)/)
-      if (guild?.[1]) {
-        return env.GUILD_DO.getByName(`guild:${guild[1]}`).fetch(request)
+      const workspace = url.pathname.match(/^\/ws\/workspace\/([^/]+)/)
+      if (workspace?.[1]) {
+        return env.WORKSPACE_DO.getByName(`workspace:${workspace[1]}`).fetch(request)
       }
     }
 

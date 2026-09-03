@@ -10,9 +10,7 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const row = (await db.select().from(attachments).where(eq(attachments.id, id)).limit(1))[0]
   if (!row) fail(404, 'not_found', 'File not found')
-  const channelId = row.r2Key.split('/')[1]
-  if (channelId) await requireChannelMember(event, channelId)
-  else fail(403, 'forbidden', 'Cannot access file')
+  await requireChannelMember(event, row.channelId)
   const obj = await env.FILES.get(row.r2Key)
   if (!obj) fail(404, 'not_found', 'Blob missing')
   setHeader(event, 'Content-Type', row.contentType)

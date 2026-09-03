@@ -3,26 +3,28 @@
 ## One-click
 
 ```md
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/discoflare/discoflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)
 ```
 
-Replace the repo URL with yours. `wrangler.jsonc` declares D1, R2, KV, and Durable Object classes so the button can provision them.
+`wrangler.jsonc` declares D1, R2, KV, and Durable Object classes so the button can provision them. Cloudflare also reads `.env.example` and prompts for the required owner/auth secrets. The source repository must be public for this flow; the current private repository is for development only.
 
 After deploy:
 
-1. Set the owner (recommended):
+1. If you did not use the deploy form, set the owner and auth secret:
 
 ```
 wrangler secret put ADMIN_EMAIL
 wrangler secret put ADMIN_PASSWORD
 wrangler secret put ADMIN_NAME
+wrangler secret put AUTH_SECRET
 ```
 
 Optional: `ADMIN_HANDLE` (used if `ADMIN_NAME` is empty), `ADMIN_WORKSPACE` (default `HQ`).
 
-2. Open the Worker URL. Health runs D1 migrations and, if the catalog is empty, creates the owner from those env vars.
-3. Sign in. Or open `/setup` if you did not set admin env.
-4. Optional huddles: `wrangler secret put` RealtimeKit values. Text chat does not need them.
+2. Run `pnpm deploy`. It applies the D1 migration using the `DB` binding and deploys the Worker.
+3. Open the Worker URL. Health creates the owner from those env vars when the database is empty.
+4. Sign in. `/setup` is a readiness page and never accepts owner credentials.
+5. Optional huddles: `wrangler secret put` RealtimeKit values. Text chat does not need them.
 
 Also:
 
@@ -30,7 +32,7 @@ Also:
 pnpm db:migrate
 ```
 
-(`wrangler d1 migrations apply discoflare --remote`) if you prefer applying SQL from `drizzle/migrations` yourself.
+(`wrangler d1 migrations apply DB --remote`) if you prefer applying SQL from `drizzle/migrations` yourself.
 
 ## Secrets
 
@@ -54,6 +56,7 @@ Never put RealtimeKit secrets in the client bundle.
 
 ```
 pnpm install
+pnpm env:init
 pnpm db:migrate:local
 pnpm dev
 ```

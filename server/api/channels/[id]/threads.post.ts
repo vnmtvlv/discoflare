@@ -28,15 +28,16 @@ export default defineEventHandler(async (event) => {
   const name = body.name?.trim() || (msg.content.slice(0, 40) || 'thread')
   await db.insert(channels).values({
     id,
-    guildId: access.guildId,
     name,
     topic: '',
     type: 'thread',
+    visibility: access.channel.visibility,
     position: 0,
     huddleMeetingId: null,
     parentId,
     parentMessageId: body.messageId,
     createdAt: created,
+    updatedAt: created,
   })
   const row = (await db.select().from(channels).where(eq(channels.id, id)).limit(1))[0]
   return { channel: row }

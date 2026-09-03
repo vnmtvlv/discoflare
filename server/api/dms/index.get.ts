@@ -1,5 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm'
-import { channelReads, channels, dmParticipants } from '../../../drizzle/schema'
+import { channelReads, channels, channelMembers } from '../../../drizzle/schema'
 import { requireUser } from '../../utils/auth'
 import { cf } from '../../utils/cf'
 import { getDb } from '../../utils/db'
@@ -11,10 +11,10 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const mine = await db.select({
     channel: channels,
-    hiddenAt: dmParticipants.hiddenAt,
-  }).from(dmParticipants)
-    .innerJoin(channels, eq(channels.id, dmParticipants.channelId))
-    .where(and(eq(dmParticipants.userId, me.id), eq(channels.type, 'dm'), isNull(dmParticipants.hiddenAt)))
+    hiddenAt: channelMembers.hiddenAt,
+  }).from(channelMembers)
+    .innerJoin(channels, eq(channels.id, channelMembers.channelId))
+    .where(and(eq(channelMembers.userId, me.id), eq(channels.type, 'dm'), isNull(channelMembers.hiddenAt)))
 
   const reads = await db.select().from(channelReads).where(eq(channelReads.userId, me.id))
   const readMap = new Map(reads.map((r) => [r.channelId, r.lastReadMessageId]))

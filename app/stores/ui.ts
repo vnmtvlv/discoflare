@@ -14,15 +14,15 @@ export const useUiStore = defineStore('ui', () => {
   const searchQuery = ref('')
   const memberTab = ref<'all' | 'online'>('all')
   const lastChannel = import.meta.client
-    ? useLocalStorage<{ guildId: string; channelId: string } | null>('df:last', null)
-    : ref<{ guildId: string; channelId: string } | null>(null)
+    ? useLocalStorage<{ workspaceId: string; channelId: string } | null>('df:last', null)
+    : ref<{ workspaceId: string; channelId: string } | null>(null)
 
-  function remember(guildId: string, channelId: string) {
-    if (!guildId || guildId === 'undefined' || !channelId || channelId === 'undefined') return
-    lastChannel.value = { guildId, channelId }
+  function remember(workspaceId: string, channelId: string) {
+    if (!workspaceId || workspaceId === 'undefined' || !channelId || channelId === 'undefined') return
+    lastChannel.value = { workspaceId, channelId }
   }
 
-  function last(): { guildId: string; channelId: string } | null {
+  function last(): { workspaceId: string; channelId: string } | null {
     return lastChannel.value
   }
 

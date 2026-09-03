@@ -24,6 +24,6 @@ export default defineEventHandler(async (event) => {
     })
   }
   catch { /* ignore */ }
-  await writeAudit(env, { guildId: member.guildId, actorId: member.user.id, action: 'huddle.end', targetType: 'channel', targetId: channelId })
+  await writeAudit(env, { workspaceId: member.workspaceId, actorId: member.user.id, action: 'huddle.end', targetType: 'channel', targetId: channelId })
   return { ok: true }
 })

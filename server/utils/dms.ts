@@ -1,7 +1,7 @@
 import { and, eq, inArray } from 'drizzle-orm'
-import { channels, dmParticipants, guildMembers, users } from '../../drizzle/schema'
+import { channels, channelMembers, users } from '../../drizzle/schema'
 import { dmTitle } from '../../shared/dm'
-import { newId, nowIso } from '../../shared/ids'
+import { newId, nowIso, WORKSPACE_ID } from '../../shared/ids'
 import type { ChannelDTO, PublicUser } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { asRpc } from './cf'
@@ -10,16 +10,16 @@ import { toPublicUser } from './messages'
 
 export async function loadParticipants(env: DiscoflareEnv, channelId: string): Promise<PublicUser[]> {
   const db = getDb(env.DB)
-  const parts = await db.select().from(dmParticipants).where(eq(dmParticipants.channelId, channelId))
+  const parts = await db.select().from(channelMembers).where(eq(channelMembers.channelId, channelId))
   if (!parts.length) return []
   const rows = await db.select().from(users).where(inArray(users.id, parts.map((p) => p.userId)))
   return rows.map(toPublicUser)
 }
 
-export async function dmFrozen(env: DiscoflareEnv, guildId: string, participantIds: string[]): Promise<boolean> {
+export async function dmFrozen(env: DiscoflareEnv, participantIds: string[]): Promise<boolean> {
   const db = getDb(env.DB)
-  const rows = await db.select({ userId: guildMembers.userId }).from(guildMembers)
-    .where(and(eq(guildMembers.guildId, guildId), inArray(guildMembers.userId, participantIds)))
+  const rows = await db.select({ userId: users.id }).from(users)
+    .where(and(inArray(users.id, participantIds), eq(users.status, 'active')))
   return rows.length !== participantIds.length
 }
 
@@ -33,7 +33,7 @@ export async function toDmDto(
   const last = await env.DB.prepare(
     'SELECT created_at FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT 1',
   ).bind(ch.id).first<{ created_at: string }>()
-  const frozen = await dmFrozen(env, ch.guildId, participants.map((p) => p.id))
+  const frozen = await dmFrozen(env, participants.map((p) => p.id))
   let huddle: ChannelDTO['huddle']
   try {
     const stub = asRpc<{ getHuddle: () => Promise<NonNullable<ChannelDTO['huddle']>> }>(env.CHANNEL_DO.getByName(`channel:${ch.id}`))
@@ -47,10 +47,11 @@ export async function toDmDto(
   }
   return {
     id: ch.id,
-    guildId: ch.guildId,
+    workspaceId: WORKSPACE_ID,
     name: ch.name,
     topic: ch.topic,
     type: 'dm',
+    visibility: 'private',
     position: ch.position,
     huddleMeetingId: ch.huddleMeetingId,
     parentId: ch.parentId,
@@ -68,38 +69,39 @@ export async function toDmDto(
 export async function findPairDm(env: DiscoflareEnv, meId: string, otherId: string): Promise<string | null> {
   const row = await env.DB.prepare(
     `SELECT a.channel_id as id
-     FROM dm_participants a
-     JOIN dm_participants b ON a.channel_id = b.channel_id AND b.user_id = ?
+     FROM channel_members a
+     JOIN channel_members b ON a.channel_id = b.channel_id AND b.user_id = ?
      JOIN channels c ON c.id = a.channel_id AND c.type = 'dm'
      WHERE a.user_id = ?
-       AND (SELECT COUNT(*) FROM dm_participants p WHERE p.channel_id = a.channel_id) = 2
+       AND (SELECT COUNT(*) FROM channel_members p WHERE p.channel_id = a.channel_id) = 2
      LIMIT 1`,
   ).bind(otherId, meId).first<{ id: string }>()
   return row?.id ?? null
 }
 
-export async function openPairDm(env: DiscoflareEnv, guildId: string, meId: string, otherId: string): Promise<string> {
+export async function openPairDm(env: DiscoflareEnv, meId: string, otherId: string): Promise<string> {
   const existing = await findPairDm(env, meId, otherId)
   const db = getDb(env.DB)
   if (existing) {
-    await db.update(dmParticipants).set({ hiddenAt: null }).where(and(eq(dmParticipants.channelId, existing), eq(dmParticipants.userId, meId)))
+    await db.update(channelMembers).set({ hiddenAt: null }).where(and(eq(channelMembers.channelId, existing), eq(channelMembers.userId, meId)))
     return existing
   }
   const id = newId()
   const created = nowIso()
   await db.insert(channels).values({
     id,
-    guildId,
     name: 'dm',
     topic: '',
     type: 'dm',
+    visibility: 'private',
     position: 0,
     huddleMeetingId: null,
     parentId: null,
     parentMessageId: null,
     createdAt: created,
+    updatedAt: created,
   })
-  await db.insert(dmParticipants).values([
+  await db.insert(channelMembers).values([
     { channelId: id, userId: meId, hiddenAt: null, joinedAt: created },
     { channelId: id, userId: otherId, hiddenAt: null, joinedAt: created },
   ])
@@ -108,7 +110,7 @@ export async function openPairDm(env: DiscoflareEnv, guildId: string, meId: stri
 
 export async function unhideAll(env: DiscoflareEnv, channelId: string) {
   const db = getDb(env.DB)
-  await db.update(dmParticipants).set({ hiddenAt: null }).where(eq(dmParticipants.channelId, channelId))
+  await db.update(channelMembers).set({ hiddenAt: null }).where(eq(channelMembers.channelId, channelId))
 }
 
 export async function fanoutDm(env: DiscoflareEnv, channelId: string, msg: unknown) {
@@ -119,8 +121,8 @@ export async function fanoutDm(env: DiscoflareEnv, channelId: string, msg: unkno
   catch { /* local without DO */ }
 }
 
-export async function requireGuildUser(env: DiscoflareEnv, guildId: string, userId: string): Promise<boolean> {
+export async function requireWorkspaceUser(env: DiscoflareEnv, userId: string): Promise<boolean> {
   const db = getDb(env.DB)
-  const row = (await db.select().from(guildMembers).where(and(eq(guildMembers.guildId, guildId), eq(guildMembers.userId, userId))).limit(1))[0]
+  const row = (await db.select().from(users).where(and(eq(users.id, userId), eq(users.status, 'active'))).limit(1))[0]
   return Boolean(row)
 }
