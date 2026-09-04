@@ -101,7 +101,7 @@ const manifest = {
     size: assetsPayload.byteLength,
   },
   container: {
-    image: `docker.io/vnmtvlv/discoflare-sandbox:${version}`,
+    image: 'docker.io/cloudflare/sandbox:0.12.9',
     className: 'Sandbox',
     instanceType: 'lite',
     maxInstances: 10,

@@ -8,10 +8,10 @@ Publishing a GitHub Release triggers `.github/workflows/publish-installer-releas
 
 1. Builds the Nuxt Worker without deploying it.
 2. Packages the Worker, static assets, and D1 migrations as release artifacts.
-3. Publishes a versioned Sandbox container image to Docker Hub.
+3. References Cloudflare's pinned public Sandbox base image.
 4. Attaches the installer manifest and payloads to the GitHub Release.
 
-Repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` must be configured before the first release. Release tags may use either `v1.2.3` or `1.2.3`; the container image is always tagged `1.2.3`.
+Release tags may use either `v1.2.3` or `1.2.3`. The installer does not need credentials for a separate container registry.
 
 The installer follows the manifest URL configured on `discoflare.com`. Its default points to the latest GitHub Release, so existing installations can be updated by running the installer again. New installs carry a `DISCOFLARE_INSTALLATION` marker. Updates also recognize the full binding signature of older GitHub installs, while refusing to overwrite an unrelated Worker with the same name.
 
