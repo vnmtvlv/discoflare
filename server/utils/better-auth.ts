@@ -4,7 +4,7 @@ import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { H3Event } from 'h3'
 import { authAccounts, authSessions, authUsers, authVerifications } from '../../drizzle/schema'
 import type { DiscoflareEnv } from '../../workers/env'
-import { authSecret, credentialReady, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
+import { authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
 import { cf } from './cf'
 import { getDb } from './db'
 import { hashPassword, verifyPassword } from './password'
@@ -58,6 +58,7 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
   const twitter = config.credentials.twitter
   const telegram = config.credentials.telegram
   const turnstile = config.credentials.turnstile
+  const requireEmailVerification = emailVerificationRequired(config)
 
   return betterAuth({
     secret: authSecret(env, baseURL),
@@ -73,8 +74,8 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
     }),
     emailAndPassword: {
       enabled: config.enabled.email,
-      disableSignUp: !config.email.verificationReady,
-      requireEmailVerification: true,
+      disableSignUp: !publicConfig.emailSignupEnabled,
+      requireEmailVerification,
       minPasswordLength: 8,
       password: {
         hash: async password => hashPassword(password),
@@ -83,8 +84,8 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
     },
     emailVerification: config.email.verificationReady
       ? {
-          sendOnSignUp: true,
-          sendOnSignIn: true,
+          sendOnSignUp: requireEmailVerification,
+          sendOnSignIn: requireEmailVerification,
           autoSignInAfterVerification: false,
           expiresIn: 60 * 60,
           sendVerificationEmail: async ({ user, url }) => {

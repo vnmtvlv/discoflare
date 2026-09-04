@@ -28,6 +28,13 @@ export default defineNuxtConfig({
     serverBundle: {
       collections: ['ph'],
     },
+    ...(nativeClient
+      ? {
+          clientBundle: {
+            scan: true,
+          },
+        }
+      : {}),
   },
   runtimeConfig: {
     public: {
@@ -92,7 +99,7 @@ export default defineNuxtConfig({
       title: 'Discoflare',
       htmlAttrs: { lang: 'en' },
       meta: [
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'color-scheme', content: 'dark' },
         { name: 'theme-color', content: '#F6821F' },
         { name: 'description', content: 'Chat that lives on your Cloudflare account.' },

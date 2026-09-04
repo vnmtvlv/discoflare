@@ -7,10 +7,11 @@ const props = defineProps<{
   channelId: string
 }>()
 const ui = useUiStore()
+const { api } = useApi()
 
 const threadsQ = useQuery({
   queryKey: computed(() => ['threads', props.channelId]),
-  queryFn: () => $fetch<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
+  queryFn: () => api<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
   enabled: computed(() => Boolean(props.channelId)),
 })
 

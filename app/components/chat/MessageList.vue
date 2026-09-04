@@ -13,6 +13,7 @@ const props = defineProps<{
   canPin?: boolean
   showIntro?: boolean
 }>()
+const { api } = useApi()
 const emit = defineEmits<{
   reply: [id: string]
   edit: [msg: MessageDTO]
@@ -33,7 +34,7 @@ let lastRead = ''
 const q = useInfiniteQuery({
   queryKey: computed(() => ['messages', props.channelId]),
   initialPageParam: undefined as string | undefined,
-  queryFn: ({ pageParam }) => $fetch<{ messages: MessageDTO[]; nextCursor: string | null }>(
+  queryFn: ({ pageParam }) => api<{ messages: MessageDTO[]; nextCursor: string | null }>(
     `/api/channels/${props.channelId}/messages`,
     { query: { cursor: pageParam, limit: 50 } },
   ),
@@ -46,7 +47,7 @@ const messages = computed(() => {
 })
 const threadsQ = useQuery({
   queryKey: computed(() => ['threads', props.channelId]),
-  queryFn: () => $fetch<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
+  queryFn: () => api<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
   enabled: computed(() => messages.value.some(message => Boolean(message.threadId))),
 })
 const threadsByMessage = computed(() => new Map(
@@ -66,7 +67,7 @@ const searchReady = computed(() => ownsSearch.value
 const searchQ = useInfiniteQuery({
   queryKey: computed(() => ['message-search', props.channelId, searchTerm.value]),
   initialPageParam: undefined as string | undefined,
-  queryFn: ({ pageParam }) => $fetch<MessageSearchResponse>(`/api/channels/${props.channelId}/search`, {
+  queryFn: ({ pageParam }) => api<MessageSearchResponse>(`/api/channels/${props.channelId}/search`, {
     query: { q: searchTerm.value, cursor: pageParam, limit: 20 },
   }),
   getNextPageParam: last => last.nextCursor ?? undefined,
@@ -135,17 +136,17 @@ function onScroll() {
 }
 
 async function remove(id: string) {
-  await $fetch(`/api/messages/${id}`, { method: 'DELETE' })
+  await api(`/api/messages/${id}`, { method: 'DELETE' })
 }
 
 async function react(id: string, emoji: string) {
-  await $fetch(`/api/messages/${id}/reactions`, { method: 'POST', body: { emoji } })
+  await api(`/api/messages/${id}/reactions`, { method: 'POST', body: { emoji } })
 }
 
 async function togglePin(message: MessageDTO) {
   if (!props.canPin) return
   try {
-    const response = await $fetch<{ pin: MessagePinDTO | null }>(`/api/messages/${message.id}/pin`, {
+    const response = await api<{ pin: MessagePinDTO | null }>(`/api/messages/${message.id}/pin`, {
       method: message.pin ? 'DELETE' : 'PUT',
     })
     qc.setQueryData<InfiniteData<MessagePage>>(['messages', props.channelId], (current) => {
@@ -186,7 +187,7 @@ watch(() => ui.searchOpen, (open) => {
 async function goToResult(hit: MessageSearchHitDTO) {
   jumpingToId.value = hit.id
   try {
-    const context = await $fetch<MessageContextResponse>(
+    const context = await api<MessageContextResponse>(
       `/api/channels/${hit.channel.id}/messages/${hit.id}/context`,
     )
     await qc.cancelQueries({ queryKey: ['messages', hit.channel.id], exact: true })

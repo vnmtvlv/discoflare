@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
+import { emailVerificationRequired, publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
 
 function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig {
   return {
@@ -22,16 +22,28 @@ describe('public auth config', () => {
     expect(publicAuthConfig(config).methods.github).toBe(false)
   })
 
-  it('only exposes email signup when delivery and Turnstile are effective', () => {
+  it('exposes direct email signup for open registration without optional infrastructure', () => {
+    const config = runtime({ registrationMode: 'open' })
+    expect(publicAuthConfig(config)).toMatchObject({
+      signupEnabled: true,
+      emailSignupEnabled: true,
+      turnstile: { enabled: false, siteKey: null },
+    })
+    expect(emailVerificationRequired(config)).toBe(false)
+  })
+
+  it('requires working email delivery for invite-only email signup', () => {
     const config = runtime({
-      registrationMode: 'open',
+      registrationMode: 'invite_only',
       enabled: { email: true, github: false, twitter: false, telegram: false, turnstile: true },
       credentials: { turnstile: { publicKey: 'site', secret: 'secret', source: 'database', secretReadable: true } },
       email: { binding: true, from: 'login@example.com', fromName: 'Discoflare', senderManagedByDeployment: false, verificationReady: true },
     })
-    expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: true, emailSignupEnabled: true })
+    expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: false, emailSignupEnabled: true })
+    expect(emailVerificationRequired(config)).toBe(true)
     config.email.binding = false
     config.email.verificationReady = false
     expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: false, emailSignupEnabled: false })
+    expect(emailVerificationRequired(config)).toBe(false)
   })
 })

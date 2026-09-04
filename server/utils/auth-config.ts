@@ -146,7 +146,8 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
     telegram: config.enabled.telegram && credentialReady(config, 'telegram'),
   }
   const turnstileReady = config.enabled.turnstile && credentialReady(config, 'turnstile')
-  const emailSignupEnabled = methods.email && config.email.verificationReady && turnstileReady
+  const emailSignupEnabled = methods.email
+    && (config.registrationMode === 'open' || config.email.verificationReady)
   return {
     registrationMode: config.registrationMode,
     signupEnabled: config.registrationMode === 'open' && (emailSignupEnabled || methods.github || methods.twitter || methods.telegram),
@@ -157,6 +158,10 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
       siteKey: turnstileReady ? config.credentials.turnstile!.publicKey : null,
     },
   }
+}
+
+export function emailVerificationRequired(config: AuthRuntimeConfig): boolean {
+  return config.registrationMode === 'invite_only' && config.email.verificationReady
 }
 
 export function credentialReady(config: AuthRuntimeConfig, provider: AuthCredentialProvider): boolean {

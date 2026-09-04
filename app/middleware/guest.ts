@@ -1,5 +1,9 @@
 export default defineNuxtRouteMiddleware(async () => {
   const session = useSessionStore()
-  if (!session.ready) await session.refresh(useRequestFetch())
+  const { api, native } = useApi()
+  if (!session.ready) {
+    if (import.meta.client && native) await session.refresh(api)
+    else await session.refresh(asSessionFetcher(useRequestFetch()))
+  }
   if (session.user) return navigateTo('/')
 })

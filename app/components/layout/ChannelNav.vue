@@ -13,24 +13,24 @@ const qc = useQueryClient()
 const toast = useToast()
 const huddle = useHuddleStore()
 const { copy } = useClipboard()
-const { serverUrl } = useApi()
+const { api, serverUrl } = useApi()
 const membersQ = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
-  queryFn: () => $fetch<{ members: M[] }>(`/api/workspaces/${props.workspaceId}/members`),
+  queryFn: () => api<{ members: M[] }>(`/api/workspaces/${props.workspaceId}/members`),
 })
 const { can } = usePermissions(computed(() => membersQ.data.value?.members))
 
 const workspaceQ = useQuery({
   queryKey: computed(() => ['workspace', props.workspaceId]),
-  queryFn: () => $fetch<{ workspace: W }>(`/api/workspaces/${props.workspaceId}`),
+  queryFn: () => api<{ workspace: W }>(`/api/workspaces/${props.workspaceId}`),
 })
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', props.workspaceId]),
-  queryFn: () => $fetch<{ categories: Category[]; channels: Ch[] }>(`/api/workspaces/${props.workspaceId}/channels`),
+  queryFn: () => api<{ categories: Category[]; channels: Ch[] }>(`/api/workspaces/${props.workspaceId}/channels`),
 })
 const workspacesQ = useQuery({
   queryKey: ['workspaces'],
-  queryFn: () => $fetch<{ workspaces: W[] }>('/api/workspaces'),
+  queryFn: () => api<{ workspaces: W[] }>('/api/workspaces'),
 })
 
 const newName = ref('')
@@ -122,7 +122,7 @@ async function createChannel() {
   if (!newName.value.trim()) return
   creating.value = true
   try {
-    const res = await $fetch<{ channel: Ch }>(`/api/workspaces/${props.workspaceId}/channels`, {
+    const res = await api<{ channel: Ch }>(`/api/workspaces/${props.workspaceId}/channels`, {
       method: 'POST',
       body: {
         name: newName.value.trim().toLowerCase().replace(/\s+/g, '-'),
@@ -150,7 +150,7 @@ async function createCategory() {
   if (!name) return
   creatingCategory.value = true
   try {
-    const res = await $fetch<{ category: Category }>(`/api/workspaces/${props.workspaceId}/categories`, {
+    const res = await api<{ category: Category }>(`/api/workspaces/${props.workspaceId}/categories`, {
       method: 'POST',
       body: { name },
     })
@@ -167,7 +167,7 @@ async function createCategory() {
 async function makeInvite() {
   inviting.value = true
   try {
-    const res = await $fetch<{ invite: { code: string; url: string } }>(`/api/workspaces/${props.workspaceId}/invites`, { method: 'POST', body: {} })
+    const res = await api<{ invite: { code: string; url: string } }>(`/api/workspaces/${props.workspaceId}/invites`, { method: 'POST', body: {} })
     inviteUrl.value = serverUrl(res.invite.url)
   }
   catch (err) {
@@ -219,7 +219,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
       <div class="px-2 pb-3">
         <NuxtLink
           to="/tasks"
-          class="flex items-center gap-2 h-9 px-2 rounded-md text-[15px]"
+          class="flex h-11 items-center gap-2 rounded-md px-2 text-[15px] md:h-9"
           :class="route.path === '/tasks' ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
         >
           <UIcon name="i-ph-kanban" class="size-[18px] shrink-0" />
@@ -230,7 +230,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
       <UAlert v-else-if="channelsQ.error.value" color="error" title="Could not load channels." class="mx-2" />
       <template v-else>
         <section v-for="(group, index) in channelGroups" :key="group.id" :class="index ? 'mt-3' : ''">
-          <div class="flex items-center pr-2 h-6">
+          <div class="flex min-h-11 items-center pr-2 md:min-h-6">
             <button
               type="button"
               class="flex-1 min-w-0 flex items-center gap-1 pl-3 pr-1 text-xs font-semibold text-muted hover:text-default"
@@ -246,6 +246,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               variant="ghost"
               size="xs"
               square
+              class="size-11 md:size-7"
               :aria-label="`Create channel in ${group.name}`"
               @click="openCreateChannel(group.id)"
             />
@@ -254,7 +255,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
             <li v-for="ch in group.channels" :key="ch.id">
               <NuxtLink
                 :to="channelPath(ch)"
-                class="flex items-center gap-1.5 h-8 px-2 rounded-md text-[15px]"
+                class="flex h-11 items-center gap-1.5 rounded-md px-2 text-[15px] md:h-8"
                 :class="channelClass(ch)"
               >
                 <UIcon :name="isVoiceType(ch.type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-[18px] text-dimmed shrink-0" />

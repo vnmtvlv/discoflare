@@ -4,9 +4,9 @@ import type { WorkspaceRealtimeEvent } from '~~/shared/workspace-realtime'
 import { applyWorkspaceRealtimeEvent } from '../utils/workspace-realtime'
 
 export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
+  const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
   const nuxt = useNuxtApp()
-  const { socketUrl } = useApi()
   let ws: WebSocket | null = null
   let closed = false
   let connecting = false
@@ -32,7 +32,7 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
     if (!id || !import.meta.client || connecting || closed) return
     connecting = true
     try {
-      const { token } = await $fetch<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
+      const { token } = await api<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
       const socket = new WebSocket(socketUrl(`/ws/workspace/${id}`))
       ws = socket

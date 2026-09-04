@@ -10,10 +10,11 @@ const props = defineProps<{
 }>()
 const ui = useUiStore()
 const threadId = computed(() => ui.threadId)
+const { api } = useApi()
 const { send } = useChannelSocket(computed(() => threadId.value || ''))
 const threadQ = useQuery({
   queryKey: computed(() => ['channel', threadId.value]),
-  queryFn: () => $fetch<{ channel: ChannelDTO }>(`/api/channels/${threadId.value}`),
+  queryFn: () => api<{ channel: ChannelDTO }>(`/api/channels/${threadId.value}`),
   enabled: computed(() => Boolean(threadId.value)),
 })
 const threadName = computed(() => threadQ.data.value?.channel.name || 'Thread')
@@ -45,12 +46,14 @@ defineShortcuts({
 <template>
   <aside
     v-if="threadId"
-    class="shrink-0 relative border-l border-default bg-elevated flex-col min-h-0 hidden md:flex"
-    :style="{ width: `${ui.rightPanelWidth}px` }"
-    aria-label="Right panel"
+    id="channel-details"
+    class="absolute inset-x-0 bottom-[calc(-1*var(--df-safe-area-bottom))] top-[calc(-1*var(--df-safe-area-top))] z-30 flex min-h-0 w-full shrink-0 flex-col border-l border-default bg-elevated pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)] md:relative md:inset-auto md:z-auto md:w-[var(--df-right-panel-width)] md:p-0"
+    :style="{ '--df-right-panel-width': `${ui.rightPanelWidth}px` }"
+    aria-label="Thread"
   >
     <LayoutResizeHandle
       v-model="ui.rightPanelWidth"
+      class="hidden md:block"
       :min="180"
       :max="640"
       side="start"
@@ -60,7 +63,7 @@ defineShortcuts({
       <span class="truncate text-sm font-semibold">{{ threadTitle }}</span>
       <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
       <UTooltip text="Back to threads">
-        <UButton class="ml-auto shrink-0" size="xs" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back to threads" @click="close" />
+        <UButton class="ml-auto size-11 shrink-0 md:size-8" size="sm" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back to threads" @click="close" />
       </UTooltip>
     </header>
     <ChatMessageList

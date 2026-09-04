@@ -23,6 +23,10 @@
 
 :root {
   --ui-radius: 0.5rem;
+  --df-auth-stage-width: 50%;
+  --df-safe-area-top: env(safe-area-inset-top, 0px);
+  --df-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --df-server-rail-width: 4rem;
 }
 
 .dark {

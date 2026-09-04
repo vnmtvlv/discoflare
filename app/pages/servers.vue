@@ -50,7 +50,7 @@ function forget(origin: string) {
 </script>
 
 <template>
-  <main class="min-h-dvh overflow-y-auto bg-default px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(2rem,env(safe-area-inset-top))] sm:px-8">
+  <main class="h-full overflow-y-auto bg-default px-5 pb-[max(2rem,var(--df-safe-area-bottom))] pt-[max(2rem,var(--df-safe-area-top))] sm:px-8">
     <div class="mx-auto max-w-xl">
       <div class="flex items-center gap-3">
         <BrandLogo class="size-9" />

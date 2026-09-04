@@ -26,6 +26,7 @@ const ui = useUiStore()
 const session = useSessionStore()
 const qc = useQueryClient()
 const toast = useToast()
+const { api } = useApi()
 const files = ref<File[]>([])
 const emojiOpen = ref(false)
 const EMOJI = ['😀', '😂', '❤️', '👍', '🔥', '🎉', '👀', '💯']
@@ -142,7 +143,7 @@ async function submit() {
     for (const file of submission.files) {
       const fd = new FormData()
       fd.append('file', file)
-      const res = await $fetch<{ attachment: { id: string } }>(`/api/channels/${channelId}/attachments`, {
+      const res = await api<{ attachment: { id: string } }>(`/api/channels/${channelId}/attachments`, {
         method: 'POST',
         body: fd,
       })
@@ -157,7 +158,7 @@ async function submit() {
 
   if (submission.editingId) {
     try {
-      await $fetch(`/api/messages/${submission.editingId}`, { method: 'PATCH', body: { content } })
+      await api(`/api/messages/${submission.editingId}`, { method: 'PATCH', body: { content } })
     }
     catch (err) {
       restoreSubmission(channelId, submission)
@@ -226,7 +227,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
             variant="ghost"
             size="sm"
             square
-            class="rounded-full mb-0! self-center"
+            class="mb-0! size-11 self-center rounded-full md:size-8"
             :disabled="attachmentsDisabled || recording || Boolean(editingId)"
             aria-label="Attach files"
             @click="() => openFiles()"
@@ -243,7 +244,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
               variant="ghost"
               size="sm"
               square
-              class="ms-auto"
+              class="ms-auto size-11 md:size-8"
               aria-label="Cancel recording"
               @click="cancelAudioRecording"
             />
@@ -255,6 +256,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
               variant="soft"
               size="sm"
               square
+              class="size-11 md:size-8"
               aria-label="Stop recording"
               @click="stopAudioRecording"
             />
@@ -281,7 +283,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
             variant="ghost"
             size="sm"
             square
-            class="mb-0! self-center"
+            class="mb-0! size-11 self-center md:size-8"
             :disabled="disabled"
             aria-label="Emoji"
           />
@@ -307,7 +309,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
             variant="ghost"
             size="sm"
             square
-            class="mb-0! self-center"
+            class="mb-0! size-11 self-center md:size-8"
             :disabled="attachmentsDisabled"
             aria-label="Record audio"
             @click="recordAudio"
@@ -321,7 +323,7 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
             variant="ghost"
             size="sm"
             square
-            class="mb-0! self-center"
+            class="mb-0! size-11 self-center md:size-8"
             :disabled="disabled"
             aria-label="Send message"
           />

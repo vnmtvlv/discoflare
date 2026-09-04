@@ -21,7 +21,7 @@ const tabs: Array<{ value: RightPanelTab; label: string }> = [
       :color="model === tab.value ? 'primary' : 'neutral'"
       :variant="model === tab.value ? 'soft' : 'ghost'"
       :class="[
-        'shrink-0 justify-center px-1',
+        'min-h-11 shrink-0 justify-center px-2 md:min-h-8 md:px-1',
         model === tab.value ? 'font-semibold' : 'text-muted hover:text-default',
       ]"
       role="tab"

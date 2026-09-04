@@ -20,6 +20,7 @@ const session = useSessionStore()
 const toast = useToast()
 const qc = useQueryClient()
 const ui = useUiStore()
+const { api } = useApi()
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
 
@@ -27,7 +28,7 @@ const { data, isPending, error } = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
   queryFn: ({ queryKey }) => {
     const id = String(queryKey[1] ?? '')
-    return id ? $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
+    return id ? api<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
   },
   enabled: computed(() => Boolean(props.workspaceId)),
 })
@@ -68,14 +69,14 @@ const kickId = ref<string | null>(null)
 
 async function confirmKick() {
   if (!kickId.value) return
-  await $fetch(`/api/workspaces/${props.workspaceId}/members/${kickId.value}`, { method: 'DELETE' })
+  await api(`/api/workspaces/${props.workspaceId}/members/${kickId.value}`, { method: 'DELETE' })
   await qc.invalidateQueries({ queryKey: ['members', props.workspaceId] })
   toast.add({ title: 'Member kicked', color: 'success' })
   kickId.value = null
 }
 
 async function message(userId: string) {
-  const res = await $fetch<{ channel: { id: string } }>('/api/dms', { method: 'POST', body: { userId, workspaceId: props.workspaceId } })
+  const res = await api<{ channel: { id: string } }>('/api/dms', { method: 'POST', body: { userId, workspaceId: props.workspaceId } })
   await qc.invalidateQueries({ queryKey: ['dms'] })
   await navigateTo(channelPath(res.channel))
 }
@@ -111,9 +112,10 @@ function roleLabel(name: string) {
 
 <template>
   <aside
+    id="channel-details"
     class="bg-muted shrink-0 relative flex flex-col min-h-0 overflow-hidden"
     :class="isMobile
-      ? (ui.mobilePane === 'members' ? 'absolute inset-0 z-20 w-full flex' : 'hidden')
+      ? (ui.mobilePane === 'members' ? 'absolute inset-x-0 bottom-[calc(-1*var(--df-safe-area-bottom))] top-[calc(-1*var(--df-safe-area-top))] z-20 flex w-full pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]' : 'hidden')
       : 'hidden md:flex'"
     :style="!isMobile ? { width: `${ui.rightPanelWidth}px` } : undefined"
     aria-label="Right panel"
@@ -132,9 +134,10 @@ function roleLabel(name: string) {
         icon="i-ph-caret-left"
         color="neutral"
         variant="ghost"
-        size="sm"
+        size="md"
         square
-        aria-label="Back"
+        class="size-11 shrink-0"
+        aria-label="Back to channel"
         @click="ui.mobilePane = 'chat'"
       />
       <LayoutRightPanelTabs v-model="ui.rightPanelTab" />
@@ -143,6 +146,7 @@ function roleLabel(name: string) {
       <div class="flex items-center gap-0.5 px-3 pt-3" aria-label="Member filter">
         <UButton
           size="xs"
+          class="min-h-11 md:min-h-7"
           color="neutral"
           :variant="ui.memberTab === 'all' ? 'soft' : 'ghost'"
           label="All"
@@ -150,6 +154,7 @@ function roleLabel(name: string) {
         />
         <UButton
           size="xs"
+          class="min-h-11 md:min-h-7"
           color="neutral"
           :variant="ui.memberTab === 'online' ? 'soft' : 'ghost'"
           label="Online"
@@ -169,7 +174,7 @@ function roleLabel(name: string) {
           <ul>
             <li v-for="m in group" :key="m.user.id">
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
-                <button type="button" class="w-full flex items-center gap-2 h-9 px-2 rounded-md hover:bg-elevated text-start">
+                <button type="button" class="flex h-11 w-full items-center gap-2 rounded-md px-2 text-start hover:bg-elevated md:h-9">
                   <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
                     <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                   </UChip>
@@ -179,7 +184,7 @@ function roleLabel(name: string) {
                   ><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
                 </button>
               </UDropdownMenu>
-              <div v-else class="w-full flex items-center gap-2 h-9 px-2 rounded-md">
+              <div v-else class="flex h-11 w-full items-center gap-2 rounded-md px-2 md:h-9">
                 <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
                   <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                 </UChip>
@@ -196,14 +201,14 @@ function roleLabel(name: string) {
           <ul>
             <li v-for="m in grouped.offline" :key="m.user.id">
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
-                <button type="button" class="w-full flex items-center gap-2 h-9 px-2 rounded-md hover:bg-elevated text-start opacity-70">
+                <button type="button" class="flex h-11 w-full items-center gap-2 rounded-md px-2 text-start opacity-70 hover:bg-elevated md:h-9">
                   <UChip inset color="neutral" position="bottom-right" size="xs">
                     <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                   </UChip>
                   <span class="truncate text-sm text-muted flex items-center gap-1"><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
                 </button>
               </UDropdownMenu>
-              <div v-else class="w-full flex items-center gap-2 h-9 px-2 rounded-md opacity-70">
+              <div v-else class="flex h-11 w-full items-center gap-2 rounded-md px-2 opacity-70 md:h-9">
                 <UChip inset color="neutral" position="bottom-right" size="xs">
                   <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                 </UChip>
@@ -214,7 +219,7 @@ function roleLabel(name: string) {
         </section>
       </template>
       <ul v-else>
-        <li v-for="m in list" :key="m.user.id" class="flex items-center gap-2 h-9 px-2">
+        <li v-for="m in list" :key="m.user.id" class="flex h-11 items-center gap-2 px-2 md:h-9">
           <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
             <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
           </UChip>

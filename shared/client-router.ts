@@ -5,6 +5,12 @@ export type ClientServer = {
   name: string
 }
 
+export function createLiveFetch(
+  current: () => typeof globalThis.fetch = () => globalThis.fetch,
+): typeof globalThis.fetch {
+  return (input, init) => current()(input, init)
+}
+
 export function normalizeServerOrigin(input: string): string {
   const value = input.trim()
   if (!value) throw new Error('Enter a server URL')

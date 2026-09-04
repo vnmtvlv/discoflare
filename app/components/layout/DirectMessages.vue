@@ -14,10 +14,11 @@ const route = useRoute()
 const session = useSessionStore()
 const qc = useQueryClient()
 const huddle = useHuddleStore()
+const { api } = useApi()
 
 const dmsQ = useQuery({
   queryKey: ['dms'],
-  queryFn: () => $fetch<{ channels: ChannelDTO[] }>('/api/dms'),
+  queryFn: () => api<{ channels: ChannelDTO[] }>('/api/dms'),
 })
 
 const q = ref('')
@@ -25,7 +26,7 @@ const picker = ref(false)
 const picked = ref<string[]>([])
 const searchQ = useQuery({
   queryKey: computed(() => ['dm-search', props.workspaceId, q.value]),
-  queryFn: () => $fetch<{ members: DmSearchMember[] }>(`/api/dms/search?workspaceId=${props.workspaceId}&q=${encodeURIComponent(q.value)}`),
+  queryFn: () => api<{ members: DmSearchMember[] }>(`/api/dms/search?workspaceId=${props.workspaceId}&q=${encodeURIComponent(q.value)}`),
   enabled: computed(() => picker.value),
 })
 
@@ -43,7 +44,7 @@ function togglePick(id: string) {
 }
 
 async function openDm(userId: string) {
-  const res = await $fetch<{ channel: ChannelDTO }>('/api/dms', { method: 'POST', body: { userId, workspaceId: props.workspaceId } })
+  const res = await api<{ channel: ChannelDTO }>('/api/dms', { method: 'POST', body: { userId, workspaceId: props.workspaceId } })
   await qc.invalidateQueries({ queryKey: ['dms'] })
   picker.value = false
   q.value = ''
@@ -53,7 +54,7 @@ async function openDm(userId: string) {
 
 async function startGroup() {
   if (picked.value.length < 2) return
-  const res = await $fetch<{ channel: ChannelDTO }>('/api/dms/group', {
+  const res = await api<{ channel: ChannelDTO }>('/api/dms/group', {
     method: 'POST',
     body: { userIds: picked.value, workspaceId: props.workspaceId },
   })
@@ -65,7 +66,7 @@ async function startGroup() {
 }
 
 async function hide(id: string) {
-  await $fetch(`/api/dms/${id}/hide`, { method: 'POST' })
+  await api(`/api/dms/${id}/hide`, { method: 'POST' })
   await qc.invalidateQueries({ queryKey: ['dms'] })
   if (selected.value === id) await navigateTo('/channels')
 }
@@ -85,7 +86,7 @@ function searchName(member: DmSearchMember) {
 
 <template>
   <section class="mt-3">
-    <div class="flex items-center pr-2 h-6">
+    <div class="flex min-h-11 items-center pr-2 md:min-h-6">
       <button
         type="button"
         class="flex-1 flex items-center gap-1 pl-3 pr-1 text-xs font-semibold text-muted hover:text-default"
@@ -94,13 +95,13 @@ function searchName(member: DmSearchMember) {
         <span class="text-start">Direct messages</span>
         <UIcon :name="collapsed ? 'i-ph-caret-right' : 'i-ph-caret-down'" class="size-3" />
       </button>
-      <UButton icon="i-ph-plus" color="neutral" variant="ghost" size="xs" square aria-label="New DM" @click="picker = true" />
+      <UButton icon="i-ph-plus" color="neutral" variant="ghost" size="xs" square class="size-11 md:size-7" aria-label="New DM" @click="picker = true" />
     </div>
     <ul v-show="!collapsed" class="px-2" role="listbox" aria-label="Direct messages">
       <li v-for="ch in dmsQ.data.value?.channels ?? []" :key="ch.id" class="group relative">
         <NuxtLink
           :to="channelPath(ch)"
-          class="flex items-center gap-2 h-8 px-2 rounded-md text-[15px]"
+          class="flex h-11 items-center gap-2 rounded-md px-2 text-[15px] md:h-8"
           :class="selected === ch.id ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
           role="option"
           :aria-selected="selected === ch.id"

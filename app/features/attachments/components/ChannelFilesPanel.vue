@@ -6,10 +6,11 @@ import AttachmentGallery from './AttachmentGallery.vue'
 const props = defineProps<{
   channelId: string
 }>()
+const { api } = useApi()
 
 const filesQ = useQuery({
   queryKey: computed(() => ['files', props.channelId]),
-  queryFn: () => $fetch<{ files: ChannelFileDTO[] }>(`/api/channels/${props.channelId}/files`),
+  queryFn: () => api<{ files: ChannelFileDTO[] }>(`/api/channels/${props.channelId}/files`),
   enabled: computed(() => Boolean(props.channelId)),
 })
 </script>

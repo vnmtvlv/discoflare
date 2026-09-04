@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createLiveFetch,
   normalizeServerOrigin,
   resolveServerUrl,
   resolveServerWebSocketUrl,
@@ -30,5 +31,16 @@ describe('client router', () => {
       .toBe('wss://sandbox.discoflare.com/ws/channel/1')
     expect(resolveServerWebSocketUrl('/ws/channel/1', null, 'http://localhost:3000'))
       .toBe('ws://localhost:3000/ws/channel/1')
+  })
+
+  it('uses the current native fetch implementation at request time', async () => {
+    const originalFetch = async () => new Response('original')
+    const nativeFetch = async () => new Response('native')
+    let currentFetch = originalFetch
+    const liveFetch = createLiveFetch(() => currentFetch)
+
+    currentFetch = nativeFetch
+
+    expect(await (await liveFetch('https://sandbox.discoflare.com/api/setup/health')).text()).toBe('native')
   })
 })

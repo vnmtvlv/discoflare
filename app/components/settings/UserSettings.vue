@@ -7,6 +7,7 @@ type Section = 'account' | 'profile' | 'privacy' | 'appearance' | 'notifications
 const open = defineModel<boolean>('open', { default: false })
 
 const session = useSessionStore()
+const { api } = useApi()
 const huddle = useHuddleStore()
 const prefs = usePrefsStore()
 const push = usePushNotifications()
@@ -177,7 +178,7 @@ async function loadDevices() {
 
 async function logout() {
   await push.disable().catch(() => undefined)
-  await session.logout()
+  await session.logout(api)
   open.value = false
   await navigateTo('/login')
 }

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 const session = useSessionStore()
 const ui = useUiStore()
+const { api } = useApi()
 
 onMounted(async () => {
-  if (!session.ready) await session.refresh()
+  if (!session.ready) await session.refresh(api)
   if (session.health && session.health.users === 0) {
     await navigateTo('/setup')
     return

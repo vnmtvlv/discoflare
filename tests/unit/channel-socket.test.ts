@@ -78,7 +78,10 @@ beforeAll(async () => {
   vi.stubGlobal('useUiStore', () => ({ dmFrozen: false, huddleSetupOpen: false }))
   vi.stubGlobal('useSessionStore', () => ({ user: null }))
   vi.stubGlobal('useNuxtApp', () => ({ $queryClient: queryClient }))
-  vi.stubGlobal('useApi', () => ({ socketUrl: (path: string) => `ws://localhost:3000${path}` }))
+  vi.stubGlobal('useApi', () => ({
+    api: vi.fn(async () => ({ token: 'test-token' })),
+    socketUrl: (path: string) => `ws://localhost:3000${path}`,
+  }))
   vi.stubGlobal('$fetch', vi.fn(async () => ({ token: 'test-token' })))
   ;({ useChannelSocket } = await import('../../app/composables/useChannelSocket'))
 })

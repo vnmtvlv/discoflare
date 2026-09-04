@@ -5,10 +5,10 @@ type Page = { messages: MessageDTO[]; nextCursor: string | null }
 type ChannelList = { channels: ChannelDTO[] }
 
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
+  const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
   const huddle = useHuddleStore()
   const nuxt = useNuxtApp()
-  const { socketUrl } = useApi()
 
   let ws: WebSocket | null = null
   let closed = false
@@ -73,7 +73,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     if (!id || !import.meta.client || connecting || closed) return
     connecting = true
     try {
-      const { token } = await $fetch<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
+      const { token } = await api<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
       const socket = new WebSocket(socketUrl(`/ws/channel/${id}`))
       ws = socket

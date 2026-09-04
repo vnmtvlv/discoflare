@@ -5,7 +5,8 @@ export function useApi() {
   const config = useRuntimeConfig()
 
   async function api<T>(url: string, opts?: Parameters<typeof $fetch>[1]) {
-    return await $fetch<T>(url, opts)
+    const fetcher = import.meta.client && native ? globalThis.$fetch : $fetch
+    return await fetcher<T>(url, opts)
   }
 
   function serverUrl(value: string) {

@@ -1,20 +1,23 @@
 <script setup lang="ts">
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
-import type { PublicAuthConfig } from '~~/shared/types'
+import type { PublicAuthConfig, SessionUser } from '~~/shared/types'
 
 definePageMeta({ layout: 'auth', middleware: ['guest'] })
 
 const route = useRoute()
 const toast = useToast()
+const session = useSessionStore()
 const busy = ref(false)
 const sent = ref(false)
 const error = ref<string | null>(null)
 const captchaToken = ref('')
 const captchaKey = ref(0)
-const { native } = useApi()
+const { api, native } = useApi()
 const inviteCode = computed(() => typeof route.query.invite === 'string' ? route.query.invite : undefined)
-const { data: authConfig } = await useFetch<PublicAuthConfig>('/api/auth/config')
+const { data: authConfig } = await useFetch<PublicAuthConfig>('/api/auth/config', {
+  $fetch: native ? globalThis.$fetch : undefined,
+})
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80),
@@ -25,20 +28,21 @@ const schema = z.object({
 type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ name: '', email: '', password: '', confirm: '' })
 
-const allowed = computed(() => Boolean(!native && authConfig.value?.emailSignupEnabled
+const allowed = computed(() => Boolean(authConfig.value?.emailSignupEnabled
   && (authConfig.value.registrationMode === 'open' || inviteCode.value)))
+const captchaRequired = computed(() => Boolean(authConfig.value?.turnstile.enabled && authConfig.value.turnstile.siteKey))
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
-  if (!captchaToken.value) {
+  if (captchaRequired.value && !captchaToken.value) {
     error.value = 'Complete the security check'
     return
   }
   busy.value = true
   error.value = null
   try {
-    await $fetch('/api/auth/signup', {
+    const result = await api<{ ok: true, verificationRequired: boolean, user?: SessionUser }>('/api/auth/signup', {
       method: 'POST',
-      headers: { 'x-captcha-response': captchaToken.value },
+      headers: captchaToken.value ? { 'x-captcha-response': captchaToken.value } : undefined,
       body: {
         name: event.data.name,
         email: event.data.email,
@@ -46,7 +50,14 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         inviteCode: inviteCode.value,
       },
     })
-    sent.value = true
+    if (result.verificationRequired) {
+      sent.value = true
+    }
+    else {
+      session.user = result.user ?? null
+      if (!session.user) await session.refresh(api)
+      await navigateTo('/')
+    }
   }
   catch (err) {
     error.value = errorMessage(err)
@@ -94,7 +105,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
           :site-key="authConfig.turnstile.siteKey"
           @update:model-value="captchaToken = $event"
         />
-        <UButton type="submit" size="lg" label="Create account" block :loading="busy" :disabled="!captchaToken" />
+        <UButton type="submit" size="lg" label="Create account" block :loading="busy" :disabled="captchaRequired && !captchaToken" />
       </UForm>
     </template>
 

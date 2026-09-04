@@ -11,8 +11,10 @@ const toast = useToast()
 const busy = ref(false)
 const socialBusy = ref<AuthLoginMethod | null>(null)
 const error = ref<string | null>(null)
-const { native, serverUrl } = useApi()
-const { data: authConfig } = await useFetch<PublicAuthConfig>('/api/auth/config')
+const { api, native, serverUrl, serverOrigin } = useApi()
+const { data: authConfig } = await useFetch<PublicAuthConfig>('/api/auth/config', {
+  $fetch: native ? globalThis.$fetch : undefined,
+})
 
 const schema = z.object({
   email: z.string().email('Enter a valid email'),
@@ -22,7 +24,7 @@ type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ email: '', password: '' })
 
 onMounted(async () => {
-  await session.refresh()
+  await session.refresh(api)
   if (session.user) {
     await navigateTo(safeNextPath())
     return
@@ -35,7 +37,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   busy.value = true
   error.value = null
   try {
-    await session.login(event.data.email, event.data.password)
+    await session.login(event.data.email, event.data.password, api)
     await navigateTo(safeNextPath())
   }
   catch (err) {
@@ -97,13 +99,22 @@ const signupPath = computed(() => inviteCode.value
   ? `/signup?invite=${encodeURIComponent(inviteCode.value)}`
   : '/signup')
 
-const canCreateAccount = computed(() => Boolean(!native && authConfig.value?.emailSignupEnabled
+const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEnabled
   && (authConfig.value.signupEnabled || inviteCode.value)))
 </script>
 
 <template>
   <div>
     <h1 class="text-xl font-medium tracking-tight text-highlighted">Sign in</h1>
+
+    <ULink
+      v-if="native && serverOrigin"
+      to="/servers"
+      class="mt-2 inline-flex max-w-full items-center gap-1.5 text-xs text-muted hover:text-default"
+    >
+      <UIcon name="i-ph-globe" class="size-3.5 shrink-0" />
+      <span class="truncate font-mono">{{ serverOrigin }}</span>
+    </ULink>
 
     <UAlert
       v-if="error"
@@ -131,7 +142,7 @@ const canCreateAccount = computed(() => Boolean(!native && authConfig.value?.ema
       <USeparator label="or" class="my-6" />
     </template>
 
-    <UForm v-if="authConfig?.methods.email" :schema="schema" :state="state" :class="socialProviders.length ? 'space-y-4' : 'mt-8 space-y-4'" @submit="onSubmit">
+    <UForm v-if="authConfig?.methods.email" :schema="schema" :state="state" :class="socialProviders.length ? 'space-y-4' : 'mt-6 space-y-4'" @submit="onSubmit">
       <UFormField name="email" label="Email">
         <UInput
           v-model="state.email"

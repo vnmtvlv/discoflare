@@ -1,7 +1,8 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { invites } from '../../../drizzle/schema'
-import { loadAuthRuntimeConfig, publicAuthConfig } from '../../utils/auth-config'
+import { authUsers, invites } from '../../../drizzle/schema'
+import { ensureDomainUser, publicUser, visibleAuthEmail } from '../../utils/auth'
+import { emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from '../../utils/auth-config'
 import { authFromEvent, resolveAuthBaseURL } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
 import { ensureMigrated, getDb } from '../../utils/db'
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
   const publicConfig = publicAuthConfig(runtime)
 
-  if (!runtime.enabled.email || !runtime.email.verificationReady) {
+  if (!publicConfig.emailSignupEnabled) {
     fail(403, 'signup_disabled', 'Email signup is not available')
   }
 
@@ -35,10 +36,6 @@ export default defineEventHandler(async (event) => {
   if (runtime.registrationMode === 'invite_only' && !validInvite) {
     fail(403, 'invite_required', 'A valid invite is required')
   }
-  if (runtime.registrationMode === 'open' && !publicConfig.emailSignupEnabled) {
-    fail(403, 'signup_disabled', 'Email signup requires email delivery and Turnstile')
-  }
-
   const ip = getHeader(event, 'cf-connecting-ip') || getHeader(event, 'x-forwarded-for') || 'local'
   let allowed = true
   try {
@@ -69,5 +66,20 @@ export default defineEventHandler(async (event) => {
     const payload = await response.json().catch(() => null) as { message?: string } | null
     fail(response.status, 'signup_failed', payload?.message || 'Could not create account')
   }
-  return { ok: true, verificationRequired: true }
+  for (const cookie of response.headers.getSetCookie?.() ?? []) appendResponseHeader(event, 'set-cookie', cookie)
+
+  const verificationRequired = emailVerificationRequired(runtime)
+  if (verificationRequired) return { ok: true, verificationRequired }
+
+  const signedUp = await response.json() as { user: { id: string; email: string; name: string; image?: string | null } }
+  await getDb(env.DB)
+    .update(authUsers)
+    .set({ emailVerified: true, updatedAt: new Date() })
+    .where(eq(authUsers.id, signedUp.user.id))
+  const row = await ensureDomainUser(event, signedUp.user)
+  return {
+    ok: true,
+    verificationRequired,
+    user: { ...publicUser(row), email: visibleAuthEmail(signedUp.user.email) },
+  }
 })

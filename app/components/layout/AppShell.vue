@@ -10,16 +10,17 @@ const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
 const workspaceId = computed(() => props.workspaceId || defaultWorkspaceId.value || ui.last()?.workspaceId)
 
-watch(() => route.params.channel, () => {
+watch(() => route.fullPath, () => {
   if (isMobile.value) ui.mobilePane = 'chat'
 })
 </script>
 
 <template>
-  <div class="h-dvh overflow-hidden flex bg-default">
+  <div class="relative flex h-full overflow-hidden bg-default">
     <aside
       v-if="workspaceId && (!isMobile || ui.mobilePane === 'channels')"
-      class="shrink-0 bg-muted flex flex-col min-h-0 relative"
+      id="channel-navigation"
+      class="relative flex min-h-0 shrink-0 flex-col bg-muted pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]"
       :class="isMobile ? 'absolute inset-y-0 start-0 z-30 shadow-xl w-60' : ''"
       :style="!isMobile ? { width: `${ui.channelPaneWidth}px` } : undefined"
     >
@@ -40,7 +41,7 @@ watch(() => route.params.channel, () => {
       aria-label="Close channel list"
       @click="ui.mobilePane = 'chat'"
     />
-    <div class="flex-1 min-w-0 min-h-0 flex flex-col">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]">
       <slot />
     </div>
   </div>

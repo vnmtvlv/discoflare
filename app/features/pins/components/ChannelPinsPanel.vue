@@ -10,10 +10,11 @@ const props = defineProps<{
 }>()
 const qc = useQueryClient()
 const toast = useToast()
+const { api } = useApi()
 
 const pinsQ = useQuery({
   queryKey: computed(() => ['pins', props.channelId]),
-  queryFn: () => $fetch<{ messages: MessageDTO[] }>(`/api/channels/${props.channelId}/pins`),
+  queryFn: () => api<{ messages: MessageDTO[] }>(`/api/channels/${props.channelId}/pins`),
   enabled: computed(() => Boolean(props.channelId)),
 })
 
@@ -31,7 +32,7 @@ async function jump(messageId: string) {
     return
   }
   try {
-    const context = await $fetch<MessageContextResponse>(
+    const context = await api<MessageContextResponse>(
       `/api/channels/${props.channelId}/messages/${messageId}/context`,
     )
     qc.setQueryData<InfiniteData<MessagePage>>(
@@ -50,7 +51,7 @@ async function jump(messageId: string) {
 
 async function unpin(messageId: string) {
   try {
-    await $fetch(`/api/messages/${messageId}/pin`, { method: 'DELETE' })
+    await api(`/api/messages/${messageId}/pin`, { method: 'DELETE' })
     await pinsQ.refetch()
   }
   catch {

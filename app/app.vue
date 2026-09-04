@@ -19,7 +19,7 @@ useSeoMeta({
     <NuxtRouteAnnouncer />
     <div v-if="native" class="flex h-dvh min-w-0 overflow-hidden bg-default">
       <ClientServerRail />
-      <div class="min-w-0 flex-1 overflow-hidden">
+      <div class="h-full min-w-0 flex-1 overflow-hidden">
         <NuxtLayout>
           <NuxtPage />
         </NuxtLayout>

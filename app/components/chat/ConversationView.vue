@@ -13,6 +13,7 @@ const presence = usePresenceStore()
 const huddle = useHuddleStore()
 const qc = useQueryClient()
 const { workspaceId } = useWorkspace()
+const { api } = useApi()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
 
 watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
@@ -29,7 +30,7 @@ const membersQ = useQuery({
   queryKey: computed(() => ['members', workspaceId.value]),
   queryFn: ({ queryKey }) => {
     const id = String(queryKey[1] ?? '')
-    return id ? $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
+    return id ? api<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
   },
   enabled: computed(() => Boolean(workspaceId.value)),
 })
@@ -37,17 +38,17 @@ const channelsQ = useQuery({
   queryKey: computed(() => ['channels', workspaceId.value]),
   queryFn: ({ queryKey }) => {
     const id = String(queryKey[1] ?? '')
-    return id ? $fetch<{ channels: ChannelDTO[] }>(`/api/workspaces/${id}/channels`) : Promise.resolve({ channels: [] })
+    return id ? api<{ channels: ChannelDTO[] }>(`/api/workspaces/${id}/channels`) : Promise.resolve({ channels: [] })
   },
   enabled: computed(() => Boolean(workspaceId.value)),
 })
 const dmsQ = useQuery({
   queryKey: ['dms'],
-  queryFn: () => $fetch<{ channels: ChannelDTO[] }>('/api/dms'),
+  queryFn: () => api<{ channels: ChannelDTO[] }>('/api/dms'),
 })
 const oneQ = useQuery({
   queryKey: computed(() => ['channel', channelId.value]),
-  queryFn: () => $fetch<{ channel: ChannelDTO; frozen?: boolean }>(`/api/channels/${channelId.value}`),
+  queryFn: () => api<{ channel: ChannelDTO; frozen?: boolean }>(`/api/channels/${channelId.value}`),
   enabled: computed(() => Boolean(channelId.value)),
 })
 
@@ -147,7 +148,7 @@ async function onThread(msg: MessageDTO) {
     ui.threadParentId = channelId.value
     return
   }
-  const res = await $fetch<{ channel: { id: string } }>(`/api/channels/${channelId.value}/threads`, {
+  const res = await api<{ channel: { id: string } }>(`/api/channels/${channelId.value}/threads`, {
     method: 'POST',
     body: { messageId: msg.id },
   })
@@ -161,12 +162,12 @@ const addOpen = ref(false)
 const addQ = ref('')
 const addSearch = useQuery({
   queryKey: computed(() => ['dm-add', workspaceId.value, addQ.value]),
-  queryFn: () => $fetch<{ members: PublicUser[] }>(`/api/dms/search?workspaceId=${workspaceId.value}&q=${encodeURIComponent(addQ.value)}`),
+  queryFn: () => api<{ members: PublicUser[] }>(`/api/dms/search?workspaceId=${workspaceId.value}&q=${encodeURIComponent(addQ.value)}`),
   enabled: computed(() => addOpen.value),
 })
 
 async function addPerson(userId: string) {
-  await $fetch(`/api/dms/${channelId.value}/participants`, { method: 'POST', body: { userId } })
+  await api(`/api/dms/${channelId.value}/participants`, { method: 'POST', body: { userId } })
   await qc.invalidateQueries({ queryKey: ['dms'] })
   await qc.invalidateQueries({ queryKey: ['channel', channelId.value] })
   addOpen.value = false
@@ -177,7 +178,7 @@ const rename = ref('')
 watch(headerName, (n) => { if (!renaming.value) rename.value = n }, { immediate: true })
 
 async function saveName() {
-  await $fetch(`/api/dms/${channelId.value}`, { method: 'PATCH', body: { name: rename.value.trim() || null } })
+  await api(`/api/dms/${channelId.value}`, { method: 'PATCH', body: { name: rename.value.trim() || null } })
   renaming.value = false
   await qc.invalidateQueries({ queryKey: ['dms'] })
   await qc.invalidateQueries({ queryKey: ['channel', channelId.value] })
@@ -207,7 +208,7 @@ defineShortcuts({
 </script>
 
 <template>
-  <div class="flex-1 min-h-0 h-full flex bg-default">
+  <div class="relative flex-1 min-h-0 h-full flex bg-default">
     <div class="flex-1 min-w-0 flex flex-col min-h-0">
       <header class="h-12 pl-4 pr-2 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
         <UButton
@@ -215,9 +216,12 @@ defineShortcuts({
           icon="i-ph-list"
           color="neutral"
           variant="ghost"
-          size="sm"
+          size="md"
           square
+          class="size-11 shrink-0"
           aria-label="Open channels"
+          aria-controls="channel-navigation"
+          :aria-expanded="ui.mobilePane === 'channels'"
           @click="ui.mobilePane = 'channels'"
         />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
@@ -280,13 +284,15 @@ defineShortcuts({
             />
           </UTooltip>
           <UButton
-            class="md:hidden"
+            class="size-11 shrink-0 md:hidden"
             icon="i-ph-sidebar-simple"
             color="neutral"
             variant="ghost"
-            size="sm"
+            size="md"
             square
-            aria-label="Right panel"
+            aria-label="Open channel details"
+            aria-controls="channel-details"
+            :aria-expanded="ui.mobilePane === 'members'"
             @click="ui.mobilePane = 'members'"
           />
         </div>

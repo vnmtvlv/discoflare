@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const open = defineModel<boolean>('open', { default: false })
 defineProps<{ labelledBy?: string }>()
+const appConfig = useAppConfig()
 
 function close() {
   open.value = false
@@ -27,8 +28,9 @@ defineShortcuts({
     <template #content>
       <div class="h-dvh flex min-h-0" role="document">
         <div class="flex-1 flex justify-end bg-muted min-w-[192px]">
-          <aside class="w-[192px] sm:w-[218px] py-[60px] px-2 pe-1.5 overflow-y-auto">
+          <aside class="flex w-[192px] flex-col overflow-y-auto px-2 py-[60px] pe-1.5 sm:w-[218px]">
             <slot name="nav" />
+            <p class="mt-auto px-2.5 pt-8 text-[11px] text-dimmed">Discoflare v{{ appConfig.version }}</p>
           </aside>
         </div>
         <div class="flex-[1_1_800px] flex min-w-0 bg-default">

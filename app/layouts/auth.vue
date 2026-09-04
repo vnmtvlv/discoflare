@@ -19,8 +19,8 @@ useHead(() => ({ title: appName.value }))
 </script>
 
 <template>
-  <div class="min-h-dvh bg-default lg:grid lg:grid-cols-2">
-    <aside class="auth-stage relative flex min-h-[22rem] flex-col overflow-hidden border-b border-default bg-elevated p-6 sm:min-h-[26rem] sm:p-8 lg:min-h-dvh lg:border-r lg:border-b-0 lg:p-10 xl:p-12">
+  <div class="h-full min-h-0 overflow-y-auto bg-default lg:grid lg:grid-cols-[var(--df-auth-stage-width)_minmax(0,1fr)]">
+    <aside class="auth-stage relative flex min-h-[22rem] flex-col overflow-hidden border-b border-default bg-elevated p-6 pb-[max(1.5rem,var(--df-safe-area-bottom))] pt-[max(1.5rem,var(--df-safe-area-top))] sm:min-h-[26rem] sm:p-8 sm:pb-[max(2rem,var(--df-safe-area-bottom))] sm:pt-[max(2rem,var(--df-safe-area-top))] lg:min-h-full lg:border-r lg:border-b-0 lg:p-10 lg:pb-[max(2.5rem,var(--df-safe-area-bottom))] lg:pt-[max(2.5rem,var(--df-safe-area-top))] xl:p-12 xl:pb-[max(3rem,var(--df-safe-area-bottom))] xl:pt-[max(3rem,var(--df-safe-area-top))]">
       <BrandWordmark :name="appName" size="lg" class="relative z-10" />
 
       <div class="relative z-10 flex-1 flex items-center">
@@ -44,8 +44,8 @@ useHead(() => ({ title: appName.value }))
       <div class="auth-shape auth-shape-three" aria-hidden="true" />
     </aside>
 
-    <main class="flex min-h-[28rem] flex-col lg:min-h-dvh">
-      <div class="flex-1 flex items-center justify-center px-6 py-12">
+    <main class="flex min-h-[28rem] flex-col lg:min-h-full">
+      <div class="flex flex-1 items-center justify-center px-6 pb-[max(3rem,var(--df-safe-area-bottom))] pt-[max(3rem,var(--df-safe-area-top))]">
         <div class="w-full max-w-[400px]">
           <slot />
         </div>
