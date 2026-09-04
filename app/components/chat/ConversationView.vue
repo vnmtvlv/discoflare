@@ -4,6 +4,7 @@ import { onKeyStroke } from '@vueuse/core'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser } from '~~/shared/types'
 import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
+import { hasPermission, Permission } from '~~/shared/permissions'
 
 const route = useRoute()
 const ui = useUiStore()
@@ -26,12 +27,18 @@ onKeyStroke(
 
 const membersQ = useQuery({
   queryKey: computed(() => ['members', workspaceId.value]),
-  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${workspaceId.value}/members`),
+  queryFn: ({ queryKey }) => {
+    const id = String(queryKey[1] ?? '')
+    return id ? $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
+  },
   enabled: computed(() => Boolean(workspaceId.value)),
 })
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', workspaceId.value]),
-  queryFn: () => $fetch<{ channels: ChannelDTO[] }>(`/api/workspaces/${workspaceId.value}/channels`),
+  queryFn: ({ queryKey }) => {
+    const id = String(queryKey[1] ?? '')
+    return id ? $fetch<{ channels: ChannelDTO[] }>(`/api/workspaces/${id}/channels`) : Promise.resolve({ channels: [] })
+  },
   enabled: computed(() => Boolean(workspaceId.value)),
 })
 const dmsQ = useQuery({
@@ -59,6 +66,15 @@ const headerName = computed(() => {
   return channel.value?.title || dmTitle(channel.value?.name, channel.value?.participants ?? [], session.user?.id || '')
 })
 const frozen = computed(() => Boolean(oneQ.data.value?.frozen || channel.value?.frozen || ui.dmFrozen))
+const { can, mine } = usePermissions(members)
+const canPin = computed(() => isDm.value ? !frozen.value : can(Permission.manageChannels))
+const effectivePermissions = computed(() => channel.value?.permissions ?? mine.value?.role.permissions ?? 0)
+const canSendMessages = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.sendMessages))
+const canAttachFiles = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.attachFiles))
+const canStartHuddle = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.startHuddle))
+const composerDisabledPlaceholder = computed(() => frozen.value
+  ? 'You can no longer send messages to this user'
+  : 'You cannot send messages in this channel')
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
 const composerPlaceholder = computed(() => {
@@ -242,6 +258,7 @@ defineShortcuts({
               variant="ghost"
               size="sm"
               square
+              :disabled="!canStartHuddle"
               aria-label="Start huddle"
               @click="start"
             />
@@ -303,6 +320,7 @@ defineShortcuts({
         :members="members"
         :channel-name="headerName"
         :is-dm="isDm"
+        :can-pin="canPin"
         @reply="onReply"
         @edit="onEdit"
         @thread="onThread"
@@ -321,7 +339,9 @@ defineShortcuts({
         :workspace-id="workspaceId"
         :members="members"
         :send="send"
-        :disabled="frozen"
+        :disabled="!canSendMessages"
+        :disabled-placeholder="composerDisabledPlaceholder"
+        :can-attach="canAttachFiles"
         :placeholder="composerPlaceholder"
         @last="onLast"
       />
@@ -330,6 +350,7 @@ defineShortcuts({
       v-if="ui.rightPanelOpen && ui.rightPanelTab === 'threads' && ui.threadId"
       :workspace-id="workspaceId"
       :members="members"
+      :can-pin="canPin"
     />
     <LayoutMemberRail
       v-else-if="ui.rightPanelOpen || isMobile"
@@ -337,6 +358,7 @@ defineShortcuts({
       :channel-id="channelId"
       :channel-members="isDm ? channel?.participants : undefined"
       :is-group-dm="isGroup"
+      :can-pin="canPin"
     />
     <HuddleSetupModal />
   </div>

@@ -2,14 +2,16 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import * as z from 'zod'
 import type { FormSubmitEvent, TableColumn } from '@nuxt/ui'
-import type { AuditEntryDTO, ChannelCategoryDTO, ChannelDTO, WorkspaceDTO, MemberDTO, RoleDTO } from '~~/shared/types'
+import type { AuditEntryDTO, ChannelCategoryDTO, ChannelDTO, ChannelRoleOverrideDTO, WorkspaceDTO, MemberDTO, RoleDTO } from '~~/shared/types'
+import { channelPermissionMasks, channelPermissionMode, ChannelPermissionGrants, type ChannelPermissionGrantKey, type ChannelPermissionMode } from '~~/shared/channel-permissions'
 import { hasPermission, MemberPermissions, Permission, permissionBitmask, PermissionGrants, type PermissionGrantKey } from '~~/shared/permissions'
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'channels' | 'roles' | 'members' | 'invites' | 'audit'
+type Section = 'overview' | 'channels' | 'roles' | 'members' | 'invites' | 'authentication' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
+const { serverUrl } = useApi()
 const open = defineModel<boolean>('open', { default: false })
 
 const toast = useToast()
@@ -21,6 +23,14 @@ const schema = z.object({ name: z.string().min(1).max(80) })
 type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ name: '' })
 const saving = ref(false)
+const permissionChannelId = ref<string | null>(null)
+const permissionRoleId = ref<string | null>(null)
+const permissionModes = reactive<Record<ChannelPermissionGrantKey, ChannelPermissionMode>>({
+  sendMessages: 'inherit',
+  attachFiles: 'inherit',
+  startHuddle: 'inherit',
+})
+const permissionSaving = ref(false)
 
 const workspaceQ = useQuery({
   queryKey: computed(() => ['workspace', props.workspaceId]),
@@ -42,6 +52,11 @@ const channelsQ = useQuery({
   queryFn: () => $fetch<{ categories: ChannelCategoryDTO[]; channels: ChannelDTO[] }>(`/api/workspaces/${props.workspaceId}/channels`),
   enabled: computed(() => open.value),
 })
+const channelOverridesQ = useQuery({
+  queryKey: computed(() => ['channel-role-overrides', permissionChannelId.value]),
+  queryFn: () => $fetch<{ overrides: ChannelRoleOverrideDTO[] }>(`/api/channels/${permissionChannelId.value}/role-overrides`),
+  enabled: computed(() => open.value && section.value === 'channels' && Boolean(permissionChannelId.value)),
+})
 const invitesQ = useQuery({
   queryKey: computed(() => ['invites', props.workspaceId]),
   queryFn: () => $fetch<{ invites: Array<{ code: string; url: string; maxUses: number; uses: number; expiresAt: string | null; createdAt: string }> }>(`/api/workspaces/${props.workspaceId}/invites`),
@@ -57,12 +72,13 @@ const { can, mine } = usePermissions(computed(() => membersQ.data.value?.members
 watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = n }, { immediate: true })
 watch(open, (v) => { if (v) section.value = 'overview' })
 
-const workspaceNav = [
+const workspaceNav = computed(() => [
   { id: 'overview' as const, label: 'Overview' },
   { id: 'channels' as const, label: 'Channels' },
   { id: 'roles' as const, label: 'Roles' },
+  ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication' }] : []),
   { id: 'audit' as const, label: 'Audit Log' },
-]
+])
 const userNav = [
   { id: 'members' as const, label: 'Members' },
   { id: 'invites' as const, label: 'Invites' },
@@ -102,6 +118,17 @@ const isOwner = computed(() => mine.value?.role.key === 'owner')
 const roleOptions = computed(() => roles.value
   .filter(role => role.key !== 'owner' && (role.key !== 'admin' || isOwner.value))
   .map(role => ({ label: roleLabel(role.name), value: role.id })))
+const permissionChannel = computed(() => workspaceChannels.value.find(channel => channel.id === permissionChannelId.value) ?? null)
+const permissionRoleOptions = computed(() => roles.value
+  .filter(role => role.key !== 'owner')
+  .map(role => ({ label: roleLabel(role.name), value: role.id })))
+const selectedPermissionOverride = computed(() => channelOverridesQ.data.value?.overrides
+  .find(override => override.roleId === permissionRoleId.value) ?? null)
+const overrideModeOptions = [
+  { label: 'Inherit', value: 'inherit' },
+  { label: 'Allow', value: 'allow' },
+  { label: 'Deny', value: 'deny' },
+]
 
 watch([roles, section], ([list, activeSection]) => {
   if (activeSection !== 'roles' || !list.length) return
@@ -127,6 +154,30 @@ watch(selectedCategory, (category) => {
   categoryName.value = category?.name ?? ''
 }, { immediate: true })
 
+watch([workspaceChannels, section], ([list, activeSection]) => {
+  if (activeSection !== 'channels') return
+  if (permissionChannelId.value && !list.some(channel => channel.id === permissionChannelId.value)) {
+    permissionChannelId.value = null
+  }
+})
+
+watch([permissionRoleOptions, permissionChannelId], ([options, channelId]) => {
+  if (!channelId) return
+  if (!permissionRoleId.value || !options.some(option => option.value === permissionRoleId.value)) {
+    permissionRoleId.value = options.find(option => roles.value.find(role => role.id === option.value)?.key === 'member')?.value
+      ?? options[0]?.value
+      ?? null
+  }
+}, { immediate: true })
+
+watch([selectedPermissionOverride, permissionRoleId], ([override]) => {
+  const allow = override?.allow ?? 0
+  const deny = override?.deny ?? 0
+  for (const grant of ChannelPermissionGrants) {
+    permissionModes[grant.key] = channelPermissionMode(allow, deny, grant.flag)
+  }
+}, { immediate: true })
+
 const memberCount = computed(() => membersQ.data.value?.members.length ?? 0)
 const channelCount = computed(() => workspaceChannels.value.length)
 const workspaceName = computed(() => workspaceQ.data.value?.workspace.name || 'Workspace')
@@ -134,7 +185,7 @@ const workspaceInitial = computed(() => workspaceName.value.slice(0, 1).toUpperC
 const workspaceIconUrl = computed(() => {
   const workspace = workspaceQ.data.value?.workspace
   if (!workspace?.iconR2Key) return undefined
-  return `/api/workspaces/${props.workspaceId}/icon?v=${encodeURIComponent(workspace.updatedAt)}`
+  return serverUrl(`/api/workspaces/${props.workspaceId}/icon?v=${encodeURIComponent(workspace.updatedAt)}`)
 })
 
 async function onSave(event: FormSubmitEvent<Schema>) {
@@ -270,11 +321,57 @@ async function assignChannelCategory(channelId: string, categoryId: string) {
   }
 }
 
+function editChannelPermissions(channelId: string) {
+  permissionChannelId.value = channelId
+}
+
+async function saveChannelPermissions() {
+  if (!permissionChannelId.value || !permissionRoleId.value) return
+  permissionSaving.value = true
+  try {
+    const masks = channelPermissionMasks(permissionModes)
+    await $fetch(`/api/channels/${permissionChannelId.value}/role-overrides/${permissionRoleId.value}`, {
+      method: 'PUT',
+      body: masks,
+    })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['channel-role-overrides', permissionChannelId.value] }),
+      qc.invalidateQueries({ queryKey: ['channel', permissionChannelId.value] }),
+    ])
+    toast.add({ title: 'Channel permissions updated', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    permissionSaving.value = false
+  }
+}
+
+async function resetChannelPermissions() {
+  if (!permissionChannelId.value || !permissionRoleId.value) return
+  permissionSaving.value = true
+  try {
+    await $fetch(`/api/channels/${permissionChannelId.value}/role-overrides/${permissionRoleId.value}`, { method: 'DELETE' })
+    await Promise.all([
+      qc.invalidateQueries({ queryKey: ['channel-role-overrides', permissionChannelId.value] }),
+      qc.invalidateQueries({ queryKey: ['channel', permissionChannelId.value] }),
+    ])
+    toast.add({ title: 'Channel permissions reset', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    permissionSaving.value = false
+  }
+}
+
 async function makeInvite() {
   inviting.value = true
   try {
     const res = await $fetch<{ invite: { url: string } }>(`/api/workspaces/${props.workspaceId}/invites`, { method: 'POST', body: {} })
-    inviteUrl.value = `${location.origin}${res.invite.url}`
+    inviteUrl.value = serverUrl(res.invite.url)
     await qc.invalidateQueries({ queryKey: ['invites', props.workspaceId] })
   }
   catch (err) {
@@ -288,7 +385,7 @@ async function makeInvite() {
 async function copyInvite(url?: string) {
   const value = url || inviteUrl.value
   if (!value) return
-  await copy(value.startsWith('http') ? value : `${location.origin}${value}`)
+  await copy(serverUrl(value))
   toast.add({ title: 'Invite copied', color: 'success' })
 }
 
@@ -544,6 +641,15 @@ function navClass(id: Section) {
         <li v-for="channel in workspaceChannels" :key="channel.id" class="flex items-center gap-3 py-3">
           <UIcon :name="channel.type === 'voice' ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 shrink-0 text-muted" />
           <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ channel.name }}</span>
+          <UButton
+            v-if="can(Permission.manageChannels)"
+            icon="i-ph-shield-check"
+            label="Permissions"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            @click="editChannelPermissions(channel.id)"
+          />
           <USelect
             :model-value="channel.categoryId || 'uncategorized'"
             :items="categoryOptions"
@@ -558,6 +664,57 @@ function navClass(id: Section) {
           />
         </li>
       </ul>
+      <div v-if="permissionChannel" class="mt-6 rounded-lg border border-default p-4">
+        <div class="flex items-center gap-3">
+          <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-highlighted">
+            {{ permissionChannel.name }} permissions
+          </h2>
+          <UButton
+            icon="i-ph-x"
+            color="neutral"
+            variant="ghost"
+            size="xs"
+            square
+            aria-label="Close channel permissions"
+            @click="permissionChannelId = null"
+          />
+        </div>
+        <UFormField label="Role" class="mt-4 max-w-xs">
+          <USelect
+            :model-value="permissionRoleId ?? undefined"
+            :items="permissionRoleOptions"
+            value-key="value"
+            label-key="label"
+            class="w-full"
+            @update:model-value="permissionRoleId = $event ? String($event) : null"
+          />
+        </UFormField>
+        <div class="mt-4 divide-y divide-default">
+          <div v-for="grant in ChannelPermissionGrants" :key="grant.key" class="flex items-center gap-4 py-2">
+            <span class="min-w-0 flex-1 text-sm text-default">{{ grant.label }}</span>
+            <USelect
+              v-model="permissionModes[grant.key]"
+              :items="overrideModeOptions"
+              value-key="value"
+              label-key="label"
+              size="sm"
+              class="w-32"
+              :aria-label="`${grant.label} override`"
+            />
+          </div>
+        </div>
+        <div class="mt-4 flex justify-end gap-2">
+          <UButton
+            v-if="selectedPermissionOverride"
+            label="Reset"
+            color="neutral"
+            variant="ghost"
+            :loading="permissionSaving"
+            @click="resetChannelPermissions"
+          />
+          <UButton label="Save" :loading="permissionSaving" @click="saveChannelPermissions" />
+        </div>
+      </div>
     </template>
 
     <template v-else-if="section === 'roles'">
@@ -669,6 +826,10 @@ function navClass(id: Section) {
           <UButton size="xs" color="neutral" variant="soft" label="Copy" @click="copyInvite(inv.url)" />
         </li>
       </ul>
+    </template>
+
+    <template v-else-if="section === 'authentication'">
+      <SettingsAuthSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else>

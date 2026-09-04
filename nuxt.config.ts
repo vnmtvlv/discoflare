@@ -1,7 +1,21 @@
 import { readFile } from 'node:fs/promises'
 
+const nativeClient = process.env.DISCOFLARE_CLIENT_MODE === 'native'
+const devProxyOrigin = process.env.DISCOFLARE_DEV_PROXY_ORIGIN
+  ? new URL(process.env.DISCOFLARE_DEV_PROXY_ORIGIN).origin
+  : null
+const rawSqlPlugin = {
+  name: 'discoflare-raw-sql',
+  async load(id: string) {
+    if (!id.endsWith('.sql?raw')) return null
+    const sql = await readFile(id.slice(0, -4), 'utf8')
+    return `export default ${JSON.stringify(sql)}`
+  },
+}
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-02',
+  ssr: !nativeClient,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   modules: ['@nuxt/ui', '@pinia/nuxt', '@vueuse/nuxt', '@nuxt/eslint'],
@@ -14,18 +28,21 @@ export default defineNuxtConfig({
       collections: ['ph'],
     },
   },
-  nitro: {
+  runtimeConfig: {
+    public: {
+      clientMode: nativeClient ? 'native' : 'web',
+    },
+  },
+  nitro: nativeClient ? {
+    preset: 'static',
+    rollupConfig: {
+      plugins: [rawSqlPlugin],
+    },
+  } : {
     preset: 'cloudflare-module',
     entry: process.env.NODE_ENV === 'development' ? undefined : './cloudflare-entry.ts',
     rollupConfig: {
-      plugins: [{
-        name: 'discoflare-raw-sql',
-        async load(id) {
-          if (!id.endsWith('.sql?raw')) return null
-          const sql = await readFile(id.slice(0, -4), 'utf8')
-          return `export default ${JSON.stringify(sql)}`
-        },
-      }],
+      plugins: [rawSqlPlugin],
     },
     errorHandler: './server/error',
     cloudflare: {
@@ -52,6 +69,22 @@ export default defineNuxtConfig({
         },
       },
     },
+    devProxy: devProxyOrigin
+      ? {
+          '/api': {
+            target: `${devProxyOrigin}/api`,
+            changeOrigin: true,
+            cookieDomainRewrite: '',
+            headers: { origin: devProxyOrigin },
+          },
+          '/ws': {
+            target: `${devProxyOrigin}/ws`,
+            ws: true,
+            changeOrigin: true,
+            headers: { origin: devProxyOrigin },
+          },
+        }
+      : undefined,
   },
   vite: {
     optimizeDeps: {

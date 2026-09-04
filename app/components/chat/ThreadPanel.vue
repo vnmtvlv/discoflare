@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
 import type { ChannelDTO, ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
+import { hasPermission, Permission } from '~~/shared/permissions'
 
 const props = defineProps<{
   workspaceId: string
   members: MemberDTO[]
+  canPin?: boolean
 }>()
 const ui = useUiStore()
 const threadId = computed(() => ui.threadId)
@@ -16,6 +18,10 @@ const threadQ = useQuery({
 })
 const threadName = computed(() => threadQ.data.value?.channel.name || 'Thread')
 const threadTitle = computed(() => threadQ.data.value?.channel.title || threadName.value)
+const { mine } = usePermissions(computed(() => props.members))
+const effectivePermissions = computed(() => threadQ.data.value?.channel.permissions ?? mine.value?.role.permissions ?? 0)
+const canSendMessages = computed(() => hasPermission(effectivePermissions.value, Permission.sendMessages))
+const canAttachFiles = computed(() => hasPermission(effectivePermissions.value, Permission.attachFiles))
 
 function close() {
   ui.threadId = null
@@ -62,6 +68,7 @@ defineShortcuts({
       :members="members"
       :channel-name="threadTitle"
       :show-intro="false"
+      :can-pin="props.canPin"
       @reply="onReply"
       @edit="onEdit"
       @read="(messageId) => send({ t: 'read', messageId })"
@@ -71,6 +78,8 @@ defineShortcuts({
       :workspace-id="props.workspaceId"
       :members="props.members"
       :send="send as (msg: ClientMsg) => void"
+      :disabled="!canSendMessages"
+      :can-attach="canAttachFiles"
       placeholder="Reply in thread"
     />
   </aside>

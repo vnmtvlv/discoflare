@@ -1,12 +1,14 @@
 import type { InfiniteData, QueryClient } from '@tanstack/vue-query'
-import type { ClientMsg, MessageDTO, ServerMsg } from '~~/shared/types'
+import type { ChannelDTO, ClientMsg, MessageDTO, ServerMsg } from '~~/shared/types'
 
 type Page = { messages: MessageDTO[]; nextCursor: string | null }
+type ChannelList = { channels: ChannelDTO[] }
 
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const presence = usePresenceStore()
   const huddle = useHuddleStore()
   const nuxt = useNuxtApp()
+  const { socketUrl } = useApi()
 
   let ws: WebSocket | null = null
   let closed = false
@@ -16,6 +18,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   let authenticated = false
   const pending: ClientMsg[] = []
   const outstanding = new Map<string, Extract<ClientMsg, { t: 'message.create' }>>()
+  let pendingRead: Extract<ClientMsg, { t: 'read' }> | null = null
 
   function queryClient(): QueryClient | undefined {
     return nuxt.$queryClient as QueryClient | undefined
@@ -45,6 +48,26 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     void qc.invalidateQueries({ queryKey: ['threads'] })
   }
 
+  function applyReadAck(channelId: string, unread: boolean) {
+    const qc = queryClient()
+    if (!qc) return
+    let directChannel = false
+    const update = (old: ChannelList | undefined) => {
+      if (!old?.channels.some(channel => channel.id === channelId)) return old
+      directChannel = true
+      return {
+        ...old,
+        channels: old.channels.map(channel => channel.id === channelId ? { ...channel, unread } : channel),
+      }
+    }
+    qc.setQueriesData<ChannelList>({ queryKey: ['channels'] }, update)
+    qc.setQueriesData<ChannelList>({ queryKey: ['dms'] }, update)
+    if (!directChannel) {
+      void qc.invalidateQueries({ queryKey: ['channels'] })
+      void qc.invalidateQueries({ queryKey: ['dms'] })
+    }
+  }
+
   async function connect(gen = generation) {
     const id = toValue(channelId)
     if (!id || !import.meta.client || connecting || closed) return
@@ -52,8 +75,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     try {
       const { token } = await $fetch<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const socket = new WebSocket(`${proto}://${location.host}/ws/channel/${id}`)
+      const socket = new WebSocket(socketUrl(`/ws/channel/${id}`))
       ws = socket
       socket.addEventListener('open', () => {
         if (gen !== generation) return socket.close()
@@ -70,6 +92,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             authenticated = true
             for (const message of outstanding.values()) socket.send(JSON.stringify(message))
             for (const queued of pending.splice(0)) socket.send(JSON.stringify(queued))
+            if (pendingRead) socket.send(JSON.stringify(pendingRead))
             if (parsed.huddle) huddle.setState(parsed.huddle)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
             break
@@ -91,6 +114,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
                 })),
               }
             })
+            void qc?.invalidateQueries({ queryKey: ['pins', id] })
             break
           }
           case 'ack':
@@ -143,6 +167,28 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             })
             break
           }
+          case 'pin': {
+            const qc = queryClient()
+            qc?.setQueryData<InfiniteData<Page>>(['messages', id], (old) => {
+              if (!old) return old
+              return {
+                ...old,
+                pages: old.pages.map(page => ({
+                  ...page,
+                  messages: page.messages.map(message => message.id === parsed.messageId
+                    ? { ...message, pin: parsed.pin }
+                    : message),
+                })),
+              }
+            })
+            void qc?.invalidateQueries({ queryKey: ['pins', id] })
+            break
+          }
+          case 'read.ack':
+            if (pendingRead && pendingRead.messageId <= parsed.messageId) pendingRead = null
+            queryClient()?.setQueryData(['readCursor', parsed.channelId], parsed.messageId)
+            applyReadAck(parsed.channelId, parsed.unread)
+            break
           case 'error':
             if (parsed.code === 'realtimekit_unconfigured') useUiStore().huddleSetupOpen = true
             break
@@ -169,15 +215,13 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
 
   function send(msg: ClientMsg) {
     if (msg.t === 'message.create') outstanding.set(msg.clientId, msg)
+    if (msg.t === 'read' && (!pendingRead || pendingRead.messageId < msg.messageId)) pendingRead = msg
     if (authenticated && ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg))
       return
     }
     if (msg.t === 'typing' || msg.t === 'auth' || msg.t === 'message.create') return
-    if (msg.t === 'read') {
-      const existing = pending.findIndex(item => item.t === 'read')
-      if (existing >= 0) pending.splice(existing, 1)
-    }
+    if (msg.t === 'read') return
     if (pending.length < 100) pending.push(msg)
   }
 
@@ -186,6 +230,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     closed = true
     authenticated = false
     pending.splice(0)
+    pendingRead = null
     outstanding.clear()
     ws?.close()
     ws = null
@@ -196,6 +241,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     closed = false
     authenticated = false
     pending.splice(0)
+    pendingRead = null
     outstanding.clear()
     ws?.close()
     ws = null

@@ -74,8 +74,16 @@ const config = {
       { name: 'CHANNEL_DO', class_name: 'ChannelDurableObject', script_name: sandboxWorker },
       { name: 'WORKSPACE_DO', class_name: 'WorkspaceDurableObject', script_name: sandboxWorker },
       { name: 'RATE_LIMIT_DO', class_name: 'RateLimitDurableObject', script_name: sandboxWorker },
+      { name: 'NOTIFICATION_DO', class_name: 'NotificationDurableObject', script_name: sandboxWorker },
     ],
   },
+}
+
+if (process.env.EMAIL_FROM?.trim()) {
+  config.send_email = [{
+    name: 'EMAIL',
+    allowed_sender_addresses: [process.env.EMAIL_FROM.trim()],
+  }]
 }
 
 mkdirSync(generatedDir, { recursive: true })

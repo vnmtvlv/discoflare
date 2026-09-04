@@ -15,6 +15,48 @@
       "when": 1788432673815,
       "tag": "0001_channel_categories",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788514846305,
+      "tag": "0002_auth_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788526800000,
+      "tag": "0003_message_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1788530400000,
+      "tag": "0004_push_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1788534000000,
+      "tag": "0005_message_pins",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1788537600000,
+      "tag": "0006_channel_role_overrides",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1788541200000,
+      "tag": "0007_agents_and_tasks",
+      "breakpoints": true
     }
   ]
 }

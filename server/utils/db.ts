@@ -2,6 +2,12 @@
 import { drizzle } from 'drizzle-orm/d1'
 import initSql from '../../drizzle/migrations/0000_init.sql?raw'
 import categorySql from '../../drizzle/migrations/0001_channel_categories.sql?raw'
+import authSettingsSql from '../../drizzle/migrations/0002_auth_settings.sql?raw'
+import messageSearchSql from '../../drizzle/migrations/0003_message_search.sql?raw'
+import pushNotificationsSql from '../../drizzle/migrations/0004_push_notifications.sql?raw'
+import messagePinsSql from '../../drizzle/migrations/0005_message_pins.sql?raw'
+import channelRoleOverridesSql from '../../drizzle/migrations/0006_channel_role_overrides.sql?raw'
+import agentsAndTasksSql from '../../drizzle/migrations/0007_agents_and_tasks.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -11,15 +17,28 @@ export function getDb(d1: D1Database) {
 /** Convert Drizzle's migration markers into the format accepted by D1 exec. */
 export function d1ExecSql(sql: string): string {
   return sql
-    .replaceAll('--> statement-breakpoint', '')
-    .split(';')
-    .map(statement => statement.replace(/\s+/g, ' ').trim())
+    .split('--> statement-breakpoint')
+    .map(statement => statement
+      .split('\n')
+      .filter(line => !line.trimStart().startsWith('--'))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim())
     .filter(Boolean)
-    .map(statement => `${statement};`)
+    .map(statement => statement.endsWith(';') ? statement : `${statement};`)
     .join('\n')
 }
 
-export const INIT_SQL = d1ExecSql(`${initSql}\n${categorySql}`)
+export const INIT_SQL = d1ExecSql([
+  initSql,
+  categorySql,
+  authSettingsSql,
+  messageSearchSql,
+  pushNotificationsSql,
+  messagePinsSql,
+  channelRoleOverridesSql,
+  agentsAndTasksSql,
+].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */
 export async function ensureMigrated(db: D1Database): Promise<boolean> {

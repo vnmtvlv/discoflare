@@ -2,6 +2,9 @@ import { defineConfig } from 'vitest/config'
 import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
+  define: {
+    'import.meta.client': 'true',
+  },
   resolve: {
     alias: {
       '~~': fileURLToPath(new URL('.', import.meta.url)),

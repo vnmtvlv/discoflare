@@ -13,6 +13,7 @@ const missing = computed(() => {
   if (bindings && !bindings.channelDo) out.push('channel')
   if (bindings && !bindings.workspaceDo) out.push('workspace')
   if (bindings && !bindings.rateLimitDo) out.push('rate limit')
+  if (bindings && !bindings.notificationDo) out.push('notifications')
   if (health.value && !health.value.migrated) out.push('migrations')
   return out
 })

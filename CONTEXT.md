@@ -37,12 +37,32 @@ A child Channel of type `thread` hanging off a text or Direct Message Channel.
 _Avoid_: Subchannel, comment thread as a different store
 
 **User**:
-A person known to Discoflare. A User is `pending` before joining, `active` while admitted to the workspace, and `removed` after being kicked. An active User has one Role.
-_Avoid_: Separate profile and membership entities
+A human identity known to Discoflare. A human User is `pending` before joining, `active` while admitted to the workspace, and `removed` after being kicked.
+_Avoid_: Calling an Agent a User in product copy
 
 **Member**:
-An active User, as presented in workspace member lists. It is a state of User, not a separate entity.
-_Avoid_: User-in-server record, participant (except huddle media peers)
+An active workspace participant, human or Agent, as presented in workspace member lists. Every Member has one Role. In storage, both kinds share the `users` identity table so Messages, mentions, Channel membership, and audit references have one author key.
+_Avoid_: User-in-server record, separate agent author system
+
+**Agent**:
+An AI Member with a profile, a stateful Agent Durable Object, and one stable Sandbox computer identity. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files are checkpointed to R2.
+_Avoid_: Bot, external runner, Hermes profile, always-running VM
+
+**Task Board**:
+An ordered collection of Tasks shared by the workspace and stored in D1.
+_Avoid_: Agent-local todo list, queue as product language
+
+**Task**:
+A unit of workspace work with a status, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may create Tasks.
+_Avoid_: Workflow (that is the execution primitive), prompt
+
+**Task Run**:
+One durable execution attempt for a Task. A Cloudflare Workflow owns orchestration; the assigned Agent Durable Object owns reasoning memory; the Sandbox owns active processes.
+_Avoid_: Treating a Task and its retryable execution as the same record
+
+**Agent Computer**:
+The stable Sandbox identity assigned to one Agent. The container may sleep or be replaced; `/workspace` survives logically because Discoflare restores and checkpoints it through R2.
+_Avoid_: Permanent VM, implying the container process runs forever
 
 **Role**:
 Named reusable set of workspace Grants assigned to Members. Owner, Admin, and Member are protected system Roles; operators may add custom Roles.
@@ -56,14 +76,26 @@ _Avoid_: Capability, privilege
 A code that grants membership in the workspace with the default member role.
 _Avoid_: Link (alone), invite URL as the entity
 
+**Registration Mode**:
+The installation-wide admission policy. `open` makes a newly authenticated User an active Member; `invite_only` keeps a new User pending until they accept an Invite.
+_Avoid_: Hiding signup UI as the policy, workspace visibility
+
+**Login Method**:
+An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.
+_Avoid_: Provider credentials as workspace data, enabled UI button as backend authorization
+
 **Message**:
-A written chat event in a Channel.
+A chat event in a Channel containing written content, Attachments, or both. A recorded audio message is a Message with an audio Attachment, not a Huddle.
 _Avoid_: Post, comment
 
 **Attachment**:
-A file shared with a Message.
+A file shared with a Message, including a recorded audio clip.
 _Avoid_: Upload, blob (in product language)
 
 **Presence**:
 A Member's ephemeral online, idle, or offline state.
 _Avoid_: User status, membership status, availability
+
+**Push Subscription**:
+A Member's opt-in browser endpoint for mentions, Direct Messages, and newly started Huddles. It belongs to one browser installation, not to the Member profile globally.
+_Avoid_: Notification permission as a workspace Role, VAPID endpoint as a public URL

@@ -13,7 +13,10 @@ export default defineEventHandler(async (event) => {
   const { env } = cf(event)
   const ch = access.channel
   if (ch.type === 'dm') {
-    return { channel: await toDmDto(env, ch, access.user.id, false), frozen: access.frozen }
+    return {
+      channel: { ...await toDmDto(env, ch, access.user.id, false), permissions: access.perms },
+      frozen: access.frozen,
+    }
   }
   let title: string | undefined
   if (ch.type === 'thread' && ch.parentMessageId) {
@@ -36,6 +39,7 @@ export default defineEventHandler(async (event) => {
       parentId: ch.parentId,
       parentMessageId: ch.parentMessageId,
       unread: false,
+      permissions: access.perms,
       huddle: null,
       createdAt: ch.createdAt,
       title,

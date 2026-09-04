@@ -1,0 +1,141 @@
+import { buildPushPayload } from '@block65/webcrypto-web-push'
+import type { PushNotificationPayload } from '../shared/notifications'
+import { pushDeliveryDisposition, pushRetryDelayMs } from '../shared/notifications'
+import type { DiscoflareEnv } from './env'
+
+const DELIVERY_LIMIT = 20
+const MAX_ATTEMPTS = 6
+const LEASE_MS = 30_000
+const TERMINAL_RETENTION_MS = 7 * 24 * 60 * 60 * 1000
+
+type OutboxRow = {
+  event_id: string
+  subscription_id: string
+  payload_json: string
+  attempts: number
+  endpoint: string
+  p256dh: string
+  auth: string
+}
+
+export function pushConfigured(env: DiscoflareEnv): boolean {
+  return Boolean(env.VAPID_SUBJECT?.trim() && env.VAPID_PUBLIC_KEY?.trim() && env.VAPID_PRIVATE_KEY?.trim())
+}
+
+async function deliverPush(env: DiscoflareEnv, row: OutboxRow) {
+  if (!pushConfigured(env)) return { disposition: 'retry' as const, error: 'vapid_unconfigured' }
+  let payload: PushNotificationPayload
+  try {
+    payload = JSON.parse(row.payload_json) as PushNotificationPayload
+  }
+  catch {
+    return { disposition: 'failed' as const, error: 'invalid_payload' }
+  }
+
+  try {
+    const request = await buildPushPayload({
+      data: payload,
+      options: {
+        ttl: payload.tag.startsWith('huddle:') ? 90 : 4 * 60 * 60,
+        urgency: payload.tag.startsWith('huddle:') ? 'high' : 'normal',
+      },
+    }, {
+      endpoint: row.endpoint,
+      expirationTime: null,
+      keys: { p256dh: row.p256dh, auth: row.auth },
+    }, {
+      subject: env.VAPID_SUBJECT!.trim(),
+      publicKey: env.VAPID_PUBLIC_KEY!.trim(),
+      privateKey: env.VAPID_PRIVATE_KEY!.trim(),
+    })
+    const response = await fetch(row.endpoint, {
+      ...request,
+      redirect: 'error',
+      signal: AbortSignal.timeout(10_000),
+    })
+    return { disposition: pushDeliveryDisposition(response.status), error: `http_${response.status}` }
+  }
+  catch {
+    return { disposition: 'retry' as const, error: 'network_error' }
+  }
+}
+
+export async function drainNotificationOutbox(env: DiscoflareEnv): Promise<void> {
+  const now = new Date()
+  const nowIso = now.toISOString()
+  const rows = await env.DB.prepare(
+    `SELECT o.event_id, o.subscription_id, o.payload_json, o.attempts,
+            s.endpoint, s.p256dh, s.auth
+     FROM notification_outbox o
+     JOIN push_subscriptions s ON s.id = o.subscription_id
+     WHERE o.delivered_at IS NULL AND o.failed_at IS NULL
+       AND o.available_at <= ?
+       AND (o.lease_until IS NULL OR o.lease_until <= ?)
+     ORDER BY o.available_at, o.created_at
+     LIMIT ?`,
+  ).bind(nowIso, nowIso, DELIVERY_LIMIT).all<OutboxRow>()
+
+  for (const row of rows.results ?? []) {
+    const leaseToken = crypto.randomUUID()
+    const leaseUntil = new Date(Date.now() + LEASE_MS).toISOString()
+    const claim = await env.DB.prepare(
+      `UPDATE notification_outbox
+       SET lease_token = ?, lease_until = ?, attempts = attempts + 1
+       WHERE event_id = ? AND subscription_id = ?
+         AND delivered_at IS NULL AND failed_at IS NULL
+         AND (lease_until IS NULL OR lease_until <= ?)`,
+    ).bind(leaseToken, leaseUntil, row.event_id, row.subscription_id, nowIso).run()
+    if (!claim.meta.changes) continue
+
+    const attempt = row.attempts + 1
+    const result = await deliverPush(env, row)
+    if (result.disposition === 'delivered') {
+      await env.DB.prepare(
+        `UPDATE notification_outbox
+         SET delivered_at = ?, lease_token = NULL, lease_until = NULL, last_error = NULL
+         WHERE event_id = ? AND subscription_id = ? AND lease_token = ?`,
+      ).bind(new Date().toISOString(), row.event_id, row.subscription_id, leaseToken).run()
+      continue
+    }
+    if (result.disposition === 'expired') {
+      await env.DB.prepare('DELETE FROM push_subscriptions WHERE id = ?').bind(row.subscription_id).run()
+      continue
+    }
+    if (result.disposition === 'failed' || attempt >= MAX_ATTEMPTS) {
+      await env.DB.prepare(
+        `UPDATE notification_outbox
+         SET failed_at = ?, lease_token = NULL, lease_until = NULL, last_error = ?
+         WHERE event_id = ? AND subscription_id = ? AND lease_token = ?`,
+      ).bind(new Date().toISOString(), result.error, row.event_id, row.subscription_id, leaseToken).run()
+      continue
+    }
+    const availableAt = new Date(Date.now() + pushRetryDelayMs(attempt)).toISOString()
+    await env.DB.prepare(
+      `UPDATE notification_outbox
+       SET available_at = ?, lease_token = NULL, lease_until = NULL, last_error = ?
+       WHERE event_id = ? AND subscription_id = ? AND lease_token = ?`,
+    ).bind(availableAt, result.error, row.event_id, row.subscription_id, leaseToken).run()
+  }
+
+  await env.DB.prepare(
+    `DELETE FROM notification_outbox
+     WHERE COALESCE(delivered_at, failed_at) IS NOT NULL
+       AND COALESCE(delivered_at, failed_at) < ?`,
+  ).bind(new Date(Date.now() - TERMINAL_RETENTION_MS).toISOString()).run()
+}
+
+export async function nextNotificationDueAt(env: DiscoflareEnv): Promise<number | null> {
+  const row = await env.DB.prepare(
+    `SELECT MIN(
+       CASE
+         WHEN lease_until IS NOT NULL AND lease_until > available_at THEN lease_until
+         ELSE available_at
+       END
+     ) AS due_at
+     FROM notification_outbox
+     WHERE delivered_at IS NULL AND failed_at IS NULL`,
+  ).first<{ due_at: string | null }>()
+  if (!row?.due_at) return null
+  const timestamp = Date.parse(row.due_at)
+  return Number.isFinite(timestamp) ? timestamp : Date.now() + 60_000
+}

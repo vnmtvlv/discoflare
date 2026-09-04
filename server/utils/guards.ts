@@ -1,9 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { H3Event } from 'h3'
-import { channels, channelMembers, roles, users, workspace } from '../../drizzle/schema'
+import { channelRoleOverrides, channels, channelMembers, roles, users, workspace } from '../../drizzle/schema'
+import { resolveChannelPermissions } from '../../shared/channel-permissions'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
-import type { PublicUser } from '../../shared/types'
+import type { ChannelType, PublicUser } from '../../shared/types'
 import { requireUser } from './auth'
 import { cf, fail } from './cf'
 import { getDb } from './db'
@@ -21,6 +22,7 @@ export type Membership = {
 
 export type ChannelAccess = Membership & {
   channel: typeof channels.$inferSelect
+  accessRootType: ChannelType
   frozen: boolean
   participants: PublicUser[]
 }
@@ -79,7 +81,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   }
 
   const rootType = accessRoot.type
-  const baseMember = await requireMember(event, WORKSPACE_ID, rootType === 'dm' ? undefined : flag)
+  const baseMember = await requireMember(event, WORKSPACE_ID)
 
   if (accessRoot.visibility === 'private') {
     const part = (await db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1))[0]
@@ -108,10 +110,26 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
       ownerId: baseMember.ownerId,
       isOwner: baseMember.isOwner,
       channel,
+      accessRootType: rootType,
       frozen,
       participants,
     }
   }
 
-  return { ...baseMember, channel, frozen: false, participants: [] }
+  let perms = baseMember.perms
+  if (!baseMember.isOwner) {
+    const override = (await db.select({
+      allow: channelRoleOverrides.allowMask,
+      deny: channelRoleOverrides.denyMask,
+    }).from(channelRoleOverrides).where(and(
+      eq(channelRoleOverrides.channelId, accessRoot.id),
+      eq(channelRoleOverrides.roleId, baseMember.roleId),
+    )).limit(1))[0]
+    perms = resolveChannelPermissions(perms, override)
+  }
+  if (flag !== undefined && !hasPermission(perms, flag)) {
+    fail(403, 'forbidden', 'Missing permission')
+  }
+
+  return { ...baseMember, perms, channel, accessRootType: rootType, frozen: false, participants: [] }
 }

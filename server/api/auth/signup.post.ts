@@ -1,0 +1,73 @@
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { invites } from '../../../drizzle/schema'
+import { loadAuthRuntimeConfig, publicAuthConfig } from '../../utils/auth-config'
+import { authFromEvent, resolveAuthBaseURL } from '../../utils/better-auth'
+import { cf, fail } from '../../utils/cf'
+import { ensureMigrated, getDb } from '../../utils/db'
+import { parseBody } from '../../utils/validate'
+
+const bodySchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  email: z.string().email().max(200),
+  password: z.string().min(8).max(200),
+  inviteCode: z.string().trim().max(100).optional(),
+})
+
+export default defineEventHandler(async (event) => {
+  const body = parseBody(bodySchema, await readBody(event))
+  const { env } = cf(event)
+  await ensureMigrated(env.DB)
+  const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
+  const publicConfig = publicAuthConfig(runtime)
+
+  if (!runtime.enabled.email || !runtime.email.verificationReady) {
+    fail(403, 'signup_disabled', 'Email signup is not available')
+  }
+
+  let validInvite = false
+  if (body.inviteCode) {
+    const invite = (await getDb(env.DB).select().from(invites).where(eq(invites.code, body.inviteCode)).limit(1))[0]
+    validInvite = Boolean(invite
+      && (!invite.expiresAt || new Date(invite.expiresAt).getTime() >= Date.now())
+      && (invite.maxUses === 0 || invite.uses < invite.maxUses))
+  }
+  if (runtime.registrationMode === 'invite_only' && !validInvite) {
+    fail(403, 'invite_required', 'A valid invite is required')
+  }
+  if (runtime.registrationMode === 'open' && !publicConfig.emailSignupEnabled) {
+    fail(403, 'signup_disabled', 'Email signup requires email delivery and Turnstile')
+  }
+
+  const ip = getHeader(event, 'cf-connecting-ip') || getHeader(event, 'x-forwarded-for') || 'local'
+  let allowed = true
+  try {
+    const limiter = asRpc<{ take: (limit: number, windowMs: number) => Promise<boolean> }>(env.RATE_LIMIT_DO.getByName(`ip:${ip}:signup`))
+    allowed = await limiter.take(5, 60 * 60 * 1000)
+  }
+  catch {
+    // nuxt cloudflare-dev does not export DOs
+  }
+  if (!allowed) fail(429, 'rate_limited', 'Too many signup attempts')
+
+  const callback = new URL('/login', resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin))
+  callback.searchParams.set('verified', '1')
+  if (body.inviteCode) callback.searchParams.set('next', `/invite/${encodeURIComponent(body.inviteCode)}`)
+
+  const auth = await authFromEvent(event)
+  const response = await auth.api.signUpEmail({
+    headers: event.headers,
+    body: {
+      name: body.name,
+      email: body.email.trim().toLowerCase(),
+      password: body.password,
+      callbackURL: callback.toString(),
+    },
+    asResponse: true,
+  })
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null) as { message?: string } | null
+    fail(response.status, 'signup_failed', payload?.message || 'Could not create account')
+  }
+  return { ok: true, verificationRequired: true }
+})

@@ -13,6 +13,7 @@ const qc = useQueryClient()
 const toast = useToast()
 const huddle = useHuddleStore()
 const { copy } = useClipboard()
+const { serverUrl } = useApi()
 const membersQ = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
   queryFn: () => $fetch<{ members: M[] }>(`/api/workspaces/${props.workspaceId}/members`),
@@ -70,7 +71,7 @@ const workspaceName = computed(() => workspaceQ.data.value?.workspace.name || 'â
 const workspaceIconUrl = computed(() => {
   const workspace = workspaceQ.data.value?.workspace
   if (!workspace?.iconR2Key) return undefined
-  return `/api/workspaces/${props.workspaceId}/icon?v=${encodeURIComponent(workspace.updatedAt)}`
+  return serverUrl(`/api/workspaces/${props.workspaceId}/icon?v=${encodeURIComponent(workspace.updatedAt)}`)
 })
 
 const otherWorkspaces = computed(() => (workspacesQ.data.value?.workspaces ?? []).filter((item) => item.id !== props.workspaceId))
@@ -167,7 +168,7 @@ async function makeInvite() {
   inviting.value = true
   try {
     const res = await $fetch<{ invite: { code: string; url: string } }>(`/api/workspaces/${props.workspaceId}/invites`, { method: 'POST', body: {} })
-    inviteUrl.value = `${location.origin}${res.invite.url}`
+    inviteUrl.value = serverUrl(res.invite.url)
   }
   catch (err) {
     toast.add({ title: errorMessage(err), color: 'error' })
@@ -215,6 +216,16 @@ watch(() => channelsQ.data.value?.channels, (list) => {
     </UDropdownMenu>
 
     <div class="flex-1 overflow-y-auto pt-3 pb-2">
+      <div class="px-2 pb-3">
+        <NuxtLink
+          to="/tasks"
+          class="flex items-center gap-2 h-9 px-2 rounded-md text-[15px]"
+          :class="route.path === '/tasks' ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
+        >
+          <UIcon name="i-ph-kanban" class="size-[18px] shrink-0" />
+          <span>Tasks</span>
+        </NuxtLink>
+      </div>
       <USkeleton v-if="channelsQ.isPending.value" class="h-24 mx-2" />
       <UAlert v-else-if="channelsQ.error.value" color="error" title="Could not load channels." class="mx-2" />
       <template v-else>

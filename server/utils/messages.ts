@@ -1,6 +1,6 @@
 import { inArray } from 'drizzle-orm'
-import { attachments, channels, messageMentions, messageReactions, messages, users } from '../../drizzle/schema'
-import type { AttachmentDTO, MessageDTO, PublicUser, ReactionDTO } from '../../shared/types'
+import { attachments, channels, messageMentions, messagePins, messageReactions, messages, users } from '../../drizzle/schema'
+import type { AttachmentDTO, MessageDTO, MessagePinDTO, PublicUser, ReactionDTO } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { getDb } from './db'
@@ -8,6 +8,7 @@ import { getDb } from './db'
 export function toPublicUser(row: typeof users.$inferSelect): PublicUser {
   return {
     id: row.id,
+    kind: row.kind,
     displayName: row.displayName,
     avatarR2Key: row.avatarR2Key,
   }
@@ -32,8 +33,15 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
   const authorIds = [...new Set(rows.map((r) => r.authorId))]
   const replyIds = rows.map((r) => r.replyToId).filter((x): x is string => Boolean(x))
 
-  const authorRows = await db.select().from(users).where(inArray(users.id, authorIds))
+  const pinRows = await db.select().from(messagePins).where(inArray(messagePins.messageId, ids))
+  const publicUserIds = [...new Set([...authorIds, ...pinRows.map(pin => pin.pinnedBy)])]
+  const authorRows = await db.select().from(users).where(inArray(users.id, publicUserIds))
   const authors = new Map(authorRows.map((u) => [u.id, toPublicUser(u)]))
+  const pins = new Map<string, MessagePinDTO>()
+  for (const pin of pinRows) {
+    const pinnedBy = authors.get(pin.pinnedBy)
+    if (pinnedBy) pins.set(pin.messageId, { pinnedBy, pinnedAt: pin.pinnedAt })
+  }
 
   const mentionRows = await db.select().from(messageMentions).where(inArray(messageMentions.messageId, ids))
   const mentions = new Map<string, string[]>()
@@ -92,12 +100,13 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
     id: row.id,
     channelId: row.channelId,
     workspaceId: WORKSPACE_ID,
-    author: authors.get(row.authorId) ?? { id: row.authorId, displayName: 'Unknown', avatarR2Key: null },
+    author: authors.get(row.authorId) ?? { id: row.authorId, kind: 'human', displayName: 'Unknown', avatarR2Key: null },
     content: row.deletedAt ? '' : row.content,
     replyTo: row.replyToId ? replies.get(row.replyToId) ?? null : null,
     mentions: mentions.get(row.id) ?? [],
     attachments: atts.get(row.id) ?? [],
     reactions: reactionMap.get(row.id) ?? [],
+    pin: pins.get(row.id) ?? null,
     threadId: threads.get(row.id) ?? null,
     editedAt: row.editedAt,
     deletedAt: row.deletedAt,

@@ -1,16 +1,109 @@
 export type PresenceStatus = 'online' | 'idle' | 'offline'
 export type UserStatus = 'pending' | 'active' | 'removed'
+export type UserKind = 'human' | 'agent'
 export type ChannelType = 'text' | 'voice' | 'thread' | 'dm'
 export type ChannelVisibility = 'workspace' | 'private'
 
 export type PublicUser = {
   id: string
+  kind: UserKind
   displayName: string
   avatarR2Key: string | null
 }
 
+export type AgentDTO = {
+  id: string
+  displayName: string
+  avatarR2Key: string | null
+  model: string
+  instructions: string
+  status: 'active' | 'paused'
+  sandboxId: string
+  lastActiveAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type TaskStatus = 'backlog' | 'ready' | 'running' | 'review' | 'done' | 'failed'
+
+export type TaskRunDTO = {
+  id: string
+  taskId: string
+  agentId: string
+  workflowId: string | null
+  status: 'queued' | 'running' | 'completed' | 'failed'
+  summary: string | null
+  details: string | null
+  error: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdAt: string
+}
+
+export type TaskDTO = {
+  id: string
+  boardId: string
+  title: string
+  description: string
+  status: TaskStatus
+  position: number
+  assigneeId: string | null
+  channelId: string | null
+  createdBy: string
+  resultSummary: string | null
+  resultDetails: string | null
+  lastError: string | null
+  createdAt: string
+  updatedAt: string
+  latestRun: TaskRunDTO | null
+}
+
+export type TaskBoardDTO = {
+  id: string
+  name: string
+  position: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  tasks: TaskDTO[]
+}
+
 export type SessionUser = PublicUser & {
-  email: string
+  email: string | null
+}
+
+export type RegistrationMode = 'open' | 'invite_only'
+export type AuthLoginMethod = 'email' | 'github' | 'twitter' | 'telegram'
+export type AuthCredentialProvider = Exclude<AuthLoginMethod, 'email'> | 'turnstile'
+
+export type PublicAuthConfig = {
+  registrationMode: RegistrationMode
+  signupEnabled: boolean
+  emailSignupEnabled: boolean
+  methods: Record<AuthLoginMethod, boolean>
+  turnstile: { enabled: boolean; siteKey: string | null }
+}
+
+export type AuthProviderAdminDTO = {
+  provider: AuthCredentialProvider
+  enabled: boolean
+  configured: boolean
+  effective: boolean
+  source: 'deployment' | 'database' | 'missing'
+  publicKey: string | null
+  secretReadable: boolean
+}
+
+export type AuthSettingsAdminDTO = PublicAuthConfig & {
+  email: {
+    enabled: boolean
+    binding: boolean
+    sender: string | null
+    senderName: string | null
+    verificationReady: boolean
+    senderManagedByDeployment: boolean
+  }
+  providers: Record<AuthCredentialProvider, AuthProviderAdminDTO>
 }
 
 export type AttachmentDTO = {
@@ -27,6 +120,11 @@ export type ReactionDTO = {
   emoji: string
   count: number
   me: boolean
+}
+
+export type MessagePinDTO = {
+  pinnedBy: PublicUser
+  pinnedAt: string
 }
 
 export type ReplyPreviewDTO = {
@@ -47,11 +145,42 @@ export type MessageDTO = {
   mentions: string[]
   attachments: AttachmentDTO[]
   reactions: ReactionDTO[]
+  pin: MessagePinDTO | null
   threadId: string | null
   editedAt: string | null
   deletedAt: string | null
   createdAt: string
   clientId?: string
+}
+
+export type MessageSearchChannelDTO = {
+  id: string
+  name: string
+  type: ChannelType
+  parentId: string | null
+  parentMessageId: string | null
+}
+
+export type MessageSearchHitDTO = {
+  id: string
+  channel: MessageSearchChannelDTO
+  author: PublicUser
+  content: string
+  editedAt: string | null
+  createdAt: string
+}
+
+export type MessageSearchResponse = {
+  hits: MessageSearchHitDTO[]
+  nextCursor: string | null
+}
+
+export type MessageContextResponse = {
+  messages: MessageDTO[]
+  targetId: string
+  targetIndex: number
+  hasOlder: boolean
+  hasNewer: boolean
 }
 
 export type HuddleState = {
@@ -79,7 +208,14 @@ export type ChannelCategoryDTO = {
   createdAt: string
 }
 
-export type RightPanelTab = 'members' | 'threads' | 'files'
+export type ChannelRoleOverrideDTO = {
+  channelId: string
+  roleId: string
+  allow: number
+  deny: number
+}
+
+export type RightPanelTab = 'members' | 'threads' | 'pins' | 'files'
 
 export type ChannelThreadDTO = {
   id: string
@@ -110,6 +246,7 @@ export type ChannelDTO = {
   parentId: string | null
   parentMessageId: string | null
   unread: boolean
+  permissions?: number
   huddle: HuddleState | null
   createdAt: string
   title?: string
@@ -169,6 +306,11 @@ export type SetupHealth = {
     channelDo: boolean
     workspaceDo: boolean
     rateLimitDo: boolean
+    notificationDo: boolean
+    agentDo: boolean
+    agentSandbox: boolean
+    agentWorkflow: boolean
+    workersAi: boolean
   }
   realtimekit: boolean
   twitterAuth: boolean
@@ -204,6 +346,8 @@ export type ServerMsg =
   | { t: 'dm.participants'; participants: PublicUser[] }
   | { t: 'dm.update'; name: string | null }
   | { t: 'reaction'; messageId: string; emoji: string; userId: string; op: 'add' | 'remove' }
+  | { t: 'pin'; messageId: string; pin: MessagePinDTO | null }
+  | { t: 'read.ack'; channelId: string; messageId: string; unread: boolean }
   | { t: 'error'; code: string; message: string }
   | { t: 'ack'; clientId: string; id: string }
 

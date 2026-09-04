@@ -13,10 +13,15 @@ export default defineEventHandler(async (event) => {
   if (!row) fail(404, 'not_found', 'Message not found')
   const member = await requireChannelMember(event, row.channelId)
   if (row.authorId !== member.user.id) fail(403, 'forbidden', 'Not your message')
-  await db.update(messages).set({ deletedAt: nowIso(), content: '' }).where(eq(messages.id, id))
+  const pin = await env.DB.prepare('SELECT message_id FROM message_pins WHERE message_id = ?').bind(id).first()
+  await env.DB.batch([
+    env.DB.prepare('UPDATE messages SET deleted_at = ?, content = ? WHERE id = ?').bind(nowIso(), '', id),
+    env.DB.prepare('DELETE FROM message_pins WHERE message_id = ?').bind(id),
+  ])
   try {
     const stub = asRpc<{ fanout: (msg: unknown) => Promise<void> }>(env.CHANNEL_DO.getByName(`channel:${row.channelId}`))
     await stub.fanout({ t: 'message.delete', id })
+    if (pin) await stub.fanout({ t: 'pin', messageId: id, pin: null })
   }
   catch { /* ignore */ }
   return { ok: true }

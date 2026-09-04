@@ -6,12 +6,14 @@ import { Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
 import ChannelFilesPanel from '~/features/attachments/components/ChannelFilesPanel.vue'
 import ChannelThreadsPanel from '~/features/threads/components/ChannelThreadsPanel.vue'
+import ChannelPinsPanel from '~/features/pins/components/ChannelPinsPanel.vue'
 
 const props = defineProps<{
   workspaceId: string
   channelId: string
   channelMembers?: PublicUser[]
   isGroupDm?: boolean
+  canPin?: boolean
 }>()
 const presence = usePresenceStore()
 const session = useSessionStore()
@@ -23,7 +25,11 @@ const isMobile = computed(() => width.value > 0 && width.value < 768)
 
 const { data, isPending, error } = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
-  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
+  queryFn: ({ queryKey }) => {
+    const id = String(queryKey[1] ?? '')
+    return id ? $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${id}/members`) : Promise.resolve({ members: [] })
+  },
+  enabled: computed(() => Boolean(props.workspaceId)),
 })
 const { can } = usePermissions(computed(() => data.value?.members))
 
@@ -168,9 +174,9 @@ function roleLabel(name: string) {
                     <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                   </UChip>
                   <span
-                    class="truncate text-sm"
+                    class="truncate text-sm flex items-center gap-1"
                     :class="m.role.name === 'owner' ? 'text-primary font-medium' : 'text-default'"
-                  >{{ m.nickname || m.user.displayName }}</span>
+                  ><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
                 </button>
               </UDropdownMenu>
               <div v-else class="w-full flex items-center gap-2 h-9 px-2 rounded-md">
@@ -178,9 +184,9 @@ function roleLabel(name: string) {
                   <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                 </UChip>
                 <span
-                  class="truncate text-sm"
+                  class="truncate text-sm flex items-center gap-1"
                   :class="m.role.name === 'owner' ? 'text-primary font-medium' : 'text-default'"
-                >{{ m.nickname || m.user.displayName }}</span>
+                ><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
               </div>
             </li>
           </ul>
@@ -194,14 +200,14 @@ function roleLabel(name: string) {
                   <UChip inset color="neutral" position="bottom-right" size="xs">
                     <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                   </UChip>
-                  <span class="truncate text-sm text-muted">{{ m.nickname || m.user.displayName }}</span>
+                  <span class="truncate text-sm text-muted flex items-center gap-1"><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
                 </button>
               </UDropdownMenu>
               <div v-else class="w-full flex items-center gap-2 h-9 px-2 rounded-md opacity-70">
                 <UChip inset color="neutral" position="bottom-right" size="xs">
                   <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
                 </UChip>
-                <span class="truncate text-sm text-muted">{{ m.nickname || m.user.displayName }}</span>
+                <span class="truncate text-sm text-muted flex items-center gap-1"><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
               </div>
             </li>
           </ul>
@@ -219,6 +225,9 @@ function roleLabel(name: string) {
     </div>
     <div v-else-if="ui.rightPanelTab === 'threads'" class="flex-1 min-h-0 overflow-y-auto">
       <ChannelThreadsPanel :channel-id="channelId" />
+    </div>
+    <div v-else-if="ui.rightPanelTab === 'pins'" class="flex-1 min-h-0 overflow-y-auto">
+      <ChannelPinsPanel :channel-id="channelId" :can-pin="canPin" />
     </div>
     <div v-else class="flex-1 min-h-0 overflow-y-auto">
       <ChannelFilesPanel :channel-id="channelId" />

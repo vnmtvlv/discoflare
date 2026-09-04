@@ -2,13 +2,16 @@
 import { onKeyStroke } from '@vueuse/core'
 import type { AttachmentDTO } from '~~/shared/types'
 import { formatBytes } from '~~/shared/format'
+import AudioPlayer from './AudioPlayer.vue'
 
 const props = defineProps<{
   attachments: AttachmentDTO[]
 }>()
+const { serverUrl } = useApi()
 
 const images = computed(() => props.attachments.filter(attachment => attachment.contentType.startsWith('image/')))
-const files = computed(() => props.attachments.filter(attachment => !attachment.contentType.startsWith('image/')))
+const audio = computed(() => props.attachments.filter(attachment => attachment.contentType.startsWith('audio/')))
+const files = computed(() => props.attachments.filter(attachment => !attachment.contentType.startsWith('image/') && !attachment.contentType.startsWith('audio/')))
 const galleryOpen = ref(false)
 const activeIndex = ref(0)
 const activeImage = computed(() => images.value[activeIndex.value] ?? null)
@@ -57,7 +60,7 @@ onKeyStroke('ArrowRight', (event) => {
         @click="openImage(index)"
       >
         <img
-          :src="image.url"
+          :src="serverUrl(image.url)"
           :alt="image.filename"
           class="block max-w-full transition-opacity group-hover/image:opacity-90"
           :class="images.length === 1
@@ -67,10 +70,18 @@ onKeyStroke('ArrowRight', (event) => {
       </button>
     </div>
 
+    <div
+      v-for="clip in audio"
+      :key="clip.id"
+      class="w-full max-w-sm"
+    >
+      <AudioPlayer :src="serverUrl(clip.url)" :label="clip.filename" />
+    </div>
+
     <ULink
       v-for="file in files"
       :key="file.id"
-      :to="file.url"
+      :to="serverUrl(file.url)"
       target="_blank"
       class="inline-flex max-w-full items-center gap-2 rounded-md bg-muted px-3 py-2 text-sm"
     >
@@ -88,7 +99,7 @@ onKeyStroke('ArrowRight', (event) => {
       <template #body>
         <div v-if="activeImage" class="relative flex min-h-48 items-center justify-center overflow-hidden rounded-lg bg-black/30">
           <img
-            :src="activeImage.url"
+            :src="serverUrl(activeImage.url)"
             :alt="activeImage.filename"
             class="block h-auto w-auto max-h-[75vh] max-w-full object-contain"
           >
@@ -125,7 +136,7 @@ onKeyStroke('ArrowRight', (event) => {
           <span v-if="images.length > 1" class="text-sm text-muted">{{ activeIndex + 1 }} / {{ images.length }}</span>
           <UButton
             v-if="activeImage"
-            :to="activeImage.url"
+            :to="serverUrl(activeImage.url)"
             target="_blank"
             icon="i-ph-arrow-square-out"
             label="Open original"

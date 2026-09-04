@@ -27,6 +27,7 @@ logs
 
 # Wrangler local state
 .wrangler
+worker-configuration.d.ts
 
 # Tests
 coverage

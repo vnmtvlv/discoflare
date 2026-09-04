@@ -9,11 +9,14 @@ const open = defineModel<boolean>('open', { default: false })
 const session = useSessionStore()
 const huddle = useHuddleStore()
 const prefs = usePrefsStore()
+const push = usePushNotifications()
 const toast = useToast()
 const colorMode = useColorMode()
 const section = ref<Section>('account')
 const revealEmail = ref(false)
 const savingName = ref(false)
+const accountProviders = ref<string[]>([])
+const hasPassword = computed(() => accountProviders.value.includes('credential'))
 
 const schema = z.object({ displayName: z.string().min(1).max(80) })
 type Schema = z.output<typeof schema>
@@ -28,7 +31,7 @@ const inputs = ref<{ label: string; value: string }[]>([])
 const outputs = ref<{ label: string; value: string }[]>([])
 const micBusy = ref(false)
 
-watch(open, (v) => {
+watch(open, async (v) => {
   if (v) {
     section.value = 'account'
     state.displayName = session.user?.displayName || ''
@@ -36,6 +39,13 @@ watch(open, (v) => {
     password.next = ''
     password.confirm = ''
     revealEmail.value = false
+    try {
+      accountProviders.value = (await $fetch<{ providers: string[] }>('/api/auth/accounts')).providers
+    }
+    catch {
+      accountProviders.value = []
+    }
+    await push.refresh()
   }
 })
 
@@ -122,13 +132,23 @@ async function onPassword() {
 }
 
 async function enableNotifications() {
-  if (!('Notification' in window)) {
-    toast.add({ title: 'Notifications are not available in this browser', color: 'error' })
-    return
+  try {
+    await push.enable()
+    if (push.status.value === 'subscribed') toast.add({ title: 'Notifications enabled', color: 'success' })
+    else if (push.status.value === 'blocked') toast.add({ title: 'Permission denied', color: 'warning' })
   }
-  const perm = await Notification.requestPermission()
-  prefs.desktopNotifications = perm === 'granted'
-  if (perm !== 'granted') toast.add({ title: 'Permission denied', color: 'warning' })
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+}
+
+async function disableNotifications() {
+  try {
+    await push.disable()
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
 }
 
 async function loadDevices() {
@@ -156,6 +176,7 @@ async function loadDevices() {
 }
 
 async function logout() {
+  await push.disable().catch(() => undefined)
   await session.logout()
   open.value = false
   await navigateTo('/login')
@@ -231,8 +252,8 @@ function navClass(id: Section) {
               </div>
               <UButton size="xs" color="neutral" variant="soft" label="Edit" @click="section = 'profile'" />
             </div>
-            <USeparator />
-            <div class="flex items-center justify-between gap-3">
+            <USeparator v-if="email" />
+            <div v-if="email" class="flex items-center justify-between gap-3">
               <div class="min-w-0">
                 <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Email</p>
                 <p class="text-sm text-highlighted truncate">{{ revealEmail ? email : maskedEmail }}</p>
@@ -249,8 +270,8 @@ function navClass(id: Section) {
         </div>
       </div>
 
-      <h2 class="mt-10 text-xs font-bold uppercase tracking-wide text-muted">Password and Authentication</h2>
-      <div class="mt-3 max-w-sm space-y-3">
+      <h2 v-if="hasPassword" class="mt-10 text-xs font-bold uppercase tracking-wide text-muted">Password and Authentication</h2>
+      <div v-if="hasPassword" class="mt-3 max-w-sm space-y-3">
         <UFormField label="Current password">
           <UInput v-model="password.current" type="password" class="w-full" autocomplete="current-password" />
         </UFormField>
@@ -283,7 +304,7 @@ function navClass(id: Section) {
                 <UAvatar size="xl" :text="initial" />
               </div>
               <p class="mt-3 text-lg font-bold text-highlighted">{{ state.displayName || session.user?.displayName }}</p>
-              <p class="text-sm text-muted">{{ email }}</p>
+              <p v-if="email" class="text-sm text-muted">{{ email }}</p>
               <USeparator class="my-3" />
               <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Custom Status</p>
               <p class="text-sm text-muted mt-1">Online in this workspace</p>
@@ -334,16 +355,28 @@ function navClass(id: Section) {
       <div class="mt-8 divide-y divide-default">
         <div class="flex items-start justify-between gap-6 py-4">
           <div>
-            <p class="font-medium text-highlighted">Enable Desktop Notifications</p>
-            <p class="text-sm text-muted mt-1">Ask this browser for permission, then show a banner for new messages.</p>
+            <p class="font-medium text-highlighted">Push notifications</p>
+            <p class="text-sm text-muted mt-1">Mentions, direct messages, and new huddles on this device.</p>
           </div>
           <UButton
-            v-if="!prefs.desktopNotifications"
+            v-if="push.status.value === 'prompt' || push.status.value === 'error'"
             size="sm"
             label="Enable"
+            :loading="push.busy.value"
             @click="enableNotifications"
           />
-          <USwitch v-else v-model="prefs.desktopNotifications" />
+          <USwitch
+            v-else-if="push.status.value === 'subscribed'"
+            :model-value="true"
+            :disabled="push.busy.value"
+            @update:model-value="disableNotifications"
+          />
+          <UBadge
+            v-else
+            color="neutral"
+            variant="soft"
+            :label="push.status.value === 'blocked' ? 'Blocked' : push.status.value === 'unconfigured' ? 'Unavailable' : 'Unsupported'"
+          />
         </div>
         <div class="flex items-start justify-between gap-6 py-4">
           <div>

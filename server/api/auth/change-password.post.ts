@@ -11,7 +11,8 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
   await requireUser(event)
   const body = parseBody(bodySchema, await readBody(event))
-  await authFromEvent(event).api.changePassword({
+  const auth = await authFromEvent(event)
+  await auth.api.changePassword({
     headers: event.headers,
     body: {
       currentPassword: body.currentPassword,

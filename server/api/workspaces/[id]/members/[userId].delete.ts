@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm'
-import { users } from '../../../../../drizzle/schema'
+import { agents, users } from '../../../../../drizzle/schema'
 import { nowIso } from '../../../../../shared/ids'
 import { Permission } from '../../../../../shared/permissions'
 import { requireMember } from '../../../../utils/guards'
@@ -15,13 +15,17 @@ export default defineEventHandler(async (event) => {
   if (userId === actor.user.id) fail(400, 'bad_request', 'Leave is not implemented; ask an admin')
   const { env } = cf(event)
   const db = getDb(env.DB)
-  await db.update(users).set({
-    status: 'removed',
-    roleId: null,
-    nickname: null,
-    joinedAt: null,
-    updatedAt: nowIso(),
-  }).where(eq(users.id, userId))
+  const now = nowIso()
+  await db.batch([
+    db.update(users).set({
+      status: 'removed',
+      roleId: null,
+      nickname: null,
+      joinedAt: null,
+      updatedAt: now,
+    }).where(eq(users.id, userId)),
+    db.update(agents).set({ status: 'paused', updatedAt: now }).where(eq(agents.userId, userId)),
+  ])
   await writeAudit(env, { workspaceId, actorId: actor.user.id, action: 'member.kick', targetType: 'user', targetId: userId })
   return { ok: true }
 })

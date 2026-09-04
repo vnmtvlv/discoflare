@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
+import { formatAudioDuration } from '~~/shared/audio'
 import { claimComposerSubmission, type ComposerSubmission } from '~~/shared/composer'
 import { applyMentionTokens } from '~~/shared/mentions'
 import { newId, nowIso } from '~~/shared/ids'
 import { useQueryClient, type InfiniteData } from '@tanstack/vue-query'
 import { useDebounceFn, useFileDialog } from '@vueuse/core'
 import AttachmentDraftPreview from '~/features/attachments/components/AttachmentDraftPreview.vue'
+import { useAudioRecorder } from '~/features/attachments/composables/useAudioRecorder'
 
 const props = defineProps<{
   channelId: string
@@ -14,6 +16,8 @@ const props = defineProps<{
   send: (msg: ClientMsg) => void
   placeholder?: string
   disabled?: boolean
+  disabledPlaceholder?: string
+  canAttach?: boolean
 }>()
 
 const emit = defineEmits<{ last: [] }>()
@@ -34,11 +38,44 @@ const editingId = computed(() => ui.composerState(props.channelId).editingId)
 
 const { open: openFiles, reset: resetFiles, onChange } = useFileDialog({
   multiple: true,
-  accept: '.png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.zip',
+  accept: '.png,.jpg,.jpeg,.webp,.gif,.pdf,.txt,.zip,.webm,.m4a,.ogg,.oga,.wav',
 })
 onChange((list) => {
   files.value = list ? Array.from(list) : []
 })
+
+const {
+  recording,
+  elapsedMs,
+  start: startAudioRecording,
+  stop: stopAudioRecording,
+  cancel: cancelAudioRecording,
+} = useAudioRecorder({
+  onRecorded(file) {
+    if (files.value.length >= 8) {
+      toast.add({ title: 'A message can contain up to 8 attachments', color: 'error' })
+      return
+    }
+    files.value = [...files.value, file]
+  },
+  onError(message) {
+    toast.add({ title: message, color: 'error' })
+  },
+  onLimit() {
+    toast.add({ title: 'Audio recording stopped at 5 minutes' })
+  },
+})
+const recordingTime = computed(() => formatAudioDuration(elapsedMs.value))
+const attachmentsDisabled = computed(() => props.disabled || props.canAttach === false)
+
+function recordAudio() {
+  if (attachmentsDisabled.value || editingId.value) return
+  if (files.value.length >= 8) {
+    toast.add({ title: 'A message can contain up to 8 attachments', color: 'error' })
+    return
+  }
+  void startAudioRecording()
+}
 
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
@@ -73,7 +110,11 @@ function restoreSubmission(channelId: string, submission: ComposerSubmission<Fil
 }
 
 async function submit() {
-  if (props.disabled) return
+  if (props.disabled || recording.value) return
+  if (files.value.length && props.canAttach === false) {
+    toast.add({ title: 'You cannot attach files in this channel', color: 'error' })
+    return
+  }
   const channelId = props.channelId
   const submission = claimComposerSubmission<File>({
     read: () => ({
@@ -137,6 +178,7 @@ async function submit() {
     mentions: [],
     attachments: [],
     reactions: [],
+    pin: null,
     threadId: null,
     editedAt: null,
     deletedAt: null,
@@ -156,6 +198,9 @@ const pingTyping = useDebounceFn(() => {
 }, 400)
 
 watch(draft, () => { pingTyping() })
+watch(() => [props.channelId, props.disabled, editingId.value], () => {
+  if (recording.value) cancelAudioRecording()
+})
 </script>
 
 <template>
@@ -182,12 +227,41 @@ watch(draft, () => { pingTyping() })
             size="sm"
             square
             class="rounded-full mb-0! self-center"
-            :disabled="disabled"
+            :disabled="attachmentsDisabled || recording || Boolean(editingId)"
             aria-label="Attach files"
             @click="() => openFiles()"
           />
         </UTooltip>
+        <div v-if="recording" class="flex min-w-0 flex-1 items-center gap-2 self-stretch px-2" aria-live="polite">
+          <span class="size-2 shrink-0 animate-pulse rounded-full bg-error" />
+          <span class="truncate text-sm text-default">Recording</span>
+          <time class="font-mono text-sm tabular-nums text-muted">{{ recordingTime }}</time>
+          <UTooltip text="Cancel recording">
+            <UButton
+              icon="i-ph-x"
+              color="neutral"
+              variant="ghost"
+              size="sm"
+              square
+              class="ms-auto"
+              aria-label="Cancel recording"
+              @click="cancelAudioRecording"
+            />
+          </UTooltip>
+          <UTooltip text="Stop recording">
+            <UButton
+              icon="i-ph-stop"
+              color="error"
+              variant="soft"
+              size="sm"
+              square
+              aria-label="Stop recording"
+              @click="stopAudioRecording"
+            />
+          </UTooltip>
+        </div>
         <UTextarea
+          v-else
           v-model="draft"
           autoresize
           :rows="1"
@@ -196,11 +270,11 @@ watch(draft, () => { pingTyping() })
           color="neutral"
           class="flex-1 self-stretch"
           :ui="{ base: () => 'w-full bg-transparent px-1 py-2.5 text-base leading-snug text-default placeholder:text-muted resize-none focus:outline-none' }"
-          :placeholder="disabled ? 'You can no longer send messages to this user' : (placeholder || 'Message')"
+          :placeholder="disabled ? (disabledPlaceholder || 'You cannot send messages in this channel') : (placeholder || 'Message')"
           :disabled="disabled"
           @keydown="onKey"
         />
-        <UPopover v-model:open="emojiOpen">
+        <UPopover v-if="!recording" v-model:open="emojiOpen">
           <UButton
             icon="i-ph-smiley"
             color="neutral"
@@ -226,6 +300,32 @@ watch(draft, () => { pingTyping() })
             </div>
           </template>
         </UPopover>
+        <UTooltip v-if="!recording && !editingId" text="Record audio">
+          <UButton
+            icon="i-ph-microphone"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            square
+            class="mb-0! self-center"
+            :disabled="attachmentsDisabled"
+            aria-label="Record audio"
+            @click="recordAudio"
+          />
+        </UTooltip>
+        <UTooltip v-if="!recording && (draft.trim() || files.length)" text="Send">
+          <UButton
+            type="submit"
+            icon="i-ph-paper-plane-tilt"
+            color="primary"
+            variant="ghost"
+            size="sm"
+            square
+            class="mb-0! self-center"
+            :disabled="disabled"
+            aria-label="Send message"
+          />
+        </UTooltip>
       </div>
     </div>
   </form>

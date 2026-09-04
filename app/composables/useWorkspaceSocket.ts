@@ -1,7 +1,12 @@
+import type { QueryClient } from '@tanstack/vue-query'
 import type { WorkspaceServerMsg } from '~~/shared/types'
+import type { WorkspaceRealtimeEvent } from '~~/shared/workspace-realtime'
+import { applyWorkspaceRealtimeEvent } from '../utils/workspace-realtime'
 
 export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
   const presence = usePresenceStore()
+  const nuxt = useNuxtApp()
+  const { socketUrl } = useApi()
   let ws: WebSocket | null = null
   let closed = false
   let connecting = false
@@ -9,6 +14,10 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
   let generation = 0
   let heartbeat: ReturnType<typeof setInterval> | null = null
   let lastActivity = 0
+
+  function queryClient(): QueryClient | undefined {
+    return nuxt.$queryClient as QueryClient | undefined
+  }
 
   function sendActivity() {
     if (!import.meta.client || document.hidden || Date.now() - lastActivity < 10_000) return
@@ -25,8 +34,7 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
     try {
       const { token } = await $fetch<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
-      const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-      const socket = new WebSocket(`${proto}://${location.host}/ws/workspace/${id}`)
+      const socket = new WebSocket(socketUrl(`/ws/workspace/${id}`))
       ws = socket
       socket.addEventListener('open', () => {
         if (gen !== generation) return socket.close()
@@ -35,10 +43,14 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
       })
       socket.addEventListener('message', (ev) => {
         if (typeof ev.data !== 'string' || ev.data === 'pong') return
-        let parsed: WorkspaceServerMsg
-        try { parsed = JSON.parse(ev.data) as WorkspaceServerMsg }
+        let parsed: WorkspaceServerMsg | WorkspaceRealtimeEvent
+        try { parsed = JSON.parse(ev.data) as WorkspaceServerMsg | WorkspaceRealtimeEvent }
         catch { return }
         if (parsed.t === 'presence') presence.apply(parsed.users)
+        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read') {
+          const qc = queryClient()
+          if (qc) applyWorkspaceRealtimeEvent(qc, parsed)
+        }
       })
       socket.addEventListener('close', () => {
         if (ws === socket) ws = null

@@ -7,6 +7,7 @@ defineProps<{
   message: MessageDTO
   names: Record<string, string>
   mine: boolean
+  canPin?: boolean
   compact?: boolean
 }>()
 const emit = defineEmits<{
@@ -16,6 +17,7 @@ const emit = defineEmits<{
   thread: []
   jump: [id: string]
   react: [emoji: string]
+  pin: []
 }>()
 
 const EMOJI = ['👍', '❤️', '😂']
@@ -92,6 +94,17 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
       </UTooltip>
       <UTooltip :text="message.threadId ? 'Open thread' : 'Start thread'">
         <UButton size="sm" variant="ghost" color="neutral" icon="i-ph-chats" :aria-label="message.threadId ? 'Open thread' : 'Start thread'" @click="emit('thread')" />
+      </UTooltip>
+      <UTooltip v-if="canPin" :text="message.pin ? 'Unpin message' : 'Pin message'">
+        <UButton
+          size="sm"
+          :variant="message.pin ? 'soft' : 'ghost'"
+          :color="message.pin ? 'primary' : 'neutral'"
+          icon="i-ph-push-pin"
+          :aria-label="message.pin ? 'Unpin message' : 'Pin message'"
+          :aria-pressed="Boolean(message.pin)"
+          @click="emit('pin')"
+        />
       </UTooltip>
       <UTooltip v-if="mine" text="Edit">
         <UButton size="sm" variant="ghost" color="neutral" icon="i-ph-pencil-simple" aria-label="Edit" @click="emit('edit')" />

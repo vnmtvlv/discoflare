@@ -3,13 +3,15 @@ import { z } from 'zod'
 import { messages } from '../../../../drizzle/schema'
 import { extractMentionIds } from '../../../../shared/mentions'
 import { newId, nowIso } from '../../../../shared/ids'
-import { Permission } from '../../../../shared/permissions'
+import { hasPermission, Permission } from '../../../../shared/permissions'
 import { requireChannelMember } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { hydrateMessages } from '../../../utils/messages'
-import { unhideAll } from '../../../utils/dms'
 import { parseBody } from '../../../utils/validate'
+import { messageNotificationStatement, signalNotificationOutbox } from '../../../../workers/notifications'
+import { signalChannelActivity, signalChannelRead } from '../../../../workers/channel-activity'
+import { signalAgentsForMessage } from '../../../../workers/agent-ingress'
 
 const bodySchema = z.object({
   content: z.string().max(2000),
@@ -23,8 +25,11 @@ export default defineEventHandler(async (event) => {
   const member = await requireChannelMember(event, channelId, Permission.sendMessages)
   const body = parseBody(bodySchema, await readBody(event))
   if (!body.content.trim() && !body.attachmentIds?.length) fail(400, 'bad_request', 'Empty message')
+  if (body.attachmentIds?.length && !hasPermission(member.perms, Permission.attachFiles)) {
+    fail(403, 'forbidden', 'Missing permission')
+  }
 
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   if (body.replyToId) {
     const reply = await env.DB.prepare(
       'SELECT id FROM messages WHERE id = ? AND channel_id = ?',
@@ -56,6 +61,14 @@ export default defineEventHandler(async (event) => {
 
   const id = newId()
   const created = nowIso()
+  const notification = await messageNotificationStatement(env, {
+    id,
+    channelId,
+    author: member.user,
+    content: body.content,
+    mentions: mentionIds,
+    attachmentCount: attachmentRows.length,
+  })
   await env.DB.batch([
     env.DB.prepare(
       'INSERT INTO messages (id, channel_id, author_id, content, reply_to_id, edited_at, deleted_at, created_at) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?)',
@@ -66,9 +79,27 @@ export default defineEventHandler(async (event) => {
     ...mentionIds.map((userId) => env.DB.prepare(
       'INSERT OR IGNORE INTO message_mentions (message_id, user_id) VALUES (?, ?)',
     ).bind(id, userId)),
+    env.DB.prepare(
+      `INSERT INTO channel_reads (channel_id, user_id, last_read_message_id, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(channel_id, user_id) DO UPDATE
+       SET last_read_message_id = excluded.last_read_message_id, updated_at = excluded.updated_at
+       WHERE channel_reads.last_read_message_id IS NULL
+          OR channel_reads.last_read_message_id < excluded.last_read_message_id`,
+    ).bind(channelId, member.user.id, id, created),
+    ...(notification ? [notification] : []),
   ])
+  waitUntil(signalNotificationOutbox(env))
+  waitUntil(signalChannelActivity(env, channelId, member.user.id, id))
+  waitUntil(signalChannelRead(env, member.user.id, channelId, id))
+  waitUntil(signalAgentsForMessage(env, {
+    messageId: id,
+    channelId,
+    authorName: member.user.displayName,
+    content: body.content,
+    mentionIds,
+  }))
 
-  if (member.channel.type === 'dm') await unhideAll(env, channelId)
   const db = getDb(env.DB)
   const row = (await db.select().from(messages).where(eq(messages.id, id)).limit(1))[0]!
   const [dto] = await hydrateMessages(env, [row], member.user.id)

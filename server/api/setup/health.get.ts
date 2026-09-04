@@ -16,7 +16,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       users: 0,
       migrated: false,
       adminEnv: false,
-      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false },
+      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, agentSandbox: false, agentWorkflow: false, workersAi: false },
       realtimekit: false,
       twitterAuth: false,
       ...readAppBranding(),
@@ -30,6 +30,11 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     channelDo: Boolean(env.CHANNEL_DO),
     workspaceDo: Boolean(env.WORKSPACE_DO),
     rateLimitDo: Boolean(env.RATE_LIMIT_DO),
+    notificationDo: Boolean(env.NOTIFICATION_DO),
+    agentDo: Boolean(env.AGENT_DO),
+    agentSandbox: Boolean(env.AGENT_SANDBOX),
+    agentWorkflow: Boolean(env.AGENT_TASK_WORKFLOW && env.AGENT_MESSAGE_WORKFLOW),
+    workersAi: Boolean(env.AI),
   }
 
   let migrated = false

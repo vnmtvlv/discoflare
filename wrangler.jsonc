@@ -11,6 +11,14 @@
   "observability": {
     "enabled": true
   },
+  "ai": { "binding": "AI" },
+  "workflows": [
+    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-agent-tasks", "class_name": "AgentTaskWorkflow" },
+    { "binding": "AGENT_MESSAGE_WORKFLOW", "name": "discoflare-agent-messages", "class_name": "AgentMessageWorkflow" }
+  ],
+  "containers": [
+    { "class_name": "Sandbox", "image": "./Dockerfile.sandbox", "instance_type": "lite", "max_instances": 10 }
+  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -35,7 +43,10 @@
     "bindings": [
       { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
       { "name": "WORKSPACE_DO", "class_name": "WorkspaceDurableObject" },
-      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" }
+      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" },
+      { "name": "NOTIFICATION_DO", "class_name": "NotificationDurableObject" },
+      { "name": "AGENT_DO", "class_name": "DiscoflareAgent" },
+      { "name": "AGENT_SANDBOX", "class_name": "Sandbox" }
     ]
   },
   "migrations": [
@@ -46,10 +57,19 @@
         "WorkspaceDurableObject",
         "RateLimitDurableObject"
       ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["NotificationDurableObject"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DiscoflareAgent", "Sandbox"]
     }
   ],
   "vars": {
     "REALTIMEKIT_PRESET_VOICE": "voice",
-    "REALTIMEKIT_PRESET_AV": "group_call_host"
+    "REALTIMEKIT_PRESET_AV": "group_call_host",
+    "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
   }
 }

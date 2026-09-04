@@ -1,11 +1,8 @@
-import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { users } from '../../../drizzle/schema'
-import { nowIso } from '../../../shared/ids'
-import { publicUser } from '../../utils/auth'
+import { ensureDomainUser, publicUser, visibleAuthEmail } from '../../utils/auth'
 import { authFromEvent } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
-import { ensureMigrated, getDb } from '../../utils/db'
+import { ensureMigrated } from '../../utils/db'
 import { parseBody } from '../../utils/validate'
 
 const bodySchema = z.object({
@@ -29,7 +26,8 @@ export default defineEventHandler(async (event) => {
   if (!allowed) fail(429, 'rate_limited', 'Too many login attempts')
 
   const email = body.email.trim().toLowerCase()
-  const res = await authFromEvent(event).api.signInEmail({
+  const auth = await authFromEvent(event)
+  const res = await auth.api.signInEmail({
     headers: event.headers,
     body: {
       email,
@@ -37,26 +35,16 @@ export default defineEventHandler(async (event) => {
     },
     asResponse: true,
   })
-  if (!res.ok) fail(401, 'invalid_credentials', 'Invalid email or password')
+  if (!res.ok) {
+    const payload = await res.json().catch(() => null) as { code?: string; message?: string } | null
+    if (payload?.code === 'EMAIL_NOT_VERIFIED') {
+      fail(403, 'email_not_verified', 'Verify your email before signing in')
+    }
+    fail(401, 'invalid_credentials', 'Invalid email or password')
+  }
   for (const cookie of res.headers.getSetCookie?.() ?? []) appendResponseHeader(event, 'set-cookie', cookie)
   const signedIn = await res.json() as { user: { id: string; email: string; name: string; image?: string | null } }
-  const db = getDb(env.DB)
-  let row = (await db.select().from(users).where(eq(users.id, signedIn.user.id)).limit(1))[0]
-  if (!row) {
-    const created = nowIso()
-    await db.insert(users).values({
-      id: signedIn.user.id,
-      displayName: signedIn.user.name || signedIn.user.email.split('@')[0] || 'member',
-      avatarR2Key: signedIn.user.image ?? null,
-      status: 'pending',
-      roleId: null,
-      nickname: null,
-      joinedAt: null,
-      createdAt: created,
-      updatedAt: created,
-    })
-    row = (await db.select().from(users).where(eq(users.id, signedIn.user.id)).limit(1))[0]!
-  }
+  const row = await ensureDomainUser(event, signedIn.user)
 
-  return { user: { ...publicUser(row), email: signedIn.user.email } }
+  return { user: { ...publicUser(row), email: visibleAuthEmail(signedIn.user.email) } }
 })
