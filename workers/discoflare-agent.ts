@@ -155,6 +155,7 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
     if (!profile || profile.status !== 'active') throw new Error('Agent is unavailable')
     return this.runWorkflow('AGENT_TASK_WORKFLOW', input, {
       id: input.runId,
+      agentBinding: 'AGENT_DO',
       metadata: { taskId: input.taskId, agentId: this.agentId() },
     })
   }
@@ -164,6 +165,7 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
     if (!profile || profile.status !== 'active') throw new Error('Agent is unavailable')
     return this.runWorkflow('AGENT_MESSAGE_WORKFLOW', input, {
       id: `reply-${this.agentId()}-${input.messageId}`,
+      agentBinding: 'AGENT_DO',
       metadata: { messageId: input.messageId, channelId: input.channelId, agentId: this.agentId() },
     })
   }
@@ -189,6 +191,7 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
     const sandbox = getSandbox(this.env.AGENT_SANDBOX, profile.sandboxId, {
       sleepAfter: '10m',
       normalizeId: true,
+      transport: 'rpc',
       labels: { product: 'discoflare', agentId: this.agentId() },
     })
     const marker = await sandbox.exists(`${WORKSPACE_ROOT}/.discoflare-hydrated`)

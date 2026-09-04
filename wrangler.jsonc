@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "discoflare",
+  "name": "discoflare-sandbox",
   "main": ".output/server/index.mjs",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat"],
@@ -11,10 +11,13 @@
   "observability": {
     "enabled": true
   },
+  "routes": [
+    { "pattern": "sandbox.discoflare.com", "custom_domain": true }
+  ],
   "ai": { "binding": "AI" },
   "workflows": [
-    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-agent-tasks", "class_name": "AgentTaskWorkflow" },
-    { "binding": "AGENT_MESSAGE_WORKFLOW", "name": "discoflare-agent-messages", "class_name": "AgentMessageWorkflow" }
+    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-sandbox-agent-tasks", "class_name": "AgentTaskWorkflow" },
+    { "binding": "AGENT_MESSAGE_WORKFLOW", "name": "discoflare-sandbox-agent-messages", "class_name": "AgentMessageWorkflow" }
   ],
   "containers": [
     { "class_name": "Sandbox", "image": "./Dockerfile.sandbox", "instance_type": "lite", "max_instances": 10 }
@@ -22,21 +25,21 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "discoflare",
-      "database_id": "REPLACE_ON_DEPLOY",
+      "database_name": "discoflare-sandbox",
+      "database_id": "5a885cab-cf4a-4f2c-9600-07f3b70248e3",
       "migrations_dir": "drizzle/migrations"
     }
   ],
   "r2_buckets": [
     {
       "binding": "FILES",
-      "bucket_name": "discoflare-files"
+      "bucket_name": "discoflare-sandbox-files"
     }
   ],
   "kv_namespaces": [
     {
       "binding": "TICKETS",
-      "id": "REPLACE_ON_DEPLOY"
+      "id": "2a7c469ad6de440d9c3afaa6f3d264f7"
     }
   ],
   "durable_objects": {
@@ -70,6 +73,9 @@
   "vars": {
     "REALTIMEKIT_PRESET_VOICE": "voice",
     "REALTIMEKIT_PRESET_AV": "group_call_host",
+    "PUBLIC_ORIGIN": "https://sandbox.discoflare.com",
+    "AUTH_REGISTRATION_MODE": "open",
+    "APP_NAME": "Discoflare Sandbox",
     "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
   }
 }
