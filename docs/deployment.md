@@ -54,6 +54,8 @@ wrangler secret put VAPID_PRIVATE_KEY
 
 Then run `pnpm deploy`. It applies the D1 migrations through the `DB` binding and deploys the Worker.
 
+For Workers Builds, use `pnpm run build` as the build command and `pnpm run deploy:built` as the deploy command. The build script raises Node's heap limit for the Nuxt bundle; the deploy command reuses that output, applies D1 migrations, and deploys without building a second time.
+
 The agent runtime adds no required secret. `AGENT_MODEL` is an optional public Worker variable; each Agent profile may override it with another Workers AI model id.
 
 ## Authentication
