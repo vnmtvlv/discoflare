@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm'
-import { agents, taskDependencies, taskRuns, tasks } from '../../../../drizzle/schema'
+import { agents, taskDependencies, tasks } from '../../../../drizzle/schema'
 import { newId, nowIso, WORKSPACE_ID } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
 import { canRunTask } from '../../../../shared/task-status'
@@ -32,37 +32,40 @@ export default defineEventHandler(async (event) => {
 
   const runId = newId()
   const createdAt = nowIso()
-  const claim = await env.DB.prepare(
-    'UPDATE tasks SET active_run_id = ?, last_error = NULL, updated_at = ? WHERE id = ? AND status = ? AND active_run_id IS NULL AND archived_at IS NULL',
-  ).bind(runId, createdAt, taskId, task.status).run()
-  if ((claim.meta.changes ?? 0) !== 1) fail(409, 'already_running', 'Task changed before the run could start')
+  const launch = await env.DB.batch([
+    env.DB.prepare(
+      `UPDATE tasks
+       SET active_run_id = ?, last_error = NULL, updated_at = ?
+       WHERE id = ? AND status = ? AND active_run_id IS NULL AND archived_at IS NULL
+         AND assignee_id = ?
+         AND EXISTS (SELECT 1 FROM agents WHERE user_id = ? AND status = 'active')`,
+    ).bind(runId, createdAt, taskId, task.status, agent.userId, agent.userId),
+    env.DB.prepare(
+      `INSERT INTO task_runs (
+         id, task_id, agent_id, workflow_id, status, triggered_by,
+         title_snapshot, description_snapshot, channel_id_snapshot,
+         agent_model_snapshot, agent_instructions_snapshot, task_status_before,
+         summary, details, error, progress, started_at, completed_at,
+         cancelled_at, cancelled_by, created_at
+       )
+       SELECT ?, t.id, a.user_id, ?, 'queued', ?,
+         t.title, t.description, t.channel_id,
+         a.model, a.instructions, t.status,
+         NULL, NULL, NULL, NULL, NULL, NULL,
+         NULL, NULL, ?
+       FROM tasks t JOIN agents a ON a.user_id = t.assignee_id
+       WHERE t.id = ? AND t.active_run_id = ? AND a.user_id = ? AND a.status = 'active'`,
+    ).bind(runId, runId, actor.user.id, createdAt, taskId, runId, agent.userId),
+  ])
+  const claim = launch[0]
+  const snapshot = launch[1]
+  if (!claim || !snapshot || (claim.meta.changes ?? 0) !== 1 || (snapshot.meta.changes ?? 0) !== 1) {
+    fail(409, 'already_running', 'Task changed before the run could start')
+  }
   try {
-    await db.insert(taskRuns).values({
-      id: runId,
-      taskId,
-      agentId: agent.userId,
-      workflowId: null,
-      status: 'queued',
-      triggeredBy: actor.user.id,
-      titleSnapshot: task.title,
-      descriptionSnapshot: task.description,
-      channelIdSnapshot: task.channelId,
-      agentModelSnapshot: agent.model,
-      agentInstructionsSnapshot: agent.instructions,
-      taskStatusBefore: task.status as Exclude<TaskStatus, 'running'>,
-      summary: null,
-      details: null,
-      error: null,
-      progress: null,
-      startedAt: null,
-      completedAt: null,
-      cancelledAt: null,
-      cancelledBy: null,
-      createdAt,
-    })
     const stub = asRpc<{ startTask: (input: { taskId: string; runId: string }) => Promise<string> }>(env.AGENT_DO.getByName(`agent:${agent.userId}`))
     const workflowId = await stub.startTask({ taskId, runId })
-    await db.update(taskRuns).set({ workflowId }).where(eq(taskRuns.id, runId))
+    if (workflowId !== runId) throw new Error('Workflow id does not match its Task Run')
     await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task.run', targetType: 'task', targetId: taskId, meta: { runId, workflowId, agentId: agent.userId } })
     waitUntil(signalTasksChanged(env, task.boardId, taskId))
     return { run: { id: runId, workflowId, status: 'queued' } }
