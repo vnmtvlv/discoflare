@@ -13,26 +13,34 @@ type AgentIngressMessage = {
 export async function signalAgentsForMessage(env: DiscoflareEnv, message: AgentIngressMessage): Promise<void> {
   if (!message.content.trim()) return
   const channel = await env.DB.prepare(
-    'SELECT type, visibility FROM channels WHERE id = ?',
-  ).bind(message.channelId).first<{ type: string; visibility: string }>()
+    'SELECT type, visibility, parent_id as parentId FROM channels WHERE id = ?',
+  ).bind(message.channelId).first<{ type: string; visibility: string; parentId: string | null }>()
   if (!channel) return
 
+  const accessChannelId = channel.type === 'thread' && channel.parentId ? channel.parentId : message.channelId
+  const accessChannel = accessChannelId === message.channelId
+    ? channel
+    : await env.DB.prepare(
+        'SELECT type, visibility, parent_id as parentId FROM channels WHERE id = ?',
+      ).bind(accessChannelId).first<{ type: string; visibility: string; parentId: string | null }>()
+  if (!accessChannel) return
+
   const candidates = new Set(message.mentionIds)
-  if (isDmType(channel.type)) {
+  if (isDmType(accessChannel.type)) {
     const rows = await env.DB.prepare(
       `SELECT u.id
        FROM channel_members cm
        JOIN users u ON u.id = cm.user_id
        JOIN agents a ON a.user_id = u.id
        WHERE cm.channel_id = ? AND u.kind = 'agent' AND u.status = 'active' AND a.status = 'active'`,
-    ).bind(message.channelId).all<{ id: string }>()
+    ).bind(accessChannelId).all<{ id: string }>()
     for (const row of rows.results ?? []) candidates.add(row.id)
   }
   if (!candidates.size) return
 
   const ids = [...candidates]
   const placeholders = ids.map(() => '?').join(',')
-  const accessClause = channel.visibility === 'private'
+  const accessClause = accessChannel.visibility === 'private'
     ? `AND EXISTS (SELECT 1 FROM channel_members cm WHERE cm.channel_id = ? AND cm.user_id = u.id)`
     : ''
   const rows = await env.DB.prepare(
@@ -40,7 +48,7 @@ export async function signalAgentsForMessage(env: DiscoflareEnv, message: AgentI
      FROM users u JOIN agents a ON a.user_id = u.id
      WHERE u.id IN (${placeholders}) AND u.kind = 'agent' AND u.status = 'active' AND a.status = 'active'
      ${accessClause}`,
-  ).bind(...ids, ...(channel.visibility === 'private' ? [message.channelId] : [])).all<{ id: string }>()
+  ).bind(...ids, ...(accessChannel.visibility === 'private' ? [accessChannelId] : [])).all<{ id: string }>()
 
   await Promise.allSettled((rows.results ?? []).map(async ({ id }) => {
     const stub = asRpc<{

@@ -67,10 +67,11 @@ Human mentions Agent, or sends a DM containing an Agent
   → Worker signals agent:<id> Agent DO
   → Agent DO starts one idempotent reply Workflow for that Message
   → Think reasons and may use the Agent's tools/computer
-  → Workflow posts the reply as the Agent's normal workspace Message
+  → In a 1:1 DM, Workflow creates/reuses a Thread rooted at that Message
+  → Workflow posts the reply as the Agent's normal workspace Message in that Thread
 ```
 
-An Agent-authored Message does not recursively enter this routing path. Paused Agents are not addressed, and a mentioned Agent cannot cross a private Channel boundary it has not joined.
+Replies in that DM Thread keep addressing the same Agent without another mention. Workspace-channel mentions and group-DM replies remain in their source Channel. An Agent-authored Message does not recursively enter this routing path. Paused Agents are not addressed, and a mentioned Agent cannot cross a private Channel boundary it has not joined.
 
 ## Notifications
 

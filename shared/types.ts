@@ -338,6 +338,7 @@ export type ServerMsg =
   | { t: 'hello'; channelId: string; you: PublicUser; huddle?: HuddleState; frozen?: boolean; participants?: PublicUser[] }
   | { t: 'message'; message: MessageDTO }
   | { t: 'message.update'; message: MessageDTO }
+  | { t: 'thread.created'; messageId: string; threadId: string }
   | { t: 'message.delete'; id: string }
   | { t: 'typing'; userId: string }
   | { t: 'presence'; users: Array<{ userId: string; status: PresenceStatus }> }

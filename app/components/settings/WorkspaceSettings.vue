@@ -8,7 +8,7 @@ import { hasPermission, MemberPermissions, Permission, permissionBitmask, Permis
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'channels' | 'roles' | 'members' | 'invites' | 'authentication' | 'audit'
+type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'authentication' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
 const { serverUrl } = useApi()
@@ -76,6 +76,7 @@ const workspaceNav = computed(() => [
   { id: 'overview' as const, label: 'Overview' },
   { id: 'channels' as const, label: 'Channels' },
   { id: 'roles' as const, label: 'Roles' },
+  ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents' }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication' }] : []),
   { id: 'audit' as const, label: 'Audit Log' },
 ])
@@ -770,6 +771,10 @@ function navClass(id: Section) {
           </div>
         </div>
       </div>
+    </template>
+
+    <template v-else-if="section === 'agents'">
+      <SettingsAgentSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else-if="section === 'members'">

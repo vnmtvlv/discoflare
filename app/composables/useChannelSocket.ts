@@ -102,6 +102,23 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
           case 'message.update':
             applyMessage(parsed.message)
             break
+          case 'thread.created': {
+            const qc = queryClient()
+            qc?.setQueryData<InfiniteData<Page>>(['messages', id], (old) => {
+              if (!old) return old
+              return {
+                ...old,
+                pages: old.pages.map(page => ({
+                  ...page,
+                  messages: page.messages.map(message => message.id === parsed.messageId
+                    ? { ...message, threadId: parsed.threadId }
+                    : message),
+                })),
+              }
+            })
+            void qc?.invalidateQueries({ queryKey: ['threads', id] })
+            break
+          }
           case 'message.delete': {
             const qc = queryClient()
             qc?.setQueryData<InfiniteData<Page>>(['messages', id], (old) => {

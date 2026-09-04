@@ -6,6 +6,7 @@ import { newId, nowIso } from '../shared/ids'
 import type { DiscoflareEnv } from './env'
 import { messageNotificationStatement, signalNotificationOutbox } from './notifications'
 import { signalChannelActivity } from './channel-activity'
+import { ensureAgentReplyTarget } from './agent-replies'
 
 const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.7-code'
 const WORKSPACE_ROOT = '/workspace'
@@ -170,6 +171,20 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
     })
   }
 
+  async replyToMessage(channelId: string, messageId: string, content: string) {
+    const target = await ensureAgentReplyTarget(this.env.DB, channelId, messageId)
+    if (target.parentChannelId && target.parentMessageId) {
+      try {
+        const parent = this.env.CHANNEL_DO.getByName(`channel:${target.parentChannelId}`) as DurableObjectStub & { fanout: (value: unknown) => Promise<void> }
+        await parent.fanout({ t: 'thread.created', messageId: target.parentMessageId, threadId: target.channelId })
+      }
+      catch {
+        // D1 is authoritative; clients recover the thread link on refresh.
+      }
+    }
+    return this.postMessage(target.channelId, content)
+  }
+
   private agentId(): string {
     return this.name.startsWith('agent:') ? this.name.slice('agent:'.length) : this.name
   }
@@ -227,10 +242,13 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
 
   async postMessage(channelId: string, content: string) {
     const agentId = this.agentId()
-    const channel = await this.env.DB.prepare('SELECT id, visibility FROM channels WHERE id = ?').bind(channelId).first<{ id: string; visibility: string }>()
+    const channel = await this.env.DB.prepare(
+      'SELECT id, type, visibility, parent_id as parentId FROM channels WHERE id = ?',
+    ).bind(channelId).first<{ id: string; type: string; visibility: string; parentId: string | null }>()
     if (!channel) throw new Error('Channel not found')
     if (channel.visibility === 'private') {
-      const access = await this.env.DB.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').bind(channelId, agentId).first()
+      const accessChannelId = channel.type === 'thread' && channel.parentId ? channel.parentId : channelId
+      const access = await this.env.DB.prepare('SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?').bind(accessChannelId, agentId).first()
       if (!access) throw new Error('Agent cannot access this private channel')
     }
     const id = newId()

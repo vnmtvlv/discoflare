@@ -10,7 +10,7 @@ const outputSchema = z.object({
 
 export class AgentMessageWorkflow extends ThinkWorkflow<DiscoflareAgent, AgentMessageWorkflowParams, Record<string, unknown>, DiscoflareEnv> {
   override async run(event: AgentWorkflowEvent<AgentMessageWorkflowParams>, step: ThinkWorkflowStep) {
-    const { channelId, authorName, content } = event.payload
+    const { messageId, channelId, authorName, content } = event.payload
     const result = await step.prompt('reply-to-message', {
       prompt: [
         `${authorName} sent you this workspace message:`,
@@ -21,7 +21,7 @@ export class AgentMessageWorkflow extends ThinkWorkflow<DiscoflareAgent, AgentMe
       timeout: '1 day',
     })
     await step.do('post-reply', async () => {
-      await this.agent.postMessage(channelId, result.reply)
+      await this.agent.replyToMessage(channelId, messageId, result.reply)
       return { posted: true }
     })
     return result
