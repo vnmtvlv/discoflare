@@ -21,7 +21,7 @@ catch {
 }
 
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-console.log(`Proxying local /api and /ws to ${origin}`)
+console.log(`Proxying local /api to ${origin}; WebSockets connect directly`)
 const result = spawnSync(pnpm, ['exec', 'nuxt', 'dev'], {
   cwd: process.cwd(),
   env: { ...process.env, DISCOFLARE_DEV_PROXY_ORIGIN: origin },

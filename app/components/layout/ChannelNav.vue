@@ -194,7 +194,7 @@ watch(showInvite, (open) => {
 
 watch(() => channelsQ.data.value?.channels, (list) => {
   if (!list?.length) return
-  if (!route.params.channel && !route.params.channelId) {
+  if (route.path === '/channels') {
     const first = list.find(channel => channel.type === 'text') ?? list[0]
     if (first) void navigateTo(channelPath(first), { replace: true })
   }

@@ -4,6 +4,7 @@ const nativeClient = process.env.DISCOFLARE_CLIENT_MODE === 'native'
 const devProxyOrigin = process.env.DISCOFLARE_DEV_PROXY_ORIGIN
   ? new URL(process.env.DISCOFLARE_DEV_PROXY_ORIGIN).origin
   : null
+const remoteFrontend = Boolean(devProxyOrigin && process.env.NODE_ENV === 'development')
 const rawSqlPlugin = {
   name: 'discoflare-raw-sql',
   async load(id: string) {
@@ -15,7 +16,7 @@ const rawSqlPlugin = {
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-02',
-  ssr: !nativeClient,
+  ssr: !nativeClient && !remoteFrontend,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   modules: ['@nuxt/ui', '@pinia/nuxt', '@vueuse/nuxt', '@nuxt/eslint'],
@@ -31,6 +32,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     public: {
       clientMode: nativeClient ? 'native' : 'web',
+      devRemoteOrigin: remoteFrontend && devProxyOrigin ? devProxyOrigin : '',
     },
   },
   nitro: nativeClient ? {
@@ -39,7 +41,7 @@ export default defineNuxtConfig({
       plugins: [rawSqlPlugin],
     },
   } : {
-    preset: 'cloudflare-module',
+    preset: remoteFrontend ? 'node-server' : 'cloudflare-module',
     entry: process.env.NODE_ENV === 'development' ? undefined : './cloudflare-entry.ts',
     rollupConfig: {
       plugins: [rawSqlPlugin],
@@ -75,12 +77,6 @@ export default defineNuxtConfig({
             target: `${devProxyOrigin}/api`,
             changeOrigin: true,
             cookieDomainRewrite: '',
-            headers: { origin: devProxyOrigin },
-          },
-          '/ws': {
-            target: `${devProxyOrigin}/ws`,
-            ws: true,
-            changeOrigin: true,
             headers: { origin: devProxyOrigin },
           },
         }

@@ -16,7 +16,7 @@ Then run the local Nuxt frontend while keeping the complete backend — includin
 pnpm dev:remote
 ```
 
-The browser still talks to `http://localhost:3000/api/...` and `ws://localhost:3000/ws/...`; Nuxt proxies those requests to `DISCOFLARE_DEV_PROXY_ORIGIN`. This keeps cookies same-origin in the browser and rewrites the forwarded origin so the deployed server's CSRF check remains enabled.
+The browser talks to `http://localhost:3000/api/...`; Nuxt proxies those requests to `DISCOFLARE_DEV_PROXY_ORIGIN`. This keeps cookies same-origin in the browser and rewrites the forwarded origin so the deployed server's CSRF check remains enabled. WebSockets connect directly to the target's `wss://` origin and authenticate with Discoflare's short-lived socket token, avoiding a second stateful WebSocket hop through the local dev server.
 
 The environment value can be overridden for one run:
 

@@ -42,12 +42,12 @@ watch(boards, (value) => {
   if (!selectedBoardId.value || !value.some(board => board.id === selectedBoardId.value)) selectedBoardId.value = value[0]?.id ?? null
 }, { immediate: true })
 
-const showAgent = ref(false)
+const showAgents = ref(false)
+const selectedAgentId = shallowRef<string | null>(null)
 const showBoard = ref(false)
 const showTask = ref(false)
 const creating = ref(false)
 const runningId = ref<string | null>(null)
-const agentForm = reactive({ displayName: '', model: '@cf/moonshotai/kimi-k2.7-code', instructions: '' })
 const boardName = ref('')
 const taskForm = reactive<{ title: string; description: string; assigneeId: string | null; channelId: string | null }>({
   title: '', description: '', assigneeId: null, channelId: null,
@@ -78,21 +78,9 @@ async function refresh() {
   ])
 }
 
-async function createAgent() {
-  if (!agentForm.displayName.trim()) return
-  creating.value = true
-  try {
-    await $fetch(`/api/workspaces/${workspaceId.value}/agents`, { method: 'POST', body: agentForm })
-    Object.assign(agentForm, { displayName: '', model: '@cf/moonshotai/kimi-k2.7-code', instructions: '' })
-    showAgent.value = false
-    await refresh()
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    creating.value = false
-  }
+function openAgents(agentId: string | null = null) {
+  selectedAgentId.value = agentId
+  showAgents.value = true
 }
 
 async function createBoard() {
@@ -158,7 +146,7 @@ async function setStatus(task: TaskDTO, status: TaskStatus) {
         <UIcon name="i-ph-kanban" class="size-5" />
         <span class="font-semibold">Tasks</span>
         <div class="ml-auto flex items-center gap-2">
-          <UButton color="neutral" variant="ghost" icon="i-ph-robot" label="Agents" @click="showAgent = true" />
+          <UButton color="neutral" variant="ghost" icon="i-ph-robot" label="Agents" @click="openAgents()" />
           <UButton color="neutral" variant="ghost" icon="i-ph-plus" label="Board" @click="showBoard = true" />
           <UButton icon="i-ph-plus" label="Task" :disabled="!activeBoard" @click="showTask = true" />
         </div>
@@ -168,13 +156,19 @@ async function setStatus(task: TaskDTO, status: TaskStatus) {
       <UAlert v-else-if="boardsQ.error.value" color="error" title="Could not load task boards." class="m-6" />
       <div v-else class="flex-1 min-h-0 overflow-auto p-4">
         <div v-if="agents.length" class="flex gap-2 mb-4 overflow-x-auto">
-          <div v-for="agent in agents" :key="agent.id" class="df-panel rounded-lg px-3 py-2 flex items-center gap-2 shrink-0">
+          <button
+            v-for="agent in agents"
+            :key="agent.id"
+            type="button"
+            class="df-panel rounded-lg px-3 py-2 flex items-center gap-2 shrink-0 text-left cursor-pointer"
+            @click="openAgents(agent.id)"
+          >
             <UAvatar size="xs" icon="i-ph-robot" />
             <div class="leading-tight">
               <div class="text-sm font-medium">{{ agent.displayName }}</div>
               <div class="text-[11px] text-muted">{{ agent.status }} · {{ agent.model }}</div>
             </div>
-          </div>
+          </button>
         </div>
 
         <div v-if="boards.length" class="flex items-center gap-2 mb-4">
@@ -235,19 +229,13 @@ async function setStatus(task: TaskDTO, status: TaskStatus) {
       </div>
     </main>
 
-    <UModal v-model:open="showAgent" title="Create agent">
-      <template #body>
-        <div class="space-y-4">
-          <UFormField label="Name"><UInput v-model="agentForm.displayName" autofocus class="w-full" /></UFormField>
-          <UFormField label="Workers AI model"><UInput v-model="agentForm.model" class="w-full" /></UFormField>
-          <UFormField label="Profile instructions"><UTextarea v-model="agentForm.instructions" :rows="7" class="w-full" /></UFormField>
-        </div>
-      </template>
-      <template #footer>
-        <UButton color="neutral" variant="ghost" label="Cancel" @click="showAgent = false" />
-        <UButton label="Create agent" :loading="creating" :disabled="!agentForm.displayName.trim()" @click="createAgent" />
-      </template>
-    </UModal>
+    <TasksAgentManager
+      v-model:open="showAgents"
+      :agents="agents"
+      :workspace-id="workspaceId"
+      :initial-agent-id="selectedAgentId"
+      @saved="refresh"
+    />
 
     <UModal v-model:open="showBoard" title="Create board">
       <template #body><UFormField label="Name"><UInput v-model="boardName" autofocus class="w-full" @keyup.enter="createBoard" /></UFormField></template>

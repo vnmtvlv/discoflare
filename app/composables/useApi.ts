@@ -2,6 +2,7 @@ import { resolveServerUrl, resolveServerWebSocketUrl } from '~~/shared/client-ro
 
 export function useApi() {
   const { native, activeOrigin } = useClientServers()
+  const config = useRuntimeConfig()
 
   async function api<T>(url: string, opts?: Parameters<typeof $fetch>[1]) {
     return await $fetch<T>(url, opts)
@@ -13,7 +14,10 @@ export function useApi() {
 
   function socketUrl(path: string) {
     const currentOrigin = import.meta.client ? window.location.origin : 'http://localhost'
-    return resolveServerWebSocketUrl(path, native ? activeOrigin.value : null, currentOrigin)
+    const remoteOrigin = import.meta.client && typeof config.public.devRemoteOrigin === 'string'
+      ? config.public.devRemoteOrigin || null
+      : null
+    return resolveServerWebSocketUrl(path, native ? activeOrigin.value : remoteOrigin, currentOrigin)
   }
 
   return { api, serverUrl, socketUrl, serverOrigin: activeOrigin, native }
