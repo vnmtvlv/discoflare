@@ -22,8 +22,7 @@ const modelOptions = [
   { id: '@cf/zai-org/glm-5.2', label: 'GLM 5.2', description: 'Agentic coding · reasoning · tools' },
   { id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B A3B', description: 'Fast · reasoning · tools' },
   { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B Fast', description: 'General · fast · tools' },
-] as const
-const modelIds: string[] = modelOptions.map(option => option.id)
+]
 const statusOptions = [
   { label: 'Active', value: 'active' },
   { label: 'Paused', value: 'paused' },
@@ -147,14 +146,13 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
       </UFormField>
 
       <UFormField name="model" label="Model" hint="Workers AI">
-        <UInputMenu v-model="form.model" :items="modelIds" mode="autocomplete" class="w-full">
-          <template #item="{ item }">
-            <div class="min-w-0">
-              <div class="truncate font-medium">{{ modelOption(item)?.label ?? item }}</div>
-              <div class="truncate text-xs text-muted">{{ modelOption(item)?.description ?? item }}</div>
-            </div>
-          </template>
-        </UInputMenu>
+        <USelect
+          v-model="form.model"
+          :items="modelOptions"
+          value-key="id"
+          label-key="label"
+          class="w-full"
+        />
       </UFormField>
 
       <UFormField name="instructions" label="Profile instructions">
