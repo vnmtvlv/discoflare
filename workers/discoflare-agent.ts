@@ -215,10 +215,12 @@ export class DiscoflareAgent extends Think<DiscoflareEnv> {
     )
     if (!packed.success) throw new Error(`Could not checkpoint agent computer: ${packed.stderr}`)
     const archive = await sandbox.readFile('/tmp/discoflare-workspace.tgz', { encoding: 'none' })
-    await this.env.FILES.put(this.archiveKey(), archive.content, {
+    const fixed = new FixedLengthStream(archive.size)
+    const upload = this.env.FILES.put(this.archiveKey(), fixed.readable, {
       httpMetadata: { contentType: 'application/gzip' },
       customMetadata: { agentId: this.agentId(), checkpointedAt: nowIso() },
     })
+    await Promise.all([archive.content.pipeTo(fixed.writable), upload])
     await this.env.DB.prepare('UPDATE agents SET last_active_at = ?, updated_at = ? WHERE user_id = ?')
       .bind(nowIso(), nowIso(), this.agentId()).run()
   }
