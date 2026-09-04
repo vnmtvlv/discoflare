@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  activateClientServer,
   createLiveFetch,
   normalizeServerOrigin,
   resolveServerUrl,
@@ -7,6 +8,37 @@ import {
 } from '../../shared/client-router'
 
 describe('client router', () => {
+  it('does nothing when the selected server is already active', () => {
+    const select = vi.fn()
+    const reload = vi.fn()
+
+    activateClientServer({
+      origin: 'https://sandbox.discoflare.com',
+      activeOrigin: 'https://sandbox.discoflare.com',
+      select,
+      reload,
+    })
+
+    expect(select).not.toHaveBeenCalled()
+    expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('selects and reloads when switching servers', () => {
+    const select = vi.fn()
+    const reload = vi.fn()
+
+    activateClientServer({
+      origin: 'https://chat.example.com',
+      activeOrigin: 'https://sandbox.discoflare.com',
+      select,
+      reload,
+    })
+
+    expect(select).toHaveBeenCalledOnce()
+    expect(select).toHaveBeenCalledWith('https://chat.example.com')
+    expect(reload).toHaveBeenCalledOnce()
+  })
+
   it('normalizes a bare server hostname', () => {
     expect(normalizeServerOrigin('sandbox.discoflare.com/')).toBe('https://sandbox.discoflare.com')
   })

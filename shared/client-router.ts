@@ -5,6 +5,19 @@ export type ClientServer = {
   name: string
 }
 
+type ActivateClientServerOptions = {
+  origin: string
+  activeOrigin: string | null
+  select: (origin: string) => void
+  reload: () => void
+}
+
+export function activateClientServer({ origin, activeOrigin, select, reload }: ActivateClientServerOptions) {
+  if (origin === activeOrigin) return
+  select(origin)
+  reload()
+}
+
 export function createLiveFetch(
   current: () => typeof globalThis.fetch = () => globalThis.fetch,
 ): typeof globalThis.fetch {

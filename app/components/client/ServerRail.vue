@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { activateClientServer } from '~~/shared/client-router'
+
 const route = useRoute()
 const { servers, activeOrigin, select } = useClientServers()
 const failedLogos = ref<string[]>([])
@@ -14,8 +16,12 @@ function useBundledLogo(origin: string) {
 }
 
 function activate(origin: string) {
-  if (origin !== activeOrigin.value) select(origin)
-  window.location.assign('/')
+  activateClientServer({
+    origin,
+    activeOrigin: activeOrigin.value,
+    select,
+    reload: () => window.location.assign('/'),
+  })
 }
 </script>
 
