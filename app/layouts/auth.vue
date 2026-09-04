@@ -19,13 +19,13 @@ useHead(() => ({ title: appName.value }))
 </script>
 
 <template>
-  <div class="min-h-dvh bg-default lg:grid lg:grid-cols-[minmax(280px,40%)_1fr]">
-    <aside class="auth-stage relative hidden lg:flex flex-col overflow-hidden p-10 xl:p-12 bg-elevated border-r border-default">
+  <div class="min-h-dvh bg-default lg:grid lg:grid-cols-2">
+    <aside class="auth-stage relative flex min-h-[22rem] flex-col overflow-hidden border-b border-default bg-elevated p-6 sm:min-h-[26rem] sm:p-8 lg:min-h-dvh lg:border-r lg:border-b-0 lg:p-10 xl:p-12">
       <BrandWordmark :name="appName" size="lg" class="relative z-10" />
 
       <div class="relative z-10 flex-1 flex items-center">
         <div class="max-w-lg">
-          <h1 class="font-brand text-4xl xl:text-5xl font-semibold tracking-[-0.045em] text-highlighted leading-[1] break-words">
+          <h1 class="font-brand text-3xl sm:text-4xl xl:text-5xl font-semibold tracking-[-0.045em] text-highlighted leading-[1] break-words">
             <span
               v-for="(line, index) in appTitleLines"
               :key="`${index}-${line}`"
@@ -44,11 +44,7 @@ useHead(() => ({ title: appName.value }))
       <div class="auth-shape auth-shape-three" aria-hidden="true" />
     </aside>
 
-    <main class="min-h-dvh flex flex-col">
-      <div class="lg:hidden flex items-center gap-3 px-6 py-5 border-b border-default">
-        <span class="w-1 h-5 bg-primary rounded-full" aria-hidden="true" />
-        <BrandWordmark :name="appName" compact />
-      </div>
+    <main class="flex min-h-[28rem] flex-col lg:min-h-dvh">
       <div class="flex-1 flex items-center justify-center px-6 py-12">
         <div class="w-full max-w-[400px]">
           <slot />

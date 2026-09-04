@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import type { MessageDTO } from '~~/shared/types'
+import type { ChannelThreadDTO, MessageDTO } from '~~/shared/types'
 import { formatMessageTime, formatTime } from '~~/shared/format'
 import AttachmentGallery from '~/features/attachments/components/AttachmentGallery.vue'
 
 defineProps<{
   message: MessageDTO
+  thread?: ChannelThreadDTO
   names: Record<string, string>
   mine: boolean
   canPin?: boolean
@@ -80,7 +81,31 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
           @click="emit('react', r.emoji)"
         />
       </div>
-      <UButton v-if="message.threadId" size="xs" variant="link" label="Open thread" class="mt-1" @click="emit('thread')" />
+      <div v-if="message.threadId" class="relative mt-2 ml-5 max-w-xl">
+        <span
+          class="pointer-events-none absolute -left-5 -top-3 h-8 w-4 rounded-bl-lg border-l-2 border-b-2 border-muted"
+          aria-hidden="true"
+        />
+        <button
+          type="button"
+          class="group/thread flex w-full items-center gap-3 rounded-md border border-default bg-elevated px-3 py-2 text-start transition-colors hover:border-accented hover:bg-accented/60"
+          @click="emit('thread')"
+        >
+          <span class="flex size-8 shrink-0 items-center justify-center rounded-full bg-accented text-primary">
+            <UIcon name="i-ph-chats-circle" class="size-5" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-sm font-medium text-highlighted">{{ thread?.title || 'Thread' }}</span>
+            <span class="mt-0.5 flex items-center gap-1.5 text-xs">
+              <span class="font-semibold text-primary">
+                {{ thread ? `${thread.replyCount} ${thread.replyCount === 1 ? 'reply' : 'replies'}` : 'Open thread' }}
+              </span>
+              <span v-if="thread?.lastReplyAt" class="truncate text-muted">Last reply {{ formatMessageTime(thread.lastReplyAt) }}</span>
+            </span>
+          </span>
+          <UIcon name="i-ph-caret-right" class="size-4 shrink-0 text-muted transition-transform group-hover/thread:translate-x-0.5" />
+        </button>
+      </div>
     </div>
     <div
       v-if="!message.deletedAt"

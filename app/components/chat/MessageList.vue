@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { useInfiniteQuery, useQueryClient } from '@tanstack/vue-query'
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { InfiniteData } from '@tanstack/vue-query'
-import type { MemberDTO, MessageContextResponse, MessageDTO, MessagePinDTO, MessageSearchHitDTO, MessageSearchResponse } from '~~/shared/types'
+import type { ChannelThreadDTO, MemberDTO, MessageContextResponse, MessageDTO, MessagePinDTO, MessageSearchHitDTO, MessageSearchResponse } from '~~/shared/types'
 import { formatDayLabel, formatMessageTime, sameDay } from '~~/shared/format'
 import { mergeMessageContext, type MessagePage } from '~/utils/message-cache'
 
@@ -44,6 +44,14 @@ const messages = computed(() => {
   const pages = q.data.value?.pages ?? []
   return [...pages].reverse().flatMap((p) => p.messages)
 })
+const threadsQ = useQuery({
+  queryKey: computed(() => ['threads', props.channelId]),
+  queryFn: () => $fetch<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
+  enabled: computed(() => messages.value.some(message => Boolean(message.threadId))),
+})
+const threadsByMessage = computed(() => new Map(
+  (threadsQ.data.value?.threads ?? []).map(thread => [thread.parentMessageId, thread]),
+))
 
 const ownsSearch = computed(() => !ui.threadId || ui.threadId === props.channelId)
 const requestedSearchTerm = computed(() => ui.searchQuery.trim())
@@ -251,6 +259,7 @@ function jumpToMessage(id: string) {
         >
           <ChatMessageItem
             :message="m"
+            :thread="threadsByMessage.get(m.id)"
             :names="names"
             :mine="m.author.id === session.user?.id"
             :can-pin="canPin"
