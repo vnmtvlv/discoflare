@@ -13,6 +13,7 @@ const error = ref<string | null>(null)
 const schema = z.object({ server: z.string().trim().min(1, 'Enter a server URL') })
 type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ server: 'https://sandbox.discoflare.com' })
+const deployUrl = 'https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare'
 
 if (!native) await navigateTo('/')
 
@@ -80,7 +81,20 @@ function forget(origin: string) {
         </div>
       </div>
 
-      <UForm :schema="schema" :state="state" class="mt-8 flex items-start gap-2" @submit="connect">
+      <UButton
+        :to="deployUrl"
+        target="_blank"
+        rel="noopener noreferrer"
+        icon="i-ph-cloud-arrow-up"
+        label="Deploy new server"
+        size="lg"
+        block
+        class="mt-8"
+      />
+
+      <USeparator label="or connect existing" class="my-6" />
+
+      <UForm :schema="schema" :state="state" class="flex items-start gap-2" @submit="connect">
         <UFormField name="server" class="min-w-0 flex-1">
           <UInput
             v-model="state.server"

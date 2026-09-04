@@ -352,20 +352,46 @@ defineShortcuts({
         @last="onLast"
       />
     </div>
-    <ChatThreadPanel
-      v-if="ui.rightPanelOpen && ui.rightPanelTab === 'threads' && ui.threadId"
-      :workspace-id="workspaceId"
-      :members="members"
-      :can-pin="canPin"
-    />
-    <LayoutMemberRail
-      v-else-if="ui.rightPanelOpen || isMobile"
-      :workspace-id="workspaceId"
-      :channel-id="channelId"
-      :channel-members="isDm ? channel?.participants : undefined"
-      :is-group-dm="isGroup"
-      :can-pin="canPin"
-    />
+    <Transition name="right-panel" :css="isMobile">
+      <ChatThreadPanel
+        v-if="ui.rightPanelOpen && ui.rightPanelTab === 'threads' && ui.threadId"
+        key="thread"
+        :workspace-id="workspaceId"
+        :members="members"
+        :can-pin="canPin"
+      />
+      <LayoutMemberRail
+        v-else-if="(!isMobile && ui.rightPanelOpen) || (isMobile && ui.mobilePane === 'members')"
+        key="details"
+        :workspace-id="workspaceId"
+        :channel-id="channelId"
+        :channel-members="isDm ? channel?.participants : undefined"
+        :is-group-dm="isGroup"
+        :can-pin="canPin"
+      />
+    </Transition>
     <HuddleSetupModal />
   </div>
 </template>
+
+<style scoped>
+.right-panel-enter-active {
+  transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.right-panel-leave-active {
+  transition: transform 180ms ease-in;
+}
+
+.right-panel-enter-from,
+.right-panel-leave-to {
+  transform: translateX(100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .right-panel-enter-active,
+  .right-panel-leave-active {
+    transition-duration: 1ms;
+  }
+}
+</style>

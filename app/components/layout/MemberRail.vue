@@ -113,10 +113,10 @@ function roleLabel(name: string) {
 <template>
   <aside
     id="channel-details"
-    class="bg-muted shrink-0 relative flex flex-col min-h-0 overflow-hidden"
+    class="flex min-h-0 shrink-0 flex-col overflow-hidden bg-muted"
     :class="isMobile
-      ? (ui.mobilePane === 'members' ? 'absolute inset-x-0 bottom-[calc(-1*var(--df-safe-area-bottom))] top-[calc(-1*var(--df-safe-area-top))] z-20 flex w-full pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]' : 'hidden')
-      : 'hidden md:flex'"
+      ? 'absolute inset-x-0 bottom-[calc(-1*var(--df-safe-area-bottom))] top-[calc(-1*var(--df-safe-area-top))] z-20 flex w-full pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]'
+      : 'relative hidden md:flex'"
     :style="!isMobile ? { width: `${ui.rightPanelWidth}px` } : undefined"
     aria-label="Right panel"
   >
