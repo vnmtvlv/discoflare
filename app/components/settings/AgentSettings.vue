@@ -242,7 +242,18 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         </div>
       </UFormField>
 
-      <UFormField name="model" label="Model" hint="Workers AI">
+      <UFormField name="model" label="Model">
+        <template #hint>
+          <ULink
+            to="https://developers.cloudflare.com/workers-ai/models/"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="inline-flex items-center gap-1 hover:text-highlighted"
+          >
+            <span>Workers AI</span>
+            <UIcon name="i-ph-arrow-square-out" class="size-3" />
+          </ULink>
+        </template>
         <USelect
           v-model="form.model"
           :items="modelOptions"
