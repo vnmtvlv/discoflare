@@ -5,9 +5,10 @@ import { claimComposerSubmission, type ComposerSubmission } from '~~/shared/comp
 import { applyMentionTokens } from '~~/shared/mentions'
 import { newId, nowIso } from '~~/shared/ids'
 import { useQueryClient, type InfiniteData } from '@tanstack/vue-query'
-import { useDebounceFn, useFileDialog } from '@vueuse/core'
+import { useFileDialog } from '@vueuse/core'
 import AttachmentDraftPreview from '~/features/attachments/components/AttachmentDraftPreview.vue'
 import { useAudioRecorder } from '~/features/attachments/composables/useAudioRecorder'
+import { createTypingActivity } from '~/utils/typing-activity'
 
 const props = defineProps<{
   channelId: string
@@ -18,6 +19,7 @@ const props = defineProps<{
   disabled?: boolean
   disabledPlaceholder?: string
   canAttach?: boolean
+  agentBusy?: boolean
 }>()
 
 const emit = defineEmits<{ last: [] }>()
@@ -29,6 +31,11 @@ const toast = useToast()
 const { api } = useApi()
 const files = ref<File[]>([])
 const emojiOpen = ref(false)
+const agentMode = ref<'queue' | 'steer'>('queue')
+const agentModes = [
+  { label: 'Queue', value: 'queue' },
+  { label: 'Steer', value: 'steer' },
+]
 const EMOJI = ['😀', '😂', '❤️', '👍', '🔥', '🎉', '👀', '💯']
 const draft = computed({
   get: () => ui.composerState(props.channelId).draft,
@@ -138,6 +145,35 @@ async function submit() {
     nickname: m.nickname,
   })))
   content = content.trim()
+  if (!content && !submission.files.length) return
+
+  const clientId = submission.editingId ? null : newId()
+  if (clientId) {
+    const optimistic: MessageDTO = {
+      id: `tmp:${clientId}`,
+      channelId,
+      workspaceId: props.workspaceId,
+      author: session.user!,
+      content,
+      replyTo: null,
+      mentions: [],
+      attachments: [],
+      reactions: [],
+      pin: null,
+      threadId: null,
+      editedAt: null,
+      deletedAt: null,
+      createdAt: nowIso(),
+      clientId,
+      deliveryState: submission.files.length ? 'uploading' : 'sending',
+    }
+    qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(['messages', channelId], (old) => {
+      if (!old?.pages?.length) return { pages: [{ messages: [optimistic], nextCursor: null }], pageParams: [undefined] }
+      const pages = old.pages.map((p, i) => i === 0 ? { ...p, messages: [...p.messages, optimistic] } : p)
+      return { ...old, pages }
+    })
+  }
+
   const attachmentIds: string[] = []
   try {
     for (const file of submission.files) {
@@ -151,6 +187,17 @@ async function submit() {
     }
   }
   catch (err) {
+    if (clientId) {
+      qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(['messages', channelId], old => old
+        ? {
+            ...old,
+            pages: old.pages.map(page => ({
+              ...page,
+              messages: page.messages.filter(message => message.clientId !== clientId),
+            })),
+          }
+        : old)
+    }
     restoreSubmission(channelId, submission)
     toast.add({ title: errorMessage(err), color: 'error' })
     return
@@ -167,41 +214,29 @@ async function submit() {
     return
   }
 
-  if (!content && !attachmentIds.length) return
-  const clientId = newId()
-  const optimistic: MessageDTO = {
-    id: `tmp:${clientId}`,
-    channelId,
-    workspaceId: props.workspaceId,
-    author: session.user!,
+  if (!clientId || (!content && !attachmentIds.length)) return
+  props.send({
+    t: 'message.create',
     content,
-    replyTo: null,
-    mentions: [],
-    attachments: [],
-    reactions: [],
-    pin: null,
-    threadId: null,
-    editedAt: null,
-    deletedAt: null,
-    createdAt: nowIso(),
+    replyToId: submission.replyToId ?? undefined,
     clientId,
-  }
-  qc.setQueryData<InfiniteData<{ messages: MessageDTO[]; nextCursor: string | null }>>(['messages', channelId], (old) => {
-    if (!old?.pages?.length) return { pages: [{ messages: [optimistic], nextCursor: null }], pageParams: [undefined] }
-    const pages = old.pages.map((p, i) => i === 0 ? { ...p, messages: [...p.messages, optimistic] } : p)
-    return { ...old, pages }
+    attachmentIds: attachmentIds.length ? attachmentIds : undefined,
+    agentMode: props.agentBusy ? agentMode.value : undefined,
   })
-  props.send({ t: 'message.create', content, replyToId: submission.replyToId ?? undefined, clientId, attachmentIds: attachmentIds.length ? attachmentIds : undefined })
+  agentMode.value = 'queue'
 }
 
-const pingTyping = useDebounceFn(() => {
-  if (!props.disabled && draft.value) props.send({ t: 'typing' })
-}, 400)
+const typing = createTypingActivity(active => props.send({ t: 'typing', active }))
 
-watch(draft, () => { pingTyping() })
+watch(draft, (value) => {
+  if (!props.disabled && !editingId.value && value) typing.input()
+  else typing.stop()
+})
 watch(() => [props.channelId, props.disabled, editingId.value], () => {
+  typing.stop()
   if (recording.value) cancelAudioRecording()
 })
+onUnmounted(() => typing.stop())
 </script>
 
 <template>
@@ -315,6 +350,16 @@ watch(() => [props.channelId, props.disabled, editingId.value], () => {
             @click="recordAudio"
           />
         </UTooltip>
+        <USelect
+          v-if="!recording && !editingId && agentBusy"
+          v-model="agentMode"
+          :items="agentModes"
+          value-key="value"
+          size="xs"
+          variant="ghost"
+          class="w-20 self-center"
+          aria-label="Agent message mode"
+        />
         <UTooltip v-if="!recording && (draft.trim() || files.length)" text="Send">
           <UButton
             type="submit"

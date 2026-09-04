@@ -4,6 +4,7 @@ import type { InfiniteData } from '@tanstack/vue-query'
 import type { ChannelThreadDTO, MemberDTO, MessageContextResponse, MessageDTO, MessagePinDTO, MessageSearchHitDTO, MessageSearchResponse } from '~~/shared/types'
 import { formatDayLabel, formatMessageTime, sameDay } from '~~/shared/format'
 import { mergeMessageContext, type MessagePage } from '~/utils/message-cache'
+import { applyReactionChange } from '~/utils/message-reactions'
 
 const props = defineProps<{
   channelId: string
@@ -19,9 +20,11 @@ const emit = defineEmits<{
   edit: [msg: MessageDTO]
   thread: [msg: MessageDTO]
   read: [messageId: string]
+  retry: [clientId: string]
 }>()
 
 const session = useSessionStore()
+const presence = usePresenceStore()
 const ui = useUiStore()
 const prefs = usePrefsStore()
 const toast = useToast()
@@ -29,15 +32,28 @@ const qc = useQueryClient()
 const scroller = ref<HTMLElement | null>(null)
 const searchTargetId = ref<string | null>(null)
 const jumpingToId = ref<string | null>(null)
+const unreadBoundary = ref<{ channelId: string; messageId: string } | null>(null)
 let lastRead = ''
+
+type MessageResponse = {
+  messages: MessageDTO[]
+  nextCursor: string | null
+  lastReadMessageId: string | null
+}
 
 const q = useInfiniteQuery({
   queryKey: computed(() => ['messages', props.channelId]),
   initialPageParam: undefined as string | undefined,
-  queryFn: ({ pageParam }) => api<{ messages: MessageDTO[]; nextCursor: string | null }>(
-    `/api/channels/${props.channelId}/messages`,
-    { query: { cursor: pageParam, limit: 50 } },
-  ),
+  queryFn: async ({ pageParam }) => {
+    const response = await api<MessageResponse>(`/api/channels/${props.channelId}/messages`, {
+      query: { cursor: pageParam, limit: 50 },
+    })
+    if (!pageParam && unreadBoundary.value?.channelId !== props.channelId) {
+      const firstUnread = response.messages.find(message => !response.lastReadMessageId || message.id > response.lastReadMessageId)
+      unreadBoundary.value = firstUnread ? { channelId: props.channelId, messageId: firstUnread.id } : null
+    }
+    return response
+  },
   getNextPageParam: (last) => last.nextCursor ?? undefined,
 })
 
@@ -45,6 +61,9 @@ const messages = computed(() => {
   const pages = q.data.value?.pages ?? []
   return [...pages].reverse().flatMap((p) => p.messages)
 })
+const streamingMessageIds = computed(() => new Set(
+  presence.agentTurnsIn(props.channelId).map(turn => turn.draftMessageId).filter((id): id is string => Boolean(id)),
+))
 const threadsQ = useQuery({
   queryKey: computed(() => ['threads', props.channelId]),
   queryFn: () => api<{ threads: ChannelThreadDTO[] }>(`/api/channels/${props.channelId}/threads`),
@@ -140,7 +159,31 @@ async function remove(id: string) {
 }
 
 async function react(id: string, emoji: string) {
-  await api(`/api/messages/${id}/reactions`, { method: 'POST', body: { emoji } })
+  if (id.startsWith('tmp:') || !session.user?.id) return
+  const key = ['messages', props.channelId] as const
+  const current = qc.getQueryData<InfiniteData<MessagePage>>(key)
+  const message = current?.pages.flatMap(page => page.messages).find(item => item.id === id)
+  const op = message?.reactions.find(reaction => reaction.emoji === emoji)?.me ? 'remove' : 'add'
+  const apply = (change: 'add' | 'remove') => qc.setQueryData<InfiniteData<MessagePage>>(key, (data) => {
+    if (!data) return data
+    return {
+      ...data,
+      pages: data.pages.map(page => ({
+        ...page,
+        messages: page.messages.map(item => item.id === id
+          ? { ...item, reactions: applyReactionChange(item.reactions, { emoji, userId: session.user!.id, op: change }, session.user!.id) }
+          : item),
+      })),
+    }
+  })
+  apply(op)
+  try {
+    await api(`/api/messages/${id}/reactions`, { method: 'POST', body: { emoji } })
+  }
+  catch {
+    apply(op === 'add' ? 'remove' : 'add')
+    toast.add({ title: 'Could not update reaction', color: 'error' })
+  }
 }
 
 async function togglePin(message: MessageDTO) {
@@ -248,6 +291,14 @@ function jumpToMessage(id: string) {
         @click="q.fetchNextPage()"
       />
       <template v-for="(m, i) in messages" :key="m.id">
+        <div
+          v-if="unreadBoundary?.channelId === channelId && unreadBoundary.messageId === m.id"
+          class="my-2 flex items-center gap-2 px-4 text-[11px] font-semibold uppercase tracking-wide text-error"
+        >
+          <div class="flex-1 border-t border-error/70" />
+          <span>New</span>
+          <div class="w-6 border-t border-error/70" />
+        </div>
         <div v-if="i === 0 || !sameDay(m.createdAt, messages[i - 1]!.createdAt)" class="flex items-center gap-1 px-4 my-2">
           <div class="flex-1 border-t border-default" />
           <span class="text-xs font-semibold text-muted px-1">{{ formatDayLabel(m.createdAt) }}</span>
@@ -265,6 +316,7 @@ function jumpToMessage(id: string) {
             :mine="m.author.id === session.user?.id"
             :can-pin="canPin"
             :compact="compactWith(m, messages[i - 1])"
+            :streaming="streamingMessageIds.has(m.id)"
             @reply="emit('reply', m.id)"
             @edit="emit('edit', m)"
             @remove="remove(m.id)"
@@ -272,6 +324,7 @@ function jumpToMessage(id: string) {
             @jump="jumpToMessage"
             @react="(emoji) => react(m.id, emoji)"
             @pin="togglePin(m)"
+            @retry="m.clientId && emit('retry', m.clientId)"
           />
         </div>
       </template>
@@ -301,7 +354,7 @@ function jumpToMessage(id: string) {
                 :disabled="Boolean(jumpingToId)"
                 @click="goToResult(message)"
               >
-                <UAvatar size="xs" :text="message.author.displayName.slice(0, 1).toUpperCase()" :alt="message.author.displayName" />
+                <UserAvatar :user="message.author" size="xs" />
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-2 text-xs">
                     <strong class="truncate text-highlighted">{{ message.author.displayName }}</strong>

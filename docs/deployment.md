@@ -25,7 +25,7 @@ For one-click deployment:
 2. Open the resulting Worker URL. The first health request creates the owner and workspace when the database is empty.
 3. Sign in. `/setup` reports readiness and never accepts owner credentials.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
-5. Configure RealtimeKit only if the workspace needs huddles; text chat works without it.
+5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that the Sandbox is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
 For a manual deployment, set the owner and auth secrets:
@@ -106,6 +106,8 @@ Keep `AUTH_SECRET` stable. Rotating it invalidates sessions and makes D1-stored 
 
 ## Secrets
 
+The owner can configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
+
 ```
 wrangler secret put ADMIN_EMAIL
 wrangler secret put ADMIN_PASSWORD
@@ -131,7 +133,7 @@ wrangler secret put REALTIMEKIT_API_SECRET
 wrangler secret put REALTIMEKIT_PRESET_AV
 ```
 
-Never put RealtimeKit secrets in the client bundle.
+`REALTIMEKIT_API_SECRET` is only for the legacy Basic Auth API path. The current Cloudflare API-token path uses `REALTIMEKIT_ACCOUNT_ID`, `REALTIMEKIT_APP_ID`, and `REALTIMEKIT_API_KEY`. Never put RealtimeKit secrets in the client bundle.
 
 ## Local
 

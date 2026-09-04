@@ -37,7 +37,7 @@ function openThread(thread: ChannelThreadDTO) {
       class="flex w-full items-start gap-2 rounded-md px-2 py-2 text-start hover:bg-elevated"
       @click="openThread(thread)"
     >
-      <UAvatar size="xs" :text="thread.author.displayName.slice(0, 1).toUpperCase()" :alt="thread.author.displayName" />
+      <UserAvatar :user="thread.author" size="xs" />
       <span class="min-w-0 flex-1">
         <span class="block truncate text-sm font-medium text-highlighted">{{ thread.title }}</span>
         <span class="mt-0.5 flex items-center gap-1 text-xs text-muted">

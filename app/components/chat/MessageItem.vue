@@ -10,6 +10,7 @@ defineProps<{
   mine: boolean
   canPin?: boolean
   compact?: boolean
+  streaming?: boolean
 }>()
 const emit = defineEmits<{
   reply: []
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   jump: [id: string]
   react: [emoji: string]
   pin: []
+  retry: []
 }>()
 
 const EMOJI = ['👍', '❤️', '😂']
@@ -35,11 +37,10 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
 <template>
   <article class="group relative px-4 flex gap-4" :class="compact ? 'py-0.5 hover:bg-elevated/40' : 'mt-4 py-0.5 hover:bg-elevated/40'">
     <div class="w-10 shrink-0 flex justify-center">
-      <UAvatar
+      <UserAvatar
         v-if="!compact"
+        :user="message.author"
         size="md"
-        :text="message.author.displayName.slice(0, 1).toUpperCase()"
-        :alt="message.author.displayName"
         class="mt-0.5"
       />
       <time
@@ -67,8 +68,27 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
         <span class="truncate">{{ replySummary(message.replyTo) }}</span>
       </button>
       <p v-if="message.deletedAt" class="text-muted italic text-base">Message deleted</p>
-      <ChatMarkdownView v-else :content="message.content" :names="names" />
+      <div v-else>
+        <ChatMarkdownView :content="message.content" :names="names" />
+        <span v-if="streaming" class="inline-block h-4 w-0.5 animate-pulse bg-primary align-text-bottom" aria-label="Streaming" />
+      </div>
       <AttachmentGallery v-if="message.attachments.length" :attachments="message.attachments" />
+      <div v-if="message.deliveryState" class="mt-0.5 flex h-5 items-center gap-1.5 text-xs" aria-live="polite">
+        <template v-if="message.deliveryState !== 'failed'">
+          <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-muted" />
+          <span class="text-muted">{{ message.deliveryState === 'uploading' ? 'Uploading' : 'Sending' }}</span>
+        </template>
+        <UButton
+          v-else
+          size="xs"
+          color="error"
+          variant="link"
+          icon="i-ph-arrow-clockwise"
+          label="Retry"
+          class="px-0"
+          @click="emit('retry')"
+        />
+      </div>
       <div v-if="message.reactions?.length" class="mt-1 flex flex-wrap gap-1">
         <UButton
           v-for="r in message.reactions"
@@ -108,7 +128,7 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
       </div>
     </div>
     <div
-      v-if="!message.deletedAt"
+      v-if="!message.deletedAt && !message.id.startsWith('tmp:')"
       class="absolute right-4 -top-5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex bg-elevated ring ring-default rounded-md shadow-sm z-10"
     >
       <UTooltip v-for="e in EMOJI" :key="e" :text="`React with ${e}`">

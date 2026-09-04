@@ -77,7 +77,7 @@ async function unpin(messageId: string) {
         class="min-w-0 flex flex-1 items-start gap-2 px-2 py-2 text-start"
         @click="jump(message.id)"
       >
-        <UAvatar size="xs" :text="message.author.displayName.slice(0, 1).toUpperCase()" :alt="message.author.displayName" />
+        <UserAvatar :user="message.author" size="xs" />
         <span class="min-w-0 flex-1">
           <span class="flex items-center gap-1.5 text-xs">
             <strong class="truncate text-highlighted">{{ message.author.displayName }}</strong>

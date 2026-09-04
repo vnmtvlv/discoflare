@@ -15,6 +15,7 @@ const names = computed(() => {
   for (const m of props.members) map[m.user.id] = m.nickname || m.user.displayName
   return map
 })
+const users = computed(() => Object.fromEntries(props.members.map(member => [member.user.id, member.user])))
 </script>
 
 <template>
@@ -29,6 +30,7 @@ const names = computed(() => {
         <UAvatar
           v-for="id in huddle.state?.participantIds ?? []"
           :key="id"
+          :src="users[id] ? userAvatarSrc(users[id]!) : undefined"
           :text="(names[id] || '?').slice(0, 1).toUpperCase()"
           :alt="names[id]"
         />

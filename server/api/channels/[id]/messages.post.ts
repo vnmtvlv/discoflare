@@ -18,6 +18,7 @@ const bodySchema = z.object({
   replyToId: z.string().min(8).optional(),
   clientId: z.string().min(1).max(80).optional(),
   attachmentIds: z.array(z.string().min(8)).max(8).optional(),
+  agentMode: z.enum(['queue', 'steer']).optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -90,16 +91,14 @@ export default defineEventHandler(async (event) => {
     ...(notification ? [notification] : []),
   ])
   waitUntil(signalNotificationOutbox(env))
-  waitUntil(signalChannelActivity(env, channelId, member.user.id, id))
-  waitUntil(signalChannelRead(env, member.user.id, channelId, id))
-  waitUntil(signalAgentsForMessage(env, {
-    messageId: id,
+  waitUntil(signalChannelActivity(env, {
+    id,
     channelId,
-    authorName: member.user.displayName,
+    author: member.user,
     content: body.content,
-    mentionIds,
+    attachmentCount: attachmentRows.length,
   }))
-
+  waitUntil(signalChannelRead(env, member.user.id, channelId, id))
   const db = getDb(env.DB)
   const row = (await db.select().from(messages).where(eq(messages.id, id)).limit(1))[0]!
   const [dto] = await hydrateMessages(env, [row], member.user.id)
@@ -108,5 +107,14 @@ export default defineEventHandler(async (event) => {
     await stub.fanout({ t: 'message', message: dto })
   }
   catch { /* local without DO */ }
+  waitUntil(signalAgentsForMessage(env, {
+    messageId: id,
+    channelId,
+    authorId: member.user.id,
+    authorName: member.user.displayName,
+    content: body.content,
+    mentionIds,
+    mode: body.agentMode,
+  }))
   return { message: dto }
 })

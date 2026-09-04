@@ -1,6 +1,6 @@
 import type { WorkspaceRealtimeEvent } from '../shared/workspace-realtime'
 
-export type WorkspaceSocketAttachment = { userId: string; lastActive: number }
+export type WorkspaceSocketAttachment = { userId: string; lastActive: number; visible: boolean }
 
 type WorkspaceSocket = {
   deserializeAttachment: () => WorkspaceSocketAttachment | null

@@ -9,6 +9,7 @@ import { loadAuthRuntimeConfig } from './auth-config'
 import { cf, fail } from './cf'
 import { getDb } from './db'
 import { writeAudit } from './messages'
+import { signalMembersChanged } from '../../workers/member-events'
 
 type AuthIdentity = { id: string; email: string; name: string; image?: string | null }
 
@@ -17,7 +18,7 @@ export function visibleAuthEmail(email: string): string | null {
 }
 
 export async function ensureDomainUser(event: H3Event, identity: AuthIdentity) {
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   let row = (await db.select().from(users).where(eq(users.id, identity.id)).limit(1))[0]
   if (row) return row
@@ -49,6 +50,7 @@ export async function ensureDomainUser(event: H3Event, identity: AuthIdentity) {
       targetId: identity.id,
       meta: { admission: 'open' },
     })
+    waitUntil(signalMembersChanged(env, 'main'))
   }
   return row
 }

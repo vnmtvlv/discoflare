@@ -9,6 +9,7 @@ import { cf, fail } from '../../../../utils/cf'
 import { getDb } from '../../../../utils/db'
 import { writeAudit } from '../../../../utils/messages'
 import { parseBody } from '../../../../utils/validate'
+import { signalMembersChanged } from '../../../../../workers/member-events'
 
 const bodySchema = z.object({
   displayName: z.string().trim().min(1).max(80).optional(),
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
   const agentId = getRouterParam(event, 'agentId')!
   const actor = await requireMember(event, workspaceId, Permission.manageWorkspace)
   const body = parseBody(bodySchema, await readBody(event))
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const current = (await db.select({ profile: agents, user: users }).from(agents)
     .innerJoin(users, eq(users.id, agents.userId))
@@ -53,6 +54,9 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
       instructionsChanged: body.instructions !== undefined && body.instructions !== current.profile.instructions,
     },
   })
+  if (body.displayName !== undefined || body.status !== undefined) {
+    waitUntil(signalMembersChanged(env, workspaceId))
+  }
 
   return {
     agent: {

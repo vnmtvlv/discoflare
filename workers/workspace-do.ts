@@ -1,11 +1,11 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { PresenceStatus, PublicUser } from '../shared/types'
-import type { WorkspaceChannelActivityEvent, WorkspaceChannelReadEvent } from '../shared/workspace-realtime'
+import type { WorkspaceChannelActivityEvent, WorkspaceChannelReadEvent, WorkspaceMembersChangedEvent, WorkspaceTasksChangedEvent } from '../shared/workspace-realtime'
 import type { DiscoflareEnv } from './env'
 import { userFromTicket } from './ticket'
 import { sendWorkspaceEvent, type WorkspaceSocketAttachment } from './workspace-events'
+import { workspacePresence } from './workspace-presence'
 
-const IDLE_MS = 5 * 60 * 1000
 const PRESENCE_TICK_MS = 60_000
 
 /** Owns installation-wide ephemeral presence and targeted unread signals. D1 remains source of truth. */
@@ -27,9 +27,9 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
 
   override async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
     if (typeof message !== 'string') return
-    let parsed: { t?: string; token?: string }
+    let parsed: { t?: string; token?: string; visible?: boolean }
     try {
-      parsed = JSON.parse(message) as { t?: string; token?: string }
+      parsed = JSON.parse(message) as { t?: string; token?: string; visible?: boolean }
     }
     catch {
       return
@@ -42,12 +42,16 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
         ws.close(4001, 'unauthorized')
         return
       }
-      await this.attach(ws, user)
+      await this.attach(ws, user, parsed.visible !== false)
       return
     }
     if (!attachment?.userId || parsed.t !== 'activity') return
 
-    ws.serializeAttachment({ userId: attachment.userId, lastActive: Date.now() } satisfies WorkspaceSocketAttachment)
+    ws.serializeAttachment({
+      userId: attachment.userId,
+      lastActive: Date.now(),
+      visible: parsed.visible !== false,
+    } satisfies WorkspaceSocketAttachment)
     this.broadcast()
   }
 
@@ -69,13 +73,21 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
     sendWorkspaceEvent(this.ctx.getWebSockets(), new Set([userId]), event)
   }
 
+  async notifyTasksChanged(event: WorkspaceTasksChangedEvent): Promise<void> {
+    this.broadcastMessage(event)
+  }
+
+  async notifyMembersChanged(event: WorkspaceMembersChangedEvent): Promise<void> {
+    this.broadcastMessage(event)
+  }
+
   override async alarm(): Promise<void> {
     this.broadcast()
     await this.scheduleTick()
   }
 
-  private async attach(ws: WebSocket, user: PublicUser) {
-    ws.serializeAttachment({ userId: user.id, lastActive: Date.now() } satisfies WorkspaceSocketAttachment)
+  private async attach(ws: WebSocket, user: PublicUser, visible: boolean) {
+    ws.serializeAttachment({ userId: user.id, lastActive: Date.now(), visible } satisfies WorkspaceSocketAttachment)
     this.send(ws, { t: 'hello', workspaceId: this.workspaceId() })
     this.broadcast()
     await this.scheduleTick()
@@ -91,17 +103,7 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   private currentPresence(): Array<{ userId: string; status: PresenceStatus }> {
-    const latest = new Map<string, number>()
-    for (const ws of this.ctx.getWebSockets()) {
-      const attachment = ws.deserializeAttachment() as WorkspaceSocketAttachment | null
-      if (!attachment?.userId) continue
-      latest.set(attachment.userId, Math.max(latest.get(attachment.userId) ?? 0, attachment.lastActive))
-    }
-    const now = Date.now()
-    return [...latest.entries()].map(([userId, lastActive]) => ({
-      userId,
-      status: now - lastActive > IDLE_MS ? 'idle' : 'online',
-    }))
+    return workspacePresence(this.ctx.getWebSockets())
   }
 
   private async scheduleTick() {
@@ -118,8 +120,14 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   private broadcast() {
-    const payload = JSON.stringify({ t: 'presence', users: this.currentPresence() })
+    this.broadcastMessage({ t: 'presence', users: this.currentPresence() })
+  }
+
+  private broadcastMessage(message: unknown) {
+    const payload = JSON.stringify(message)
     for (const ws of this.ctx.getWebSockets()) {
+      const attachment = ws.deserializeAttachment() as WorkspaceSocketAttachment | null
+      if (!attachment?.userId) continue
       try { ws.send(payload) }
       catch { /* ignore */ }
     }

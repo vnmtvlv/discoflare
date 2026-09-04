@@ -48,7 +48,11 @@ class FakeWebSocket {
 let useChannelSocket: typeof ChannelSocketFactory
 const queryData = new Map<string, unknown>()
 const queryClient = {
-  setQueryData: vi.fn(),
+  setQueryData: vi.fn((queryKey: string[], updater: unknown) => {
+    const key = queryKey.join(':')
+    const current = queryData.get(key)
+    queryData.set(key, typeof updater === 'function' ? (updater as (old: unknown) => unknown)(current) : updater)
+  }),
   setQueriesData: vi.fn((filters: { queryKey: string[] }, updater: (old: unknown) => unknown) => {
     for (const [key, value] of queryData) {
       if (key.startsWith(`${filters.queryKey[0]}:`) || key === filters.queryKey[0]) {
@@ -73,7 +77,13 @@ beforeAll(async () => {
     return () => {}
   })
   vi.stubGlobal('onUnmounted', () => {})
-  vi.stubGlobal('usePresenceStore', () => ({ markTyping: vi.fn(), apply: vi.fn() }))
+  vi.stubGlobal('onMounted', () => {})
+  vi.stubGlobal('usePresenceStore', () => ({
+    markTyping: vi.fn(),
+    setAgentTurns: vi.fn(),
+    hydrateAgentTurns: vi.fn(),
+    apply: vi.fn(),
+  }))
   vi.stubGlobal('useHuddleStore', () => ({ setState: vi.fn() }))
   vi.stubGlobal('useUiStore', () => ({ dmFrozen: false, huddleSetupOpen: false }))
   vi.stubGlobal('useSessionStore', () => ({ user: null }))
@@ -179,7 +189,7 @@ describe('channel read reconnect delivery', () => {
     channel.disconnect()
   })
 
-  it('updates a direct channel unread badge only after the persisted read acknowledgement', async () => {
+  it('clears a direct channel unread badge immediately and reconciles with the persisted acknowledgement', async () => {
     queryData.set('channels:main', { channels: [{ id: 'channel-1', unread: true }] })
     const channel = useChannelSocket(ref('channel-1'))
     await flush()
@@ -189,7 +199,7 @@ describe('channel read reconnect delivery', () => {
     socket.message({ t: 'hello', channelId: 'channel-1', you: { id: 'user-1', displayName: 'A', avatarR2Key: null } })
     channel.send({ t: 'read', messageId: '01990000-0000-7000-8000-000000000001' })
 
-    expect(queryData.get('channels:main')).toEqual({ channels: [{ id: 'channel-1', unread: true }] })
+    expect(queryData.get('channels:main')).toEqual({ channels: [{ id: 'channel-1', unread: false, unreadCount: 0 }] })
 
     socket.message({
       t: 'read.ack',
@@ -198,7 +208,7 @@ describe('channel read reconnect delivery', () => {
       unread: false,
     })
 
-    expect(queryData.get('channels:main')).toEqual({ channels: [{ id: 'channel-1', unread: false }] })
+    expect(queryData.get('channels:main')).toEqual({ channels: [{ id: 'channel-1', unread: false, unreadCount: 0 }] })
     expect(queryClient.invalidateQueries).not.toHaveBeenCalled()
     channel.disconnect()
   })
@@ -253,6 +263,33 @@ describe('channel read reconnect delivery', () => {
       pageParams: [undefined],
     })
     expect(queryClient.invalidateQueries).toHaveBeenCalledWith({ queryKey: ['pins', 'channel-1'] })
+    channel.disconnect()
+  })
+
+  it('marks an unacknowledged optimistic message failed and retries it', async () => {
+    const clientId = 'client-1'
+    queryData.set('messages:channel-1', {
+      pages: [{
+        messages: [{ id: `tmp:${clientId}`, clientId, deliveryState: 'sending', attachments: [] }],
+        nextCursor: null,
+      }],
+      pageParams: [undefined],
+    })
+    const channel = useChannelSocket(ref('channel-1'))
+    await flush()
+    const socket = FakeWebSocket.instances[0]!
+    socket.open()
+    socket.message({ t: 'hello', channelId: 'channel-1', you: { id: 'user-1', displayName: 'A', avatarR2Key: null } })
+    channel.send({ t: 'message.create', content: 'hello', clientId })
+
+    await vi.advanceTimersByTimeAsync(15_000)
+    const failed = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ deliveryState?: string }> }> }
+    expect(failed.pages[0]!.messages[0]!.deliveryState).toBe('failed')
+
+    channel.retry(clientId)
+    const retried = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ deliveryState?: string }> }> }
+    expect(retried.pages[0]!.messages[0]!.deliveryState).toBe('sending')
+    expect(socket.sent.map(JSON.parse).filter(message => message.t === 'message.create')).toHaveLength(2)
     channel.disconnect()
   })
 })

@@ -75,6 +75,13 @@ const workspaceIconUrl = computed(() => {
 })
 
 const otherWorkspaces = computed(() => (workspacesQ.data.value?.workspaces ?? []).filter((item) => item.id !== props.workspaceId))
+const canOpenWorkspaceSettings = computed(() => [
+  Permission.manageWorkspace,
+  Permission.manageChannels,
+  Permission.manageRoles,
+  Permission.invite,
+  Permission.kick,
+].some(flag => can(flag)))
 
 const serverItems = computed<DropdownMenuItem[][]>(() => {
   const invite: DropdownMenuItem[] = can(Permission.invite)
@@ -87,7 +94,9 @@ const serverItems = computed<DropdownMenuItem[][]>(() => {
       { label: 'Create Category', icon: 'i-ph-folder-plus', onSelect: () => { showCreateCategory.value = true } },
     )
   }
-  manage.push({ label: 'Workspace Settings', icon: 'i-ph-gear', onSelect: () => { nextTick(() => { showWorkspaceSettings.value = true }) } })
+  if (canOpenWorkspaceSettings.value) {
+    manage.push({ label: 'Workspace Settings', icon: 'i-ph-gear', onSelect: () => { nextTick(() => { showWorkspaceSettings.value = true }) } })
+  }
   const switcher: DropdownMenuItem[] = otherWorkspaces.value.map((item) => ({
     label: item.name,
     icon: 'i-ph-hard-drives',
@@ -216,7 +225,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
     </UDropdownMenu>
 
     <div class="flex-1 overflow-y-auto pt-3 pb-2">
-      <div class="px-2 pb-3">
+      <div v-if="can(Permission.manageTasks)" class="px-2 pb-3">
         <NuxtLink
           to="/tasks"
           class="flex h-11 items-center gap-2 rounded-md px-2 text-[15px] md:h-9"
@@ -261,7 +270,14 @@ watch(() => channelsQ.data.value?.channels, (list) => {
                 <UIcon :name="isVoiceType(ch.type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-[18px] text-dimmed shrink-0" />
                 <span class="truncate flex-1">{{ ch.name }}</span>
                 <UIcon v-if="ch.visibility === 'private'" name="i-ph-lock" class="size-3.5 text-dimmed shrink-0" />
-                <UChip v-if="ch.unread && selected !== ch.id" size="sm" color="primary" standalone />
+                <UBadge
+                  v-if="ch.unread && selected !== ch.id"
+                  color="primary"
+                  variant="solid"
+                  size="sm"
+                  :label="ch.unreadCount && ch.unreadCount > 99 ? '99+' : String(ch.unreadCount || '')"
+                  :class="ch.unreadCount ? 'min-w-5 justify-center' : 'size-2 rounded-full p-0'"
+                />
               </NuxtLink>
               <ul
                 v-if="isVoiceType(ch.type) && huddle.state?.active && selected === ch.id"
@@ -289,7 +305,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
       <p class="text-[11px] text-muted truncate">{{ channels.find((c) => c.id === selected)?.name || 'Huddle' }}</p>
     </div>
     <LayoutUserPanel />
-    <SettingsWorkspaceSettings v-model:open="showWorkspaceSettings" :workspace-id="workspaceId" />
+    <SettingsWorkspaceSettings v-if="canOpenWorkspaceSettings" v-model:open="showWorkspaceSettings" :workspace-id="workspaceId" />
 
     <UModal v-model:open="showCreate" title="Create Channel">
       <template #body>

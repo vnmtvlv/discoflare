@@ -3,12 +3,11 @@ import { ChannelDurableObject } from './channel-do'
 import { WorkspaceDurableObject } from './workspace-do'
 import { RateLimitDurableObject } from './rate-limit-do'
 import { NotificationDurableObject } from './notification-do'
-import { DiscoflareAgent } from './discoflare-agent'
+import { DiscoflareAgent, DiscoflareThink } from './discoflare-agent'
 import { AgentTaskWorkflow } from './agent-task-workflow'
-import { AgentMessageWorkflow } from './agent-message-workflow'
 import { Sandbox } from '@cloudflare/sandbox'
 
-export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, AgentTaskWorkflow, AgentMessageWorkflow, Sandbox }
+export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, DiscoflareThink, AgentTaskWorkflow, Sandbox }
 
 export default {
   async fetch(request: Request, env: DiscoflareEnv): Promise<Response> {

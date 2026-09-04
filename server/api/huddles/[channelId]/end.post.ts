@@ -4,7 +4,7 @@ import { Permission } from '../../../../shared/permissions'
 import { requireChannelMember } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
-import { endMeeting } from '../../../../workers/realtimekit'
+import { endMeeting, loadRealtimeKitConfig } from '../../../../workers/realtimekit'
 import { writeAudit } from '../../../utils/messages'
 
 export default defineEventHandler(async (event) => {
@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const ch = member.channel
   if (!ch.huddleMeetingId) fail(404, 'not_found', 'No huddle to end')
-  await endMeeting(env, ch.huddleMeetingId)
+  await endMeeting(await loadRealtimeKitConfig(env), ch.huddleMeetingId)
   await db.update(channels).set({ huddleMeetingId: null }).where(eq(channels.id, channelId))
   try {
     const stub = asRpc<{ fanout: (msg: unknown) => Promise<void> }>(env.CHANNEL_DO.getByName(`channel:${channelId}`))

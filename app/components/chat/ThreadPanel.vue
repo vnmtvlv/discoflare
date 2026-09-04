@@ -11,7 +11,7 @@ const props = defineProps<{
 const ui = useUiStore()
 const threadId = computed(() => ui.threadId)
 const { api } = useApi()
-const { send } = useChannelSocket(computed(() => threadId.value || ''))
+const { send, retry } = useChannelSocket(computed(() => threadId.value || ''))
 const threadQ = useQuery({
   queryKey: computed(() => ['channel', threadId.value]),
   queryFn: () => api<{ channel: ChannelDTO }>(`/api/channels/${threadId.value}`),
@@ -23,6 +23,9 @@ const { mine } = usePermissions(computed(() => props.members))
 const effectivePermissions = computed(() => threadQ.data.value?.channel.permissions ?? mine.value?.role.permissions ?? 0)
 const canSendMessages = computed(() => hasPermission(effectivePermissions.value, Permission.sendMessages))
 const canAttachFiles = computed(() => hasPermission(effectivePermissions.value, Permission.attachFiles))
+const presence = usePresenceStore()
+const agentBusy = computed(() => Boolean(threadId.value && presence.agentTurnsIn(threadId.value).length))
+const canApproveAgent = computed(() => hasPermission(effectivePermissions.value, Permission.manageWorkspace))
 
 function close() {
   ui.threadId = null
@@ -75,6 +78,13 @@ defineShortcuts({
       @reply="onReply"
       @edit="onEdit"
       @read="(messageId) => send({ t: 'read', messageId })"
+      @retry="retry"
+    />
+    <ChatAgentActivity
+      :channel-id="threadId"
+      :members="members"
+      :send="send as (msg: ClientMsg) => void"
+      :can-approve="canApproveAgent"
     />
     <ChatComposer
       :channel-id="threadId"
@@ -83,6 +93,7 @@ defineShortcuts({
       :send="send as (msg: ClientMsg) => void"
       :disabled="!canSendMessages"
       :can-attach="canAttachFiles"
+      :agent-busy="agentBusy"
       placeholder="Reply in thread"
     />
   </aside>

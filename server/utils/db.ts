@@ -8,6 +8,11 @@ import pushNotificationsSql from '../../drizzle/migrations/0004_push_notificatio
 import messagePinsSql from '../../drizzle/migrations/0005_message_pins.sql?raw'
 import channelRoleOverridesSql from '../../drizzle/migrations/0006_channel_role_overrides.sql?raw'
 import agentsAndTasksSql from '../../drizzle/migrations/0007_agents_and_tasks.sql?raw'
+import agentTurnsSql from '../../drizzle/migrations/0008_agent_turns.sql?raw'
+import taskManagementSql from '../../drizzle/migrations/0009_task_management.sql?raw'
+import realtimekitSettingsSql from '../../drizzle/migrations/0010_realtimekit_settings.sql?raw'
+import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_boundary.sql?raw'
+import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -38,6 +43,11 @@ export const INIT_SQL = d1ExecSql([
   messagePinsSql,
   channelRoleOverridesSql,
   agentsAndTasksSql,
+  agentTurnsSql,
+  taskManagementSql,
+  realtimekitSettingsSql,
+  adminTaskBoundarySql,
+  agentIdentityBoundarySql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */
@@ -48,6 +58,8 @@ export async function ensureMigrated(db: D1Database): Promise<boolean> {
   catch {
     await db.exec(INIT_SQL)
   }
+  await db.prepare('SELECT kind FROM users LIMIT 1').first()
+  await db.prepare('SELECT user_id FROM agents LIMIT 1').first()
   return true
 }
 

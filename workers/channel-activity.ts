@@ -1,10 +1,14 @@
 import { WORKSPACE_ID } from '../shared/ids'
+import { notificationPreview } from '../shared/notifications'
+import { channelPath } from '../shared/paths'
+import type { PublicUser } from '../shared/types'
 import type { WorkspaceChannelActivityEvent, WorkspaceChannelReadEvent } from '../shared/workspace-realtime'
 import { asRpc, type DiscoflareEnv } from './env'
 import { channelHasUnread } from './unread'
 
 type ChannelRoot = {
   id: string
+  name: string
   type: string
   visibility: string
 }
@@ -12,19 +16,20 @@ type ChannelRoot = {
 export type ChannelActivityAudience = {
   sourceChannelId: string
   rootChannelId: string
+  rootName: string
   rootType: string
   recipientIds: string[]
 }
 
 export async function resolveChannelRoot(db: D1Database, channelId: string): Promise<ChannelRoot | null> {
   const source = await db.prepare(
-    'SELECT id, type, visibility, parent_id FROM channels WHERE id = ?',
+    'SELECT id, name, type, visibility, parent_id FROM channels WHERE id = ?',
   ).bind(channelId).first<ChannelRoot & { parent_id: string | null }>()
   if (!source) return null
   if (source.type !== 'thread') return source
   if (!source.parent_id) return null
   return db.prepare(
-    'SELECT id, type, visibility FROM channels WHERE id = ?',
+    'SELECT id, name, type, visibility FROM channels WHERE id = ?',
   ).bind(source.parent_id).first<ChannelRoot>()
 }
 
@@ -53,6 +58,7 @@ export async function channelActivityAudience(
   return {
     sourceChannelId: channelId,
     rootChannelId: root.id,
+    rootName: root.name,
     rootType: root.type,
     recipientIds: (rows.results ?? []).map(row => row.id),
   }
@@ -60,11 +66,15 @@ export async function channelActivityAudience(
 
 export async function signalChannelActivity(
   env: DiscoflareEnv,
-  channelId: string,
-  authorId: string,
-  messageId: string,
+  message: {
+    id: string
+    channelId: string
+    author: PublicUser
+    content: string
+    attachmentCount: number
+  },
 ): Promise<void> {
-  const audience = await channelActivityAudience(env.DB, channelId, authorId)
+  const audience = await channelActivityAudience(env.DB, message.channelId, message.author.id)
   if (!audience) return
   if (audience.rootType === 'dm') {
     await env.DB.prepare('UPDATE channel_members SET hidden_at = NULL WHERE channel_id = ?').bind(audience.rootChannelId).run()
@@ -74,7 +84,16 @@ export async function signalChannelActivity(
     t: 'channel.activity',
     sourceChannelId: audience.sourceChannelId,
     rootChannelId: audience.rootChannelId,
-    messageId,
+    messageId: message.id,
+    notification: {
+      title: audience.rootType === 'dm'
+        ? message.author.displayName
+        : `${message.author.displayName} in #${audience.rootName}`,
+      body: notificationPreview(message.content, message.attachmentCount),
+      url: audience.sourceChannelId === audience.rootChannelId
+        ? channelPath(audience.rootChannelId)
+        : channelPath(audience.rootChannelId, audience.sourceChannelId),
+    },
   }
   const stub = asRpc<{
     notifyChannelActivity: (event: WorkspaceChannelActivityEvent, recipientIds: string[]) => Promise<void>

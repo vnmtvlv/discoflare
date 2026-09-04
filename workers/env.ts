@@ -6,13 +6,6 @@ export type AgentTaskWorkflowParams = {
   runId: string
 }
 
-export type AgentMessageWorkflowParams = {
-  messageId: string
-  channelId: string
-  authorName: string
-  content: string
-}
-
 export type Rpc<T> = { fetch: (request: Request) => Promise<Response> } & T
 
 export function asRpc<T>(stub: unknown): Rpc<T> {
@@ -28,9 +21,9 @@ export type DiscoflareEnv = {
   RATE_LIMIT_DO: DurableObjectNamespace
   NOTIFICATION_DO: DurableObjectNamespace
   AGENT_DO: DurableObjectNamespace
+  AGENT_THINK: DurableObjectNamespace
   AGENT_SANDBOX: DurableObjectNamespace<Sandbox>
   AGENT_TASK_WORKFLOW: Workflow<AgentTaskWorkflowParams>
-  AGENT_MESSAGE_WORKFLOW: Workflow<AgentMessageWorkflowParams>
   AI: Ai
   EMAIL?: SendEmail
   ASSETS?: { fetch: (request: Request) => Promise<Response> }

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { agents, roles, users } from '../../../../drizzle/schema'
+import { agents, identityKeys, roles, users } from '../../../../drizzle/schema'
 import { newId, nowIso } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
 import type { AgentDTO } from '../../../../shared/types'
@@ -9,6 +9,7 @@ import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
 import { parseBody } from '../../../utils/validate'
+import { signalMembersChanged } from '../../../../workers/member-events'
 
 const bodySchema = z.object({
   displayName: z.string().trim().min(1).max(80),
@@ -20,15 +21,25 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
   const workspaceId = getRouterParam(event, 'id')!
   const actor = await requireMember(event, workspaceId, Permission.manageWorkspace)
   const body = parseBody(bodySchema, await readBody(event))
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
   if (!memberRole) fail(409, 'workspace_incomplete', 'Member role not found')
 
   const id = newId()
   const now = nowIso()
+  const identityNow = new Date()
   const sandboxId = `agent-${id}`.toLowerCase()
   await db.batch([
+    db.insert(identityKeys).values({
+      id,
+      name: body.displayName,
+      email: `agent+${id}@discoflare.invalid`,
+      emailVerified: false,
+      image: null,
+      createdAt: identityNow,
+      updatedAt: identityNow,
+    }),
     db.insert(users).values({
       id,
       kind: 'agent',
@@ -62,6 +73,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
     targetId: id,
     meta: { displayName: body.displayName, model: body.model },
   })
+  waitUntil(signalMembersChanged(env, workspaceId))
   return {
     agent: {
       id,

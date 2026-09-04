@@ -61,4 +61,10 @@ describe('DM member search', () => {
 
     expect(members).toMatchObject([{ id: 'agent', kind: 'agent', displayName: 'Mike' }])
   })
+
+  it('can hide agents from chat-only members', async () => {
+    const members = await searchDmMembers(db, 'viewer', '', false)
+
+    expect(members.map(member => member.displayName)).toEqual(['Ada'])
+  })
 })

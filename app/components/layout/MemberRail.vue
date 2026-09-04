@@ -176,7 +176,7 @@ function roleLabel(name: string) {
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
                 <button type="button" class="flex h-11 w-full items-center gap-2 rounded-md px-2 text-start hover:bg-elevated md:h-9">
                   <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
-                    <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
+                    <UserAvatar :user="m.user" size="xs" />
                   </UChip>
                   <span
                     class="truncate text-sm flex items-center gap-1"
@@ -186,7 +186,7 @@ function roleLabel(name: string) {
               </UDropdownMenu>
               <div v-else class="flex h-11 w-full items-center gap-2 rounded-md px-2 md:h-9">
                 <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
-                  <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
+                  <UserAvatar :user="m.user" size="xs" />
                 </UChip>
                 <span
                   class="truncate text-sm flex items-center gap-1"
@@ -203,14 +203,14 @@ function roleLabel(name: string) {
               <UDropdownMenu v-if="itemsFor(m).length" :items="itemsFor(m)">
                 <button type="button" class="flex h-11 w-full items-center gap-2 rounded-md px-2 text-start opacity-70 hover:bg-elevated md:h-9">
                   <UChip inset color="neutral" position="bottom-right" size="xs">
-                    <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
+                    <UserAvatar :user="m.user" size="xs" />
                   </UChip>
                   <span class="truncate text-sm text-muted flex items-center gap-1"><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
                 </button>
               </UDropdownMenu>
               <div v-else class="flex h-11 w-full items-center gap-2 rounded-md px-2 opacity-70 md:h-9">
                 <UChip inset color="neutral" position="bottom-right" size="xs">
-                  <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
+                  <UserAvatar :user="m.user" size="xs" />
                 </UChip>
                 <span class="truncate text-sm text-muted flex items-center gap-1"><UIcon v-if="m.user.kind === 'agent'" name="i-ph-robot" class="size-3.5 shrink-0" />{{ m.nickname || m.user.displayName }}</span>
               </div>
@@ -221,7 +221,7 @@ function roleLabel(name: string) {
       <ul v-else>
         <li v-for="m in list" :key="m.user.id" class="flex h-11 items-center gap-2 px-2 md:h-9">
           <UChip inset :color="chipColor(presence.statusOf(m.user.id))" position="bottom-right" size="xs">
-            <UAvatar size="xs" :text="m.user.displayName.slice(0, 1).toUpperCase()" :alt="m.user.displayName" />
+            <UserAvatar :user="m.user" size="xs" />
           </UChip>
           <span class="truncate text-sm">{{ m.nickname || m.user.displayName }}</span>
         </li>

@@ -31,6 +31,10 @@ export function usePushNotifications() {
   const error = ref<string | null>(null)
   let config: PushConfig | null = null
 
+  function nativeNotifications() {
+    return native ? window.__DISCOFLARE_NATIVE_NOTIFICATIONS__ : undefined
+  }
+
   function supported() {
     return !native && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window
   }
@@ -47,6 +51,15 @@ export function usePushNotifications() {
 
   async function refresh() {
     error.value = null
+    const bridge = nativeNotifications()
+    if (bridge) {
+      try { status.value = await bridge.status() }
+      catch (cause) {
+        error.value = errorMessage(cause)
+        status.value = 'error'
+      }
+      return
+    }
     if (!supported()) {
       status.value = 'unsupported'
       return
@@ -75,6 +88,11 @@ export function usePushNotifications() {
     error.value = null
     let created: PushSubscription | null = null
     try {
+      const bridge = nativeNotifications()
+      if (bridge) {
+        status.value = await bridge.enable()
+        return
+      }
       if (!supported()) throw new Error('Notifications are not available in this browser')
       const currentConfig = config ?? await loadConfig()
       if (!currentConfig.configured || !currentConfig.publicKey) throw new Error('Web Push is not configured')
@@ -111,6 +129,18 @@ export function usePushNotifications() {
   }
 
   async function disable() {
+    const bridge = nativeNotifications()
+    if (bridge) {
+      busy.value = true
+      try {
+        await bridge.disable()
+        status.value = 'prompt'
+      }
+      finally {
+        busy.value = false
+      }
+      return
+    }
     if (!supported()) return
     busy.value = true
     error.value = null

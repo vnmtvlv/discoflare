@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { channelCategories, channelMembers, channels } from '../../../../drizzle/schema'
-import { channelHasUnread } from '../../../../workers/unread'
+import { channelUnreadCounts } from '../../../../workers/unread'
 import { requireMember } from '../../../utils/guards'
 import { cf } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -14,10 +14,7 @@ export default defineEventHandler(async (event) => {
   const privateIds = new Set(privateAccess.map(row => row.channelId))
   const list = (await db.select().from(channels).orderBy(channels.position))
     .filter((ch) => ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
-  const unread = new Set<string>()
-  for (const ch of list) {
-    if (await channelHasUnread(env.DB, member.user.id, ch.id)) unread.add(ch.id)
-  }
+  const unread = await channelUnreadCounts(env.DB, member.user.id, list.map(channel => channel.id))
 
   return {
     categories: await db.select({
@@ -39,7 +36,8 @@ export default defineEventHandler(async (event) => {
         huddleMeetingId: ch.huddleMeetingId,
         parentId: ch.parentId,
         parentMessageId: ch.parentMessageId,
-        unread: unread.has(ch.id),
+        unread: (unread.get(ch.id) ?? 0) > 0,
+        unreadCount: unread.get(ch.id) ?? 0,
         huddle: null,
         createdAt: ch.createdAt,
       }

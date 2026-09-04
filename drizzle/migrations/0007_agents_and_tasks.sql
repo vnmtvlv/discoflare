@@ -1,37 +1,7 @@
-PRAGMA defer_foreign_keys = ON;
---> statement-breakpoint
-CREATE TABLE `users_new` (
-  `id` text PRIMARY KEY NOT NULL,
-  `kind` text DEFAULT 'human' NOT NULL,
-  `handle` text,
-  `display_name` text NOT NULL,
-  `avatar_r2_key` text,
-  `status` text DEFAULT 'pending' NOT NULL,
-  `role_id` text,
-  `nickname` text,
-  `joined_at` text,
-  `created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-  `updated_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
-  FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`),
-  CONSTRAINT `users_kind_check` CHECK (`kind` in ('human', 'agent')),
-  CONSTRAINT `users_status_check` CHECK (`status` in ('pending', 'active', 'removed')),
-  CONSTRAINT `users_active_role_check` CHECK (`status` <> 'active' or (`role_id` is not null and `joined_at` is not null))
-);
---> statement-breakpoint
-INSERT INTO `users_new` (`id`, `kind`, `handle`, `display_name`, `avatar_r2_key`, `status`, `role_id`, `nickname`, `joined_at`, `created_at`, `updated_at`)
-SELECT `id`, 'human', `handle`, `display_name`, `avatar_r2_key`, `status`, `role_id`, `nickname`, `joined_at`, `created_at`, `updated_at` FROM `users`;
---> statement-breakpoint
-DROP TABLE `users`;
---> statement-breakpoint
-ALTER TABLE `users_new` RENAME TO `users`;
---> statement-breakpoint
-CREATE UNIQUE INDEX `users_handle_unique` ON `users` (`handle`);
---> statement-breakpoint
-CREATE INDEX `users_status_idx` ON `users` (`status`);
+ALTER TABLE `users` ADD COLUMN `kind` text DEFAULT 'human' NOT NULL
+  CONSTRAINT `users_kind_check` CHECK (`kind` in ('human', 'agent'));
 --> statement-breakpoint
 CREATE INDEX `users_kind_idx` ON `users` (`kind`);
---> statement-breakpoint
-CREATE INDEX `users_role_id_idx` ON `users` (`role_id`);
 --> statement-breakpoint
 CREATE TABLE `agents` (
   `user_id` text PRIMARY KEY NOT NULL,

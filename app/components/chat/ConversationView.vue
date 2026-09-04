@@ -46,6 +46,8 @@ const dmsQ = useQuery({
   queryKey: ['dms'],
   queryFn: () => api<{ channels: ChannelDTO[] }>('/api/dms'),
 })
+const attention = useAttention()
+watch([() => channelsQ.data.value, () => dmsQ.data.value], () => attention.sync(), { deep: true })
 const oneQ = useQuery({
   queryKey: computed(() => ['channel', channelId.value]),
   queryFn: () => api<{ channel: ChannelDTO; frozen?: boolean }>(`/api/channels/${channelId.value}`),
@@ -83,8 +85,14 @@ const composerPlaceholder = computed(() => {
   return `Message #${headerName.value}`
 })
 
-const { send } = useChannelSocket(channelId)
-useWorkspaceSocket(workspaceId)
+const { send, retry, connection: channelConnection } = useChannelSocket(channelId)
+const { connection: workspaceConnection } = useWorkspaceSocket(workspaceId)
+const connection = computed(() => {
+  if (channelConnection.value === 'offline' || workspaceConnection.value === 'offline') return 'offline'
+  if (channelConnection.value === 'connected' && workspaceConnection.value === 'connected') return 'connected'
+  if (channelConnection.value === 'reconnecting' || workspaceConnection.value === 'reconnecting') return 'reconnecting'
+  return 'connecting'
+})
 const { start, join } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
 
 watch([workspaceId, channelId], () => {
@@ -107,6 +115,8 @@ const typingLine = computed(() => {
   if (names.length === 1) return `${names[0]} is typing…`
   return `${names.join(', ')} are typing…`
 })
+const agentBusy = computed(() => presence.agentTurnsIn(channelId.value).length > 0)
+const canApproveAgent = computed(() => can(Permission.manageWorkspace))
 
 function onReply(id: string) {
   ui.startReply(channelId.value, id)
@@ -225,6 +235,7 @@ defineShortcuts({
           @click="ui.mobilePane = 'channels'"
         />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
+        <UserAvatar v-else-if="!isGroup && others[0]" :user="others[0]" size="2xs" />
         <UAvatar v-else size="2xs" :text="(others[0]?.displayName || headerName).slice(0, 1).toUpperCase()" />
         <UInput
           v-if="isGroup && renaming"
@@ -245,6 +256,15 @@ defineShortcuts({
         <USeparator v-if="!isDm && channel?.topic" orientation="vertical" class="h-4" />
         <p v-if="!isDm" class="text-sm text-muted truncate hidden lg:block min-w-0 flex-1">{{ channel?.topic }}</p>
         <div class="ml-auto flex items-center gap-2">
+          <UBadge
+            v-if="connection !== 'connected'"
+            :color="connection === 'offline' ? 'error' : 'neutral'"
+            variant="subtle"
+            size="sm"
+            :icon="connection === 'offline' ? 'i-ph-wifi-slash' : 'i-ph-circle-notch'"
+            :class="connection === 'offline' ? '' : '[&_svg]:animate-spin'"
+            :label="connection === 'offline' ? 'Offline' : connection === 'reconnecting' ? 'Reconnecting' : 'Connecting'"
+          />
           <button
             type="button"
             class="hidden sm:flex w-40 h-8 items-center gap-2 rounded-md bg-muted px-2 text-xs text-muted hover:text-default"
@@ -331,9 +351,16 @@ defineShortcuts({
         @edit="onEdit"
         @thread="onThread"
         @read="(messageId) => send({ t: 'read', messageId })"
+        @retry="retry"
       />
       <UAlert v-if="frozen" color="neutral" variant="subtle" title="You can no longer send messages to this user." class="rounded-none shrink-0" />
-      <p v-if="typingLine" class="px-4 text-xs text-muted h-5 shrink-0">{{ typingLine }}</p>
+      <ChatAgentActivity
+        :channel-id="channelId"
+        :members="members"
+        :send="send"
+        :can-approve="canApproveAgent"
+      />
+      <p v-if="typingLine && !agentBusy" class="h-5 shrink-0 px-4 text-xs text-muted">{{ typingLine }}</p>
       <HuddleBar
         v-if="isVoiceType(type) || isDm || huddle.state?.active"
         :channel-id="channelId"
@@ -348,6 +375,7 @@ defineShortcuts({
         :disabled="!canSendMessages"
         :disabled-placeholder="composerDisabledPlaceholder"
         :can-attach="canAttachFiles"
+        :agent-busy="agentBusy"
         :placeholder="composerPlaceholder"
         @last="onLast"
       />

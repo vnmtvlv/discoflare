@@ -1,28 +1,34 @@
 import type { QueryClient } from '@tanstack/vue-query'
-import type { WorkspaceServerMsg } from '~~/shared/types'
+import { ref } from 'vue'
+import type { WorkspaceClientMsg, WorkspaceServerMsg } from '~~/shared/types'
 import type { WorkspaceRealtimeEvent } from '~~/shared/workspace-realtime'
 import { applyWorkspaceRealtimeEvent } from '../utils/workspace-realtime'
+import type { RealtimeConnection } from './useChannelSocket'
 
 export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
+  const prefs = usePrefsStore()
   const nuxt = useNuxtApp()
+  const attention = useAttention()
+  const connection = ref<RealtimeConnection>('connecting')
   let ws: WebSocket | null = null
   let closed = false
   let connecting = false
   let attempt = 0
   let generation = 0
-  let heartbeat: ReturnType<typeof setInterval> | null = null
   let lastActivity = 0
+  let authenticated = false
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
   function queryClient(): QueryClient | undefined {
     return nuxt.$queryClient as QueryClient | undefined
   }
 
-  function sendActivity() {
-    if (!import.meta.client || document.hidden || Date.now() - lastActivity < 10_000) return
-    if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ t: 'activity' }))
+  function sendActivity(force = false) {
+    if (!import.meta.client || (!force && document.hidden) || (!force && Date.now() - lastActivity < 10_000)) return
+    if (authenticated && ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ t: 'activity', visible: prefs.showOnline } satisfies WorkspaceClientMsg))
       lastActivity = Date.now()
     }
   }
@@ -31,6 +37,7 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
     const id = toValue(workspaceId)
     if (!id || !import.meta.client || connecting || closed) return
     connecting = true
+    connection.value = attempt ? 'reconnecting' : 'connecting'
     try {
       const { token } = await api<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
@@ -39,30 +46,43 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
       socket.addEventListener('open', () => {
         if (gen !== generation) return socket.close()
         attempt = 0
-        socket.send(JSON.stringify({ t: 'auth', token }))
+        socket.send(JSON.stringify({ t: 'auth', token, visible: prefs.showOnline } satisfies WorkspaceClientMsg))
       })
       socket.addEventListener('message', (ev) => {
         if (typeof ev.data !== 'string' || ev.data === 'pong') return
         let parsed: WorkspaceServerMsg | WorkspaceRealtimeEvent
         try { parsed = JSON.parse(ev.data) as WorkspaceServerMsg | WorkspaceRealtimeEvent }
         catch { return }
-        if (parsed.t === 'presence') presence.apply(parsed.users)
-        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read') {
+        if (parsed.t === 'hello') {
+          authenticated = true
+          connection.value = 'connected'
+        }
+        else if (parsed.t === 'presence') presence.apply(parsed.users)
+        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'members.changed') {
           const qc = queryClient()
           if (qc) applyWorkspaceRealtimeEvent(qc, parsed)
+          if (parsed.t === 'channel.activity') {
+            attention.notifyActivity(parsed)
+          }
+          else if (parsed.t === 'channel.read') attention.sync()
         }
       })
       socket.addEventListener('close', () => {
+        authenticated = false
         if (ws === socket) ws = null
         if (!closed && gen === generation) {
+          connection.value = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting'
           const delay = Math.min(12_000, 2000 * 2 ** attempt)
           attempt += 1
-          setTimeout(() => { void connect(gen) }, delay)
+          reconnectTimer = setTimeout(() => { void connect(gen) }, delay)
         }
       })
     }
     catch {
-      if (!closed && gen === generation) setTimeout(() => { void connect(gen) }, 4000)
+      if (!closed && gen === generation) {
+        connection.value = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting'
+        reconnectTimer = setTimeout(() => { void connect(gen) }, 4000)
+      }
     }
     finally {
       connecting = false
@@ -73,33 +93,58 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
   function disconnect() {
     generation += 1
     closed = true
+    authenticated = false
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
     ws?.close()
     ws = null
+    connection.value = 'offline'
+  }
+
+  function reconnectNow() {
+    if (closed || authenticated || connecting || ws?.readyState === WebSocket.CONNECTING || ws?.readyState === WebSocket.OPEN) return
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    attempt = 0
+    void connect(generation)
   }
 
   watch(() => toValue(workspaceId), () => {
     generation += 1
     closed = false
+    authenticated = false
+    attempt = 0
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    connection.value = 'connecting'
     ws?.close()
     ws = null
     void connect(generation)
   }, { immediate: true })
 
   const activity = () => sendActivity()
+  const resume = () => {
+    reconnectNow()
+    sendActivity(true)
+  }
   onMounted(() => {
     window.addEventListener('pointerdown', activity, { passive: true })
     window.addEventListener('keydown', activity)
-    window.addEventListener('focus', activity)
-    document.addEventListener('visibilitychange', activity)
-    heartbeat = setInterval(sendActivity, 60_000)
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
   })
 
   onUnmounted(() => {
     window.removeEventListener('pointerdown', activity)
     window.removeEventListener('keydown', activity)
-    window.removeEventListener('focus', activity)
-    document.removeEventListener('visibilitychange', activity)
-    if (heartbeat) clearInterval(heartbeat)
+    window.removeEventListener('focus', resume)
+    window.removeEventListener('online', resume)
+    document.removeEventListener('visibilitychange', resume)
     disconnect()
   })
+
+  watch(() => prefs.showOnline, () => sendActivity(true))
+
+  return { connection, connect, disconnect }
 }

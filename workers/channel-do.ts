@@ -7,15 +7,17 @@ import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '.
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
 import { asRpc, type DiscoflareEnv } from './env'
-import { createMeeting, endMeeting, realtimekitConfigured } from './realtimekit'
+import { createMeeting, endMeeting, loadRealtimeKitConfig, realtimekitConfigured } from './realtimekit'
 import { userFromTicket } from './ticket'
 import { channelHasUnread } from './unread'
 import { huddleNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
 import { signalChannelActivity, signalChannelRead } from './channel-activity'
 import { signalAgentsForMessage } from './agent-ingress'
+import { listAgentTurns } from './agent-turns'
+import { AGENT_REACTION_EMOJIS, replaceAgentReaction } from './agent-reactions'
 
 type Sock = { userId: string; user: PublicUser }
-type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean }
+type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean; canManageAgents: boolean }
 
 const createSchema = z.object({
   t: z.literal('message.create'),
@@ -23,12 +25,35 @@ const createSchema = z.object({
   replyToId: z.string().min(8).optional(),
   clientId: z.string().min(1).max(80),
   attachmentIds: z.array(z.string().min(8)).max(8).optional(),
+  agentMode: z.enum(['queue', 'steer']).optional(),
+})
+
+const agentControlSchema = z.object({
+  t: z.literal('agent.control'),
+  agentId: z.string().min(8),
+  action: z.enum(['stop', 'approve', 'reject']),
+  executionId: z.string().min(1).optional(),
 })
 
 const updateSchema = z.object({
   t: z.literal('message.update'),
   id: z.string().min(8),
   content: z.string().min(1).max(2000),
+})
+
+const agentPostSchema = z.object({
+  agentId: z.string().min(8),
+  content: z.string().trim().min(1).max(2000),
+})
+
+const agentUpdateSchema = agentPostSchema.extend({
+  messageId: z.string().min(8),
+})
+
+const agentReactionSchema = z.object({
+  agentId: z.string().min(8),
+  messageId: z.string().min(8),
+  emoji: z.enum(AGENT_REACTION_EMOJIS),
 })
 
 const emptyHuddle = (): HuddleState => ({
@@ -63,9 +88,9 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   override async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
     if (typeof raw !== 'string') return
-    let msg: { t?: string; token?: string }
+    let msg: { t?: string; token?: string; clientId?: string }
     try {
-      msg = JSON.parse(raw) as { t?: string; token?: string }
+      msg = JSON.parse(raw) as { t?: string; token?: string; clientId?: string }
     }
     catch {
       this.send(ws, { t: 'error', code: 'bad_json', message: 'Invalid JSON' })
@@ -93,7 +118,12 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
     catch (err) {
       const message = err instanceof Error ? err.message : 'error'
-      this.send(ws, { t: 'error', code: 'internal', message })
+      this.send(ws, {
+        t: 'error',
+        code: 'internal',
+        message,
+        ...(msg.t === 'message.create' && msg.clientId ? { clientId: msg.clientId } : {}),
+      })
     }
   }
 
@@ -115,7 +145,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
   override async alarm(): Promise<void> {
     const huddle = await this.getHuddle()
     if (huddle.active && huddle.participantIds.length === 0) {
-      if (huddle.meetingId) await endMeeting(this.env, huddle.meetingId)
+      if (huddle.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
       await this.setHuddle(emptyHuddle())
       await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
       this.broadcast({ t: 'huddle', huddle: emptyHuddle() })
@@ -123,7 +153,110 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   async fanout(msg: ServerMsg): Promise<void> {
+    if (msg.t === 'agent.state') {
+      for (const ws of this.ctx.getWebSockets()) {
+        const sock = ws.deserializeAttachment() as Sock | null
+        if (!sock?.userId) continue
+        const authz = await this.loadAuthz(sock.userId)
+        if (authz?.canManageAgents) this.send(ws, msg)
+      }
+      return
+    }
     this.broadcast(msg)
+  }
+
+  async postAgentMessage(input: z.infer<typeof agentPostSchema>): Promise<{ id: string, channelId: string }> {
+    const body = agentPostSchema.parse(input)
+    const agent = await this.env.DB.prepare(
+      `SELECT u.id, u.kind, u.display_name as displayName, u.avatar_r2_key as avatarR2Key
+       FROM users u JOIN agents a ON a.user_id = u.id
+       WHERE u.id = ? AND u.kind = 'agent' AND u.status = 'active' AND a.status = 'active'`,
+    ).bind(body.agentId).first<{
+      id: string
+      kind: 'agent'
+      displayName: string
+      avatarR2Key: string | null
+    }>()
+    if (!agent) throw new Error('Agent is unavailable')
+
+    const channel = await this.env.DB.prepare(
+      'SELECT id, type, visibility, parent_id as parentId FROM channels WHERE id = ?',
+    ).bind(this.channelId()).first<{ id: string; type: string; visibility: string; parentId: string | null }>()
+    if (!channel) throw new Error('Channel not found')
+    if (channel.visibility === 'private') {
+      const accessChannelId = channel.type === 'thread' && channel.parentId ? channel.parentId : channel.id
+      const access = await this.env.DB.prepare(
+        'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?',
+      ).bind(accessChannelId, agent.id).first()
+      if (!access) throw new Error('Agent cannot access this private channel')
+    }
+
+    const id = newId()
+    const createdAt = nowIso()
+    const message: MessageDTO = {
+      id,
+      channelId: channel.id,
+      workspaceId: WORKSPACE_ID,
+      author: agent,
+      content: body.content,
+      replyTo: null,
+      mentions: [],
+      attachments: [],
+      reactions: [],
+      pin: null,
+      threadId: null,
+      editedAt: null,
+      deletedAt: null,
+      createdAt,
+    }
+    await this.persistMessage(message, null)
+    this.ctx.waitUntil(signalNotificationOutbox(this.env))
+    this.ctx.waitUntil(signalChannelActivity(this.env, {
+      id,
+      channelId: channel.id,
+      author: agent,
+      content: body.content,
+      attachmentCount: 0,
+    }))
+    this.broadcast({ t: 'message', message })
+    return { id, channelId: channel.id }
+  }
+
+  async updateAgentMessage(input: z.infer<typeof agentUpdateSchema>): Promise<void> {
+    const body = agentUpdateSchema.parse(input)
+    const row = await this.env.DB.prepare(
+      `SELECT m.id
+       FROM messages m
+       JOIN users u ON u.id = m.author_id
+       JOIN agents a ON a.user_id = u.id
+       WHERE m.id = ? AND m.channel_id = ? AND m.author_id = ?
+         AND m.deleted_at IS NULL AND u.kind = 'agent'`,
+    ).bind(body.messageId, this.channelId(), body.agentId).first<{ id: string }>()
+    if (!row) throw new Error('Agent message not found')
+    await this.env.DB.prepare('UPDATE messages SET content = ? WHERE id = ?').bind(body.content, body.messageId).run()
+    const message = await this.loadMessage(body.messageId)
+    if (message) this.broadcast({ t: 'message.update', message, streaming: true })
+  }
+
+  async setAgentReaction(input: z.infer<typeof agentReactionSchema>): Promise<void> {
+    const body = agentReactionSchema.parse(input)
+    const target = await this.env.DB.prepare(
+      `SELECT m.id
+       FROM messages m
+       JOIN users u ON u.id = ?
+       JOIN agents a ON a.user_id = u.id
+       WHERE m.id = ? AND m.channel_id = ?
+         AND u.kind = 'agent' AND u.status = 'active' AND a.status = 'active'`,
+    ).bind(body.agentId, body.messageId, this.channelId()).first<{ id: string }>()
+    if (!target) throw new Error('Agent reaction target not found')
+
+    const change = await replaceAgentReaction(this.env.DB, body.messageId, body.agentId, body.emoji)
+    for (const emoji of change.removed) {
+      this.broadcast({ t: 'reaction', messageId: body.messageId, emoji, userId: body.agentId, op: 'remove' })
+    }
+    if (change.added) {
+      this.broadcast({ t: 'reaction', messageId: body.messageId, emoji: change.added, userId: body.agentId, op: 'add' })
+    }
   }
 
   async getHuddle(): Promise<HuddleState> {
@@ -148,8 +281,15 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       case 'message.delete':
         await this.onDelete(ws, sock, (JSON.parse(raw) as { id: string }).id)
         break
+      case 'agent.control':
+        await this.onAgentControl(ws, sock, authz, agentControlSchema.parse(JSON.parse(raw)))
+        break
       case 'typing':
-        this.broadcast({ t: 'typing', userId: sock.userId }, ws)
+        this.broadcast({
+          t: 'typing',
+          userId: sock.userId,
+          active: (JSON.parse(raw) as { active?: boolean }).active !== false,
+        }, ws)
         break
       case 'read':
         await this.onRead(sock, authz, (JSON.parse(raw) as { messageId: string }).messageId)
@@ -176,26 +316,32 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     authz: Authz,
     body: z.infer<typeof createSchema>,
   ) {
+    const fail = (code: string, message: string) => this.send(ws, {
+      t: 'error',
+      code,
+      message,
+      clientId: body.clientId,
+    })
     if (authz.frozen) {
-      this.send(ws, { t: 'error', code: 'frozen', message: 'You can no longer send messages to this user' })
+      fail('frozen', 'You can no longer send messages to this user')
       return
     }
     if (!hasPermission(authz.perms, Permission.sendMessages)) {
-      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot send messages in this channel' })
+      fail('forbidden', 'Cannot send messages in this channel')
       return
     }
     if (body.attachmentIds?.length && !hasPermission(authz.perms, Permission.attachFiles)) {
-      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot attach files in this channel' })
+      fail('forbidden', 'Cannot attach files in this channel')
       return
     }
     if (!body.content.trim() && !(body.attachmentIds?.length)) {
-      this.send(ws, { t: 'error', code: 'bad_request', message: 'Empty message' })
+      fail('bad_request', 'Empty message')
       return
     }
     const limiter = asRpc<{ take: (n: number, w: number) => Promise<boolean> }>(this.env.RATE_LIMIT_DO.getByName(`user:${sock.userId}:msg`))
     const ok = await limiter.take(30, 10_000)
     if (!ok) {
-      this.send(ws, { t: 'error', code: 'rate_limited', message: 'Slow down' })
+      fail('rate_limited', 'Slow down')
       return
     }
 
@@ -211,12 +357,12 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     const mentions = await this.validMentions(extractMentionIds(body.content))
     const attachmentIds = [...new Set(body.attachmentIds ?? [])]
     if (attachmentIds.length !== (body.attachmentIds?.length ?? 0)) {
-      this.send(ws, { t: 'error', code: 'bad_request', message: 'Duplicate attachment' })
+      fail('bad_request', 'Duplicate attachment')
       return
     }
     const attachments = await this.loadAttachments(sock.userId, attachmentIds)
     if (attachments.length !== attachmentIds.length) {
-      this.send(ws, { t: 'error', code: 'bad_request', message: 'Invalid attachment' })
+      fail('bad_request', 'Invalid attachment')
       return
     }
     let replyTo: MessageDTO['replyTo'] = null
@@ -233,7 +379,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         attachment_count: number
       }>()
       if (!row) {
-        this.send(ws, { t: 'error', code: 'bad_request', message: 'Invalid reply target' })
+        fail('bad_request', 'Invalid reply target')
         return
       }
       replyTo = {
@@ -265,18 +411,52 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
     await this.persistMessage(dto, body.replyToId ?? null)
     this.ctx.waitUntil(signalNotificationOutbox(this.env))
-    this.ctx.waitUntil(signalChannelActivity(this.env, this.channelId(), sock.userId, id))
-    this.ctx.waitUntil(signalChannelRead(this.env, sock.userId, this.channelId(), id))
-    this.ctx.waitUntil(signalAgentsForMessage(this.env, {
-      messageId: id,
+    this.ctx.waitUntil(signalChannelActivity(this.env, {
+      id,
       channelId: this.channelId(),
-      authorName: sock.user.displayName,
+      author: sock.user,
       content: body.content,
-      mentionIds: mentions,
+      attachmentCount: attachments.length,
     }))
+    this.ctx.waitUntil(signalChannelRead(this.env, sock.userId, this.channelId(), id))
     await this.ctx.storage.put(`idem:${idemKey}`, id)
     this.broadcast({ t: 'message', message: dto })
     this.send(ws, { t: 'ack', clientId: body.clientId, id })
+    this.ctx.waitUntil(signalAgentsForMessage(this.env, {
+      messageId: id,
+      channelId: this.channelId(),
+      authorId: sock.userId,
+      authorName: sock.user.displayName,
+      content: body.content,
+      mentionIds: mentions,
+      mode: body.agentMode,
+    }))
+  }
+
+  private async onAgentControl(
+    ws: WebSocket,
+    _sock: Sock,
+    authz: Authz,
+    body: z.infer<typeof agentControlSchema>,
+  ) {
+    if (!authz.canManageAgents) {
+      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot control an Agent in this channel' })
+      return
+    }
+    const turn = await this.env.DB.prepare(
+      `SELECT submission_id FROM agent_turns
+       WHERE channel_id = ? AND agent_id = ?
+         AND (? IS NULL OR approval_json LIKE ?)
+       LIMIT 1`,
+    ).bind(this.channelId(), body.agentId, body.executionId ?? null, body.executionId ? `%${body.executionId}%` : null).first()
+    if (!turn) {
+      this.send(ws, { t: 'error', code: 'not_found', message: 'Agent run not found' })
+      return
+    }
+    const agent = asRpc<{
+      controlConversation: (input: { channelId: string; action: 'stop' | 'approve' | 'reject'; executionId?: string }) => Promise<void>
+    }>(this.env.AGENT_DO.getByName(`agent:${body.agentId}`))
+    await agent.controlConversation({ channelId: this.channelId(), action: body.action, executionId: body.executionId })
   }
 
   private async onUpdate(ws: WebSocket, sock: Sock, body: z.infer<typeof updateSchema>) {
@@ -374,7 +554,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot start huddle' })
       return
     }
-    if (!realtimekitConfigured(this.env)) {
+    const realtimekit = await loadRealtimeKitConfig(this.env)
+    if (!realtimekitConfigured(realtimekit)) {
       this.send(ws, { t: 'error', code: 'realtimekit_unconfigured', message: 'RealtimeKit secrets missing' })
       return
     }
@@ -392,7 +573,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       this.broadcast({ t: 'voice', voice: huddle })
       return
     }
-    const meeting = await createMeeting(this.env, `huddle:${this.channelId()}`)
+    const meeting = await createMeeting(realtimekit, `huddle:${this.channelId()}`)
     huddle = {
       active: true,
       huddleId: meeting.id,
@@ -452,7 +633,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     if (isDmType(authz.type) || (authz.type === 'thread')) {
       participants = await this.loadDmParticipants()
     }
-    this.send(ws, { t: 'hello', channelId: this.channelId(), you: user, huddle, frozen: authz.frozen, participants })
+    const agentTurns = authz.canManageAgents ? await listAgentTurns(this.env, this.channelId()) : []
+    this.send(ws, { t: 'hello', channelId: this.channelId(), you: user, huddle, frozen: authz.frozen, participants, agentTurns })
   }
 
   private async authTimeout(ws: WebSocket) {
@@ -485,6 +667,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
        WHERE u.id = ? AND u.status = 'active'`,
     ).bind(userId).first<{ perms: number; roleId: string; ownerId: string }>()
     if (!membership) return null
+    const canManageAgents = membership.ownerId === userId || hasPermission(membership.perms, Permission.manageWorkspace)
 
     if (accessRoot.visibility === 'private') {
       const part = await this.env.DB.prepare(
@@ -499,13 +682,19 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       let frozen = false
       if (ids.length) {
         const placeholders = ids.map(() => '?').join(',')
+        if (!canManageAgents) {
+          const agent = await this.env.DB.prepare(
+            `SELECT 1 FROM users WHERE id IN (${placeholders}) AND kind = 'agent' LIMIT 1`,
+          ).bind(...ids).first()
+          if (agent) return null
+        }
         const still = await this.env.DB.prepare(
           `SELECT id FROM users WHERE id IN (${placeholders}) AND status = 'active'`,
         ).bind(...ids).all<{ id: string }>()
         frozen = (still.results ?? []).length !== ids.length
       }
       const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
-      return { workspaceId: WORKSPACE_ID, type: accessRoot.id === ch.id ? 'dm' : type, perms, ownerId: membership.ownerId, frozen }
+      return { workspaceId: WORKSPACE_ID, type: accessRoot.id === ch.id ? 'dm' : type, perms, ownerId: membership.ownerId, frozen, canManageAgents }
     }
     let perms = membership.ownerId === userId ? ALL_PERMISSIONS : membership.perms
     if (membership.ownerId !== userId) {
@@ -514,7 +703,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       ).bind(accessRoot.id, membership.roleId).first<{ allow_mask: number; deny_mask: number }>()
       perms = resolveChannelPermissions(perms, override && { allow: override.allow_mask, deny: override.deny_mask })
     }
-    return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false }
+    return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false, canManageAgents }
   }
 
   private async loadDmParticipants(): Promise<PublicUser[]> {

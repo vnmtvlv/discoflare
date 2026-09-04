@@ -1,12 +1,13 @@
 import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
-import { addParticipant, realtimekitConfigured } from '../../../../workers/realtimekit'
+import { addParticipant, loadRealtimeKitConfig, realtimekitConfigured } from '../../../../workers/realtimekit'
 
 export default defineEventHandler(async (event) => {
   const channelId = getRouterParam(event, 'channelId')!
   const member = await requireChannelAccess(event, channelId)
   const { env } = cf(event)
-  if (!realtimekitConfigured(env)) fail(501, 'realtimekit_unconfigured', 'RealtimeKit secrets missing')
+  const realtimekit = await loadRealtimeKitConfig(env)
+  if (!realtimekitConfigured(realtimekit)) fail(501, 'realtimekit_unconfigured', 'RealtimeKit credentials missing')
 
   const stub = asRpc<{
     getHuddle: () => Promise<{ active: boolean; meetingId: string | null }>
@@ -15,8 +16,8 @@ export default defineEventHandler(async (event) => {
   if (!huddle.active || !huddle.meetingId) fail(404, 'not_found', 'No active huddle')
 
   const av = getQuery(event).av === '1'
-  const preset = av ? (env.REALTIMEKIT_PRESET_AV || env.REALTIMEKIT_PRESET_VOICE || 'voice') : (env.REALTIMEKIT_PRESET_VOICE || 'voice')
-  const { token } = await addParticipant(env, huddle.meetingId, {
+  const preset = av ? realtimekit.avPreset : realtimekit.voicePreset
+  const { token } = await addParticipant(realtimekit, huddle.meetingId, {
     name: member.user.displayName,
     customId: member.user.id,
     preset,

@@ -29,14 +29,21 @@ function d1(database: DatabaseSync): D1Database {
 beforeEach(() => {
   sqlite = new DatabaseSync(':memory:')
   sqlite.exec(`
-    CREATE TABLE users (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL);
+    CREATE TABLE roles (id TEXT PRIMARY KEY, permissions_bitmask INTEGER NOT NULL);
+    CREATE TABLE workspace (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL);
+    CREATE TABLE users (id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, role_id TEXT NOT NULL);
     CREATE TABLE agents (user_id TEXT PRIMARY KEY, status TEXT NOT NULL);
     CREATE TABLE channels (id TEXT PRIMARY KEY, type TEXT NOT NULL, visibility TEXT NOT NULL, parent_id TEXT);
     CREATE TABLE channel_members (channel_id TEXT NOT NULL, user_id TEXT NOT NULL);
+    CREATE TABLE attachments (id TEXT PRIMARY KEY, message_id TEXT, content_type TEXT NOT NULL);
 
+    INSERT INTO roles VALUES ('admin-role', 1), ('member-role', 112);
+    INSERT INTO workspace VALUES ('main', 'owner');
     INSERT INTO users VALUES
-      ('human', 'human', 'active'),
-      ('agent', 'agent', 'active');
+      ('owner', 'human', 'active', 'member-role'),
+      ('human', 'human', 'active', 'admin-role'),
+      ('member', 'human', 'active', 'member-role'),
+      ('agent', 'agent', 'active', 'member-role');
     INSERT INTO agents VALUES ('agent', 'active');
     INSERT INTO channels VALUES
       ('dm', 'dm', 'private', NULL),
@@ -61,16 +68,64 @@ describe('agent message ingress', () => {
     await signalAgentsForMessage(env as never, {
       messageId: 'message-thread',
       channelId: 'thread',
+      authorId: 'human',
       authorName: 'Human',
       content: 'Continue here',
       mentionIds: [],
+      mode: 'steer',
     })
 
     expect(receiveMessage).toHaveBeenCalledWith({
       messageId: 'message-thread',
       channelId: 'thread',
+      authorId: 'human',
       authorName: 'Human',
       content: 'Continue here',
+      hasImages: false,
+      mode: 'steer',
     })
+  })
+
+  it('starts a DM turn for an image-only message', async () => {
+    sqlite.exec("INSERT INTO attachments VALUES ('image-1', 'message-image', 'image/png')")
+    const receiveMessage = vi.fn(async () => 'workflow-id')
+    const env = {
+      DB: db,
+      AGENT_DO: { getByName: () => ({ receiveMessage }) },
+    }
+
+    await signalAgentsForMessage(env as never, {
+      messageId: 'message-image',
+      channelId: 'dm',
+      authorId: 'human',
+      authorName: 'Human',
+      content: '',
+      mentionIds: [],
+    })
+
+    expect(receiveMessage).toHaveBeenCalledWith(expect.objectContaining({
+      messageId: 'message-image',
+      content: '',
+      hasImages: true,
+    }))
+  })
+
+  it('does not let a chat-only member start an agent turn', async () => {
+    const receiveMessage = vi.fn(async () => 'workflow-id')
+    const env = {
+      DB: db,
+      AGENT_DO: { getByName: () => ({ receiveMessage }) },
+    }
+
+    await signalAgentsForMessage(env as never, {
+      messageId: 'message-member',
+      channelId: 'dm',
+      authorId: 'member',
+      authorName: 'Member',
+      content: 'Run this command',
+      mentionIds: ['agent'],
+    })
+
+    expect(receiveMessage).not.toHaveBeenCalled()
   })
 })

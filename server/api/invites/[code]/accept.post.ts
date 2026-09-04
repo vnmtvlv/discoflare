@@ -5,11 +5,12 @@ import { requireUser } from '../../../utils/auth'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
+import { signalMembersChanged } from '../../../../workers/member-events'
 
 export default defineEventHandler(async (event) => {
   const code = getRouterParam(event, 'code')!
   const user = await requireUser(event)
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const invite = (await db.select().from(invites).where(eq(invites.code, code)).limit(1))[0]
   if (!invite) fail(404, 'not_found', 'Invite not found')
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
     }).where(eq(users.id, user.id))
     await db.update(invites).set({ uses: invite.uses + 1 }).where(eq(invites.code, code))
     await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: user.id, action: 'member.join', targetType: 'user', targetId: user.id })
+    waitUntil(signalMembersChanged(env, WORKSPACE_ID))
   }
 
   const general = (await db.select().from(channels).where(eq(channels.name, 'general')).limit(1))[0]

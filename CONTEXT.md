@@ -45,19 +45,20 @@ An active workspace participant, human or Agent, as presented in workspace membe
 _Avoid_: User-in-server record, separate agent author system
 
 **Agent**:
-An AI Member with a profile, a stateful Agent Durable Object, and one stable Sandbox computer identity. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files are checkpointed to R2.
+An AI Member with a profile, a stateful coordinator Durable Object, isolated Think memory per Channel, Thread, and Task Run, and one stable Sandbox computer identity. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files are checkpointed to R2.
+Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat. A custom Role with Manage tasks may assign Agents to and run Tasks without receiving Agent configuration secrets.
 _Avoid_: Bot, external runner, Hermes profile, always-running VM
 
 **Task Board**:
-An ordered collection of Tasks shared by the workspace and stored in D1.
+An ordered, archivable collection of Tasks and Labels shared by the workspace and stored in D1.
 _Avoid_: Agent-local todo list, queue as product language
 
 **Task**:
-A unit of workspace work with a status, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may create Tasks.
+A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may create Tasks.
 _Avoid_: Workflow (that is the execution primitive), prompt
 
 **Task Run**:
-One durable execution attempt for a Task. A Cloudflare Workflow owns orchestration; the assigned Agent Durable Object owns reasoning memory; the Sandbox owns active processes.
+One durable, cancellable execution attempt for a Task. It snapshots the Task and Agent launch configuration, retains progress and outcome history, and can be reconciled with its Cloudflare Workflow after an interruption. The assigned Agent Durable Object owns reasoning memory; the Sandbox owns active processes.
 _Avoid_: Treating a Task and its retryable execution as the same record
 
 **Agent Computer**:
@@ -66,6 +67,7 @@ _Avoid_: Permanent VM, implying the container process runs forever
 
 **Role**:
 Named reusable set of workspace Grants assigned to Members. Owner, Admin, and Member are protected system Roles; operators may add custom Roles.
+Owner and Admin receive every Grant. Member is chat-only by default: it may send Messages, attach files, and start Huddles, but it cannot see or operate workspace settings, Agent configuration, Task Boards, Tasks, or Task Runs. Administrative access may be delegated only by assigning an explicit custom Role Grant.
 _Avoid_: Rank, group
 
 **Grant**:

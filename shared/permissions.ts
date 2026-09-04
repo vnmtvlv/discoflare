@@ -7,6 +7,7 @@ export const Permission = {
   attachFiles: 1 << 5,
   startHuddle: 1 << 6,
   kick: 1 << 7,
+  manageTasks: 1 << 8,
 } as const
 
 export type PermissionFlag = (typeof Permission)[keyof typeof Permission]
@@ -20,6 +21,7 @@ export const ALL_PERMISSIONS =
   | Permission.attachFiles
   | Permission.startHuddle
   | Permission.kick
+  | Permission.manageTasks
 
 export const MemberPermissions =
   Permission.sendMessages | Permission.attachFiles | Permission.startHuddle
@@ -33,6 +35,7 @@ export const PermissionGrants = [
   { key: 'attachFiles', flag: Permission.attachFiles, label: 'Attach files', description: 'Upload attachments to messages.' },
   { key: 'startHuddle', flag: Permission.startHuddle, label: 'Start huddles', description: 'Start voice huddles in channels and direct messages.' },
   { key: 'kick', flag: Permission.kick, label: 'Remove members', description: 'Remove members from the workspace.' },
+  { key: 'manageTasks', flag: Permission.manageTasks, label: 'Manage tasks', description: 'Create, edit, assign, run, archive, and remove task boards and tasks.' },
 ] as const
 
 export type PermissionGrantKey = (typeof PermissionGrants)[number]['key']

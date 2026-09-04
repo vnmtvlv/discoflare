@@ -7,21 +7,38 @@ import type { AgentDTO } from '~~/shared/types'
 const props = defineProps<{ workspaceId: string }>()
 const toast = useToast()
 const qc = useQueryClient()
+const { api } = useApi()
 const selectedAgentId = shallowRef<string | null>(null)
 const creatingNew = ref(false)
 const saving = ref(false)
+const avatarFile = shallowRef<File | null>(null)
+const removeCurrentAvatar = ref(false)
 
 const agentsQ = useQuery({
   queryKey: computed(() => ['agents', props.workspaceId]),
-  queryFn: () => $fetch<{ agents: AgentDTO[] }>(`/api/workspaces/${props.workspaceId}/agents`),
+  queryFn: () => api<{ agents: AgentDTO[] }>(`/api/workspaces/${props.workspaceId}/agents`),
 })
 const agents = computed(() => agentsQ.data.value?.agents ?? [])
 
 const modelOptions = [
-  { id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', description: 'Coding · reasoning · tools' },
-  { id: '@cf/zai-org/glm-5.2', label: 'GLM 5.2', description: 'Agentic coding · reasoning · tools' },
-  { id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B A3B', description: 'Fast · reasoning · tools' },
-  { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B Fast', description: 'General · fast · tools' },
+  { id: '@cf/moonshotai/kimi-k2.7-code', label: 'Kimi K2.7 Code', description: 'Moonshot AI · Coding · reasoning · vision', avatar: { src: '/providers/moonshotai.svg', alt: 'Moonshot AI' } },
+  { id: '@cf/zai-org/glm-5.3', label: 'GLM 5.3', description: 'Z.ai · Agentic coding · reasoning', avatar: { src: '/providers/zai.svg', alt: 'Z.ai' } },
+  { id: '@cf/zai-org/glm-5.3-flash', label: 'GLM 5.3 Flash', description: 'Z.ai · Fast · reasoning · vision', avatar: { src: '/providers/zai.svg', alt: 'Z.ai' } },
+  { id: '@cf/deepseek-ai/deepseek-v4-flash-0731', label: 'DeepSeek V4 Flash', description: 'DeepSeek · Fast · reasoning', avatar: { src: '/providers/deepseek.svg', alt: 'DeepSeek' } },
+  { id: '@cf/deepseek-ai/deepseek-v4-pro-0813', label: 'DeepSeek V4 Pro', description: 'DeepSeek · Long-horizon · reasoning', avatar: { src: '/providers/deepseek.svg', alt: 'DeepSeek' } },
+  { id: '@cf/openai/gpt-oss-120b', label: 'GPT-OSS 120B', description: 'OpenAI · High reasoning · tools', avatar: { src: '/providers/openai.svg', alt: 'OpenAI' } },
+  { id: '@cf/openai/gpt-oss-20b', label: 'GPT-OSS 20B', description: 'OpenAI · Fast · reasoning · tools', avatar: { src: '/providers/openai.svg', alt: 'OpenAI' } },
+  { id: '@cf/qwen/qwen3.8-27b', label: 'Qwen 3.8 27B', description: 'Qwen · Reasoning · vision', avatar: { src: '/providers/qwen.svg', alt: 'Qwen' } },
+  { id: '@cf/qwen/qwen3-30b-a3b-fp8', label: 'Qwen3 30B A3B', description: 'Qwen · Fast · reasoning', avatar: { src: '/providers/qwen.svg', alt: 'Qwen' } },
+  { id: '@cf/google/gemma-4-26b-a4b-it', label: 'Gemma 4 26B A4B', description: 'Google · Reasoning · vision', avatar: { src: '/providers/google.svg', alt: 'Google' } },
+  { id: '@cf/nvidia/nemotron-3-120b-a12b', label: 'Nemotron 3 120B A12B', description: 'NVIDIA · Multi-agent · reasoning', avatar: { src: '/providers/nvidia.svg', alt: 'NVIDIA' } },
+  { id: '@cf/moonshotai/kimi-k2.6', label: 'Kimi K2.6', description: 'Moonshot AI · Reasoning · vision', avatar: { src: '/providers/moonshotai.svg', alt: 'Moonshot AI' } },
+  { id: '@cf/zai-org/glm-5.2', label: 'GLM 5.2', description: 'Z.ai · Agentic coding · reasoning', avatar: { src: '/providers/zai.svg', alt: 'Z.ai' } },
+  { id: '@cf/zai-org/glm-4.7-flash', label: 'GLM 4.7 Flash', description: 'Z.ai · Fast · multilingual · reasoning', avatar: { src: '/providers/zai.svg', alt: 'Z.ai' } },
+  { id: '@cf/meta/llama-4-scout-17b-16e-instruct', label: 'Llama 4 Scout 17B', description: 'Meta · Vision · tools', avatar: { src: '/providers/meta.svg', alt: 'Meta' } },
+  { id: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', label: 'Llama 3.3 70B Fast', description: 'Meta · General · fast · tools', avatar: { src: '/providers/meta.svg', alt: 'Meta' } },
+  { id: '@cf/mistralai/mistral-small-3.1-24b-instruct', label: 'Mistral Small 3.1 24B', description: 'Mistral AI · General · tools', avatar: { src: '/providers/mistralai.svg', alt: 'Mistral AI' } },
+  { id: '@cf/ibm-granite/granite-4.0-h-micro', label: 'Granite 4.0 H Micro', description: 'IBM · Efficient · tools', avatar: { src: '/providers/ibm.svg', alt: 'IBM' } },
 ]
 const statusOptions = [
   { label: 'Active', value: 'active' },
@@ -45,6 +62,21 @@ const form = reactive<AgentForm>({
 
 const selectedAgent = computed(() => agents.value.find(agent => agent.id === selectedAgentId.value) ?? null)
 const isNew = computed(() => creatingNew.value || !selectedAgent.value)
+const formAvatarUser = computed(() => ({
+  id: selectedAgent.value?.id ?? `new-${form.displayName}`,
+  kind: 'agent' as const,
+  displayName: form.displayName || 'Agent',
+  avatarR2Key: removeCurrentAvatar.value ? null : selectedAgent.value?.avatarR2Key ?? null,
+}))
+
+function agentAvatarUser(agent: AgentDTO) {
+  return {
+    id: agent.id,
+    kind: 'agent' as const,
+    displayName: agent.displayName,
+    avatarR2Key: agent.avatarR2Key,
+  }
+}
 
 function modelOption(value: unknown) {
   return modelOptions.find(option => option.id === value)
@@ -53,6 +85,8 @@ function modelOption(value: unknown) {
 function selectAgent(agent: AgentDTO) {
   creatingNew.value = false
   selectedAgentId.value = agent.id
+  avatarFile.value = null
+  removeCurrentAvatar.value = false
   Object.assign(form, {
     displayName: agent.displayName,
     model: agent.model,
@@ -64,6 +98,8 @@ function selectAgent(agent: AgentDTO) {
 function createAgent() {
   creatingNew.value = true
   selectedAgentId.value = null
+  avatarFile.value = null
+  removeCurrentAvatar.value = false
   Object.assign(form, {
     displayName: '',
     model: '@cf/moonshotai/kimi-k2.7-code',
@@ -80,18 +116,23 @@ watch(agents, (list) => {
 }, { immediate: true })
 
 async function saveAgent(event: FormSubmitEvent<AgentForm>) {
+  if (avatarFile.value && avatarFile.value.size > 2 * 1024 * 1024) {
+    toast.add({ title: 'Avatar exceeds 2 MB', color: 'error' })
+    return
+  }
+  const creating = isNew.value
+  let persistedAgent: AgentDTO | null = null
   saving.value = true
   try {
     let result: { agent: AgentDTO }
     if (selectedAgent.value) {
-      result = await $fetch<{ agent: AgentDTO }>(`/api/workspaces/${props.workspaceId}/agents/${selectedAgent.value.id}`, {
+      result = await api<{ agent: AgentDTO }>(`/api/workspaces/${props.workspaceId}/agents/${selectedAgent.value.id}`, {
         method: 'PATCH',
         body: event.data,
       })
-      toast.add({ title: 'Agent updated', color: 'success' })
     }
     else {
-      result = await $fetch<{ agent: AgentDTO }>(`/api/workspaces/${props.workspaceId}/agents`, {
+      result = await api<{ agent: AgentDTO }>(`/api/workspaces/${props.workspaceId}/agents`, {
         method: 'POST',
         body: {
           displayName: event.data.displayName,
@@ -99,16 +140,47 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
           instructions: event.data.instructions,
         },
       })
-      toast.add({ title: 'Agent created', color: 'success' })
+      creatingNew.value = false
+      selectedAgentId.value = result.agent.id
+    }
+    persistedAgent = result.agent
+
+    if (avatarFile.value) {
+      const formData = new FormData()
+      formData.append('file', avatarFile.value)
+      const avatar = await api<{ avatarR2Key: string }>(`/api/workspaces/${props.workspaceId}/agents/${result.agent.id}/avatar`, {
+        method: 'PUT',
+        body: formData,
+      })
+      result.agent.avatarR2Key = avatar.avatarR2Key
+    }
+    else if (removeCurrentAvatar.value && result.agent.avatarR2Key) {
+      await api(`/api/workspaces/${props.workspaceId}/agents/${result.agent.id}/avatar`, { method: 'DELETE' })
+      result.agent.avatarR2Key = null
     }
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['agents', props.workspaceId] }),
       qc.invalidateQueries({ queryKey: ['members', props.workspaceId] }),
     ])
     selectAgent(result.agent)
+    toast.add({ title: creating ? 'Agent created' : 'Agent updated', color: 'success' })
   }
   catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
+    if (persistedAgent) {
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ['agents', props.workspaceId] }),
+        qc.invalidateQueries({ queryKey: ['members', props.workspaceId] }),
+      ])
+      selectAgent(persistedAgent)
+      toast.add({
+        title: creating ? 'Agent created, but avatar could not be saved' : 'Agent updated, but avatar could not be saved',
+        description: errorMessage(error),
+        color: 'error',
+      })
+    }
+    else {
+      toast.add({ title: errorMessage(error), color: 'error' })
+    }
   }
   finally {
     saving.value = false
@@ -134,8 +206,13 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         :class="selectedAgentId === agent.id && !creatingNew ? 'bg-accented text-highlighted' : 'text-muted'"
         @click="selectAgent(agent)"
       >
-        <span class="block truncate text-sm font-medium">{{ agent.displayName }}</span>
-        <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelOption(agent.model)?.label ?? agent.model }}</span>
+        <span class="flex items-center gap-2">
+          <UserAvatar :user="agentAvatarUser(agent)" size="sm" />
+          <span class="min-w-0">
+            <span class="block truncate text-sm font-medium">{{ agent.displayName }}</span>
+            <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelOption(agent.model)?.label ?? agent.model }}</span>
+          </span>
+        </span>
       </button>
       <p v-if="!agents.length" class="px-3 py-2 text-sm text-muted">No agents</p>
     </div>
@@ -145,10 +222,31 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         <UInput v-model="form.displayName" class="w-full" />
       </UFormField>
 
+      <UFormField label="Avatar">
+        <div class="flex items-center gap-3">
+          <UserAvatar :user="formAvatarUser" size="lg" />
+          <UFileUpload
+            v-model="avatarFile"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            variant="button"
+            label="Choose image"
+          />
+          <UButton
+            v-if="selectedAgent?.avatarR2Key && !avatarFile && !removeCurrentAvatar"
+            label="Remove"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            @click="removeCurrentAvatar = true"
+          />
+        </div>
+      </UFormField>
+
       <UFormField name="model" label="Model" hint="Workers AI">
         <USelect
           v-model="form.model"
           :items="modelOptions"
+          :avatar="modelOption(form.model)?.avatar"
           value-key="id"
           label-key="label"
           class="w-full"

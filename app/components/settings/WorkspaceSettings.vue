@@ -8,7 +8,7 @@ import { hasPermission, MemberPermissions, Permission, permissionBitmask, Permis
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'authentication' | 'audit'
+type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'huddles' | 'authentication' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
 const { serverUrl } = useApi()
@@ -42,10 +42,11 @@ const membersQ = useQuery({
   queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
   enabled: computed(() => open.value),
 })
+const { can, mine } = usePermissions(computed(() => membersQ.data.value?.members))
 const rolesQ = useQuery({
   queryKey: computed(() => ['roles', props.workspaceId]),
   queryFn: () => $fetch<{ roles: RoleDTO[] }>(`/api/workspaces/${props.workspaceId}/roles`),
-  enabled: computed(() => open.value),
+  enabled: computed(() => open.value && (can(Permission.manageRoles) || can(Permission.manageChannels))),
 })
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', props.workspaceId]),
@@ -67,23 +68,30 @@ const auditQ = useQuery({
   queryFn: () => $fetch<{ entries: AuditEntryDTO[] }>(`/api/workspaces/${props.workspaceId}/audit`),
   enabled: computed(() => open.value && section.value === 'audit'),
 })
-const { can, mine } = usePermissions(computed(() => membersQ.data.value?.members))
+const isOwner = computed(() => mine.value?.role.key === 'owner')
 
 watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = n }, { immediate: true })
-watch(open, (v) => { if (v) section.value = 'overview' })
 
 const workspaceNav = computed(() => [
-  { id: 'overview' as const, label: 'Overview' },
-  { id: 'channels' as const, label: 'Channels' },
-  { id: 'roles' as const, label: 'Roles' },
+  ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview' }] : []),
+  ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels' }] : []),
+  ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles' }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents' }] : []),
+  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Huddles' }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication' }] : []),
-  { id: 'audit' as const, label: 'Audit Log' },
+  ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log' }] : []),
 ])
-const userNav = [
-  { id: 'members' as const, label: 'Members' },
-  { id: 'invites' as const, label: 'Invites' },
-]
+const userNav = computed(() => [
+  ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members' }] : []),
+  ...(can(Permission.invite) ? [{ id: 'invites' as const, label: 'Invites' }] : []),
+])
+const availableNav = computed(() => [...workspaceNav.value, ...userNav.value])
+
+watch([open, availableNav], ([isOpen, items]) => {
+  if (isOpen && !items.some(item => item.id === section.value)) {
+    section.value = items[0]?.id ?? 'overview'
+  }
+}, { immediate: true })
 
 const inviteUrl = ref('')
 const inviting = ref(false)
@@ -115,7 +123,6 @@ const categoryOptions = computed(() => [
   ...categories.value.map(category => ({ label: category.name, value: category.id })),
 ])
 const selectedRole = computed(() => roles.value.find(role => role.id === selectedRoleId.value) ?? null)
-const isOwner = computed(() => mine.value?.role.key === 'owner')
 const roleOptions = computed(() => roles.value
   .filter(role => role.key !== 'owner' && (role.key !== 'admin' || isOwner.value))
   .map(role => ({ label: roleLabel(role.name), value: role.id })))
@@ -523,21 +530,23 @@ function navClass(id: Section) {
           @click="section = item.id"
         />
       </nav>
-      <USeparator class="my-3" />
-      <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">User Management</p>
-      <nav class="space-y-0.5">
-        <UButton
-          v-for="item in userNav"
-          :key="item.id"
-          :label="item.label"
-          color="neutral"
-          :variant="section === item.id ? 'soft' : 'ghost'"
-          block
-          class="justify-start"
-          :class="navClass(item.id)"
-          @click="section = item.id"
-        />
-      </nav>
+      <template v-if="userNav.length">
+        <USeparator class="my-3" />
+        <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">User Management</p>
+        <nav class="space-y-0.5">
+          <UButton
+            v-for="item in userNav"
+            :key="item.id"
+            :label="item.label"
+            color="neutral"
+            :variant="section === item.id ? 'soft' : 'ghost'"
+            block
+            class="justify-start"
+            :class="navClass(item.id)"
+            @click="section = item.id"
+          />
+        </nav>
+      </template>
     </template>
 
     <template v-if="section === 'overview'">
@@ -782,7 +791,7 @@ function navClass(id: Section) {
       <p class="mt-1 text-sm text-muted">{{ memberCount }} {{ memberCount === 1 ? 'member' : 'members' }} in this workspace.</p>
       <ul class="mt-6 divide-y divide-default">
         <li v-for="m in membersQ.data.value?.members ?? []" :key="m.user.id" class="flex items-center gap-3 py-3">
-          <UAvatar size="sm" :text="m.user.displayName.slice(0, 1).toUpperCase()" />
+          <UserAvatar :user="m.user" size="sm" />
           <div class="min-w-0 flex-1">
             <p class="font-medium truncate">{{ m.nickname || m.user.displayName }}</p>
             <p class="text-xs text-muted">{{ roleLabel(m.role.name) }}</p>
@@ -831,6 +840,10 @@ function navClass(id: Section) {
           <UButton size="xs" color="neutral" variant="soft" label="Copy" @click="copyInvite(inv.url)" />
         </li>
       </ul>
+    </template>
+
+    <template v-else-if="section === 'huddles'">
+      <SettingsRealtimeKitSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else-if="section === 'authentication'">

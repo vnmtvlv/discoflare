@@ -24,19 +24,81 @@ export type AgentDTO = {
   updatedAt: string
 }
 
+export type TaskAgentDTO = Pick<AgentDTO, 'id' | 'displayName' | 'avatarR2Key' | 'status'>
+
+export type AgentApprovalDTO = {
+  executionId: string
+  action: string
+  summary: string
+  input: unknown
+  risk?: 'low' | 'medium' | 'high'
+}
+
+export type AgentTurnDTO = {
+  submissionId: string
+  agentId: string
+  channelId: string
+  sourceMessageId: string
+  initiatedBy: string
+  status: 'queued' | 'thinking' | 'tool' | 'waiting_approval'
+  detail: string | null
+  draftMessageId: string | null
+  approval: AgentApprovalDTO | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type TaskStatus = 'backlog' | 'ready' | 'running' | 'review' | 'done' | 'failed'
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+export type TaskLabelDTO = {
+  id: string
+  boardId: string
+  name: string
+  color: string
+  position: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type TaskChecklistItemDTO = {
+  id: string
+  taskId: string
+  title: string
+  completed: boolean
+  position: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type TaskAttachmentDTO = AttachmentDTO & {
+  taskId: string
+  uploaderId: string
+  createdAt: string
+}
 
 export type TaskRunDTO = {
   id: string
   taskId: string
   agentId: string
   workflowId: string | null
-  status: 'queued' | 'running' | 'completed' | 'failed'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  triggeredBy: string | null
+  titleSnapshot: string
+  descriptionSnapshot: string
+  channelIdSnapshot: string | null
+  agentModelSnapshot: string
+  agentInstructionsSnapshot: string
+  taskStatusBefore: Exclude<TaskStatus, 'running'>
   summary: string | null
   details: string | null
   error: string | null
+  progress: string | null
   startedAt: string | null
   completedAt: string | null
+  cancelledAt: string | null
+  cancelledBy: string | null
   createdAt: string
 }
 
@@ -46,6 +108,8 @@ export type TaskDTO = {
   title: string
   description: string
   status: TaskStatus
+  priority: TaskPriority
+  dueAt: string | null
   position: number
   assigneeId: string | null
   channelId: string | null
@@ -53,9 +117,22 @@ export type TaskDTO = {
   resultSummary: string | null
   resultDetails: string | null
   lastError: string | null
+  activeRunId: string | null
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
+  labels: TaskLabelDTO[]
+  checklistTotal: number
+  checklistCompleted: number
+  dependencyIds: string[]
+  attachmentCount: number
   latestRun: TaskRunDTO | null
+}
+
+export type TaskDetailDTO = TaskDTO & {
+  runs: TaskRunDTO[]
+  checklist: TaskChecklistItemDTO[]
+  attachments: TaskAttachmentDTO[]
 }
 
 export type TaskBoardDTO = {
@@ -63,8 +140,10 @@ export type TaskBoardDTO = {
   name: string
   position: number
   createdBy: string
+  archivedAt: string | null
   createdAt: string
   updatedAt: string
+  labels: TaskLabelDTO[]
   tasks: TaskDTO[]
 }
 
@@ -104,6 +183,17 @@ export type AuthSettingsAdminDTO = PublicAuthConfig & {
     senderManagedByDeployment: boolean
   }
   providers: Record<AuthCredentialProvider, AuthProviderAdminDTO>
+}
+
+export type RealtimeKitSettingsAdminDTO = {
+  configured: boolean
+  source: 'deployment' | 'database' | 'missing'
+  accountId: string | null
+  appId: string | null
+  apiTokenConfigured: boolean
+  secretReadable: boolean
+  voicePreset: string
+  avPreset: string
 }
 
 export type AttachmentDTO = {
@@ -151,6 +241,7 @@ export type MessageDTO = {
   deletedAt: string | null
   createdAt: string
   clientId?: string
+  deliveryState?: 'uploading' | 'sending' | 'failed'
 }
 
 export type MessageSearchChannelDTO = {
@@ -246,6 +337,7 @@ export type ChannelDTO = {
   parentId: string | null
   parentMessageId: string | null
   unread: boolean
+  unreadCount?: number
   permissions?: number
   huddle: HuddleState | null
   createdAt: string
@@ -321,10 +413,10 @@ export type SetupHealth = {
 
 export type ClientMsg =
   | { t: 'auth'; token: string }
-  | { t: 'message.create'; content: string; replyToId?: string; clientId: string; attachmentIds?: string[] }
+  | { t: 'message.create'; content: string; replyToId?: string; clientId: string; attachmentIds?: string[]; agentMode?: 'queue' | 'steer' }
   | { t: 'message.update'; id: string; content: string }
   | { t: 'message.delete'; id: string }
-  | { t: 'typing' }
+  | { t: 'typing'; active: boolean }
   | { t: 'read'; messageId: string }
   | { t: 'huddle.start' }
   | { t: 'huddle.join' }
@@ -333,14 +425,16 @@ export type ClientMsg =
   | { t: 'voice.leave' }
   | { t: 'reaction.add'; messageId: string; emoji: string }
   | { t: 'reaction.remove'; messageId: string; emoji: string }
+  | { t: 'agent.control'; agentId: string; action: 'stop' | 'approve' | 'reject'; executionId?: string }
 
 export type ServerMsg =
-  | { t: 'hello'; channelId: string; you: PublicUser; huddle?: HuddleState; frozen?: boolean; participants?: PublicUser[] }
+  | { t: 'hello'; channelId: string; you: PublicUser; huddle?: HuddleState; frozen?: boolean; participants?: PublicUser[]; agentTurns?: AgentTurnDTO[] }
   | { t: 'message'; message: MessageDTO }
-  | { t: 'message.update'; message: MessageDTO }
+  | { t: 'message.update'; message: MessageDTO; streaming?: boolean }
   | { t: 'thread.created'; messageId: string; threadId: string }
   | { t: 'message.delete'; id: string }
-  | { t: 'typing'; userId: string }
+  | { t: 'typing'; userId: string; active: boolean }
+  | { t: 'agent.state'; agentId: string; runs: AgentTurnDTO[] }
   | { t: 'presence'; users: Array<{ userId: string; status: PresenceStatus }> }
   | { t: 'huddle'; huddle: HuddleState }
   | { t: 'voice'; voice: HuddleState }
@@ -349,10 +443,10 @@ export type ServerMsg =
   | { t: 'reaction'; messageId: string; emoji: string; userId: string; op: 'add' | 'remove' }
   | { t: 'pin'; messageId: string; pin: MessagePinDTO | null }
   | { t: 'read.ack'; channelId: string; messageId: string; unread: boolean }
-  | { t: 'error'; code: string; message: string }
+  | { t: 'error'; code: string; message: string; clientId?: string }
   | { t: 'ack'; clientId: string; id: string }
 
-export type WorkspaceClientMsg = { t: 'auth'; token: string } | { t: 'activity' }
+export type WorkspaceClientMsg = { t: 'auth'; token: string; visible?: boolean } | { t: 'activity'; visible?: boolean }
 
 export type WorkspaceServerMsg =
   | { t: 'hello'; workspaceId: string }

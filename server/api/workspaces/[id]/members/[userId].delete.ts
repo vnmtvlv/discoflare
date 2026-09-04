@@ -6,6 +6,7 @@ import { requireMember } from '../../../../utils/guards'
 import { cf, fail } from '../../../../utils/cf'
 import { getDb } from '../../../../utils/db'
 import { writeAudit } from '../../../../utils/messages'
+import { signalMembersChanged } from '../../../../../workers/member-events'
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id')!
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, workspaceId, Permission.kick)
   if (userId === actor.ownerId) fail(403, 'forbidden', 'Owner cannot be kicked')
   if (userId === actor.user.id) fail(400, 'bad_request', 'Leave is not implemented; ask an admin')
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const now = nowIso()
   await db.batch([
@@ -27,5 +28,6 @@ export default defineEventHandler(async (event) => {
     db.update(agents).set({ status: 'paused', updatedAt: now }).where(eq(agents.userId, userId)),
   ])
   await writeAudit(env, { workspaceId, actorId: actor.user.id, action: 'member.kick', targetType: 'user', targetId: userId })
+  waitUntil(signalMembersChanged(env, workspaceId))
   return { ok: true }
 })

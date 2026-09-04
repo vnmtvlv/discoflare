@@ -36,13 +36,14 @@ Discoflare gives a team one private, real-time workspace without an origin serve
 - Receive optional Web Push notifications for mentions, Direct Messages, and new huddles.
 - Record audio messages or upload attachments to your own R2 bucket.
 - Start voice huddles with Cloudflare RealtimeKit.
-- Invite members and manage roles, permissions, workspace settings, and audit history.
+- Keep members in chat by default while Owner, Admin, or explicitly delegated custom roles manage invites, roles, workspace settings, and audit history.
 - Control invite-only or open registration and enable email, GitHub, X, and Telegram login methods.
-- Create AI agents as workspace participants, talk to them by mention or DM, assign board tasks, and let each agent work in its own persistent Cloudflare computer.
+- Let workspace administrators create AI agents as participants, give them custom avatars, and use vision-capable Workers AI models to inspect image attachments.
+- Manage realtime boards with ordered tasks, labels, dependencies, checklists, attachments, durable run history, cancellation, and recovery.
 
 ## How it works
 
-One Nuxt Worker serves the app and API. D1 stores shared workspace, chat, agent profile, board, task, and run records. R2 stores attachments and agent-computer checkpoints. KV holds short-lived WebSocket tickets. Durable Objects coordinate live channels, presence, notification delivery, rate limits, and one stateful Think runtime per agent. Cloudflare Workflows orchestrate task runs; Cloudflare Sandbox containers execute commands; Workers AI performs inference. RealtimeKit carries huddle media and remains optional.
+One Nuxt Worker serves the app and API. D1 stores shared workspace, chat, agent profile, board, task, and run records. R2 stores attachments and agent-computer checkpoints. KV holds short-lived WebSocket tickets. Durable Objects coordinate live channels, presence, notification delivery, rate limits, and isolated Think memory for each Agent conversation and Task Run. Cloudflare Workflows orchestrate task runs; Cloudflare Sandbox containers execute commands; Workers AI performs inference. RealtimeKit carries huddle media and remains optional.
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
@@ -107,7 +108,7 @@ For frontend-only work against a deployed Discoflare backend, set `DISCOFLARE_DE
 pnpm db:seed
 ```
 
-Text chat works without RealtimeKit. When huddle secrets are absent, the app remains usable and explains the missing configuration.
+Text chat works without RealtimeKit. The owner can connect it in **Workspace Settings → Huddles**; deployment secrets remain available as an override. When credentials are absent, the app remains usable and explains the missing configuration.
 
 Web Push is optional. Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push needs HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
 

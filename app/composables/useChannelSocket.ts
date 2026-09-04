@@ -1,14 +1,20 @@
 import type { InfiniteData, QueryClient } from '@tanstack/vue-query'
+import { ref } from 'vue'
 import type { ChannelDTO, ClientMsg, MessageDTO, ServerMsg } from '~~/shared/types'
+import { applyReactionChange } from '../utils/message-reactions'
 
 type Page = { messages: MessageDTO[]; nextCursor: string | null }
 type ChannelList = { channels: ChannelDTO[] }
+export type RealtimeConnection = 'connecting' | 'connected' | 'reconnecting' | 'offline'
+
+const DELIVERY_TIMEOUT_MS = 15_000
 
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
   const huddle = useHuddleStore()
   const nuxt = useNuxtApp()
+  const connection = ref<RealtimeConnection>('connecting')
 
   let ws: WebSocket | null = null
   let closed = false
@@ -19,12 +25,15 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const pending: ClientMsg[] = []
   const outstanding = new Map<string, Extract<ClientMsg, { t: 'message.create' }>>()
   let pendingRead: Extract<ClientMsg, { t: 'read' }> | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  const deliveryTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
   function queryClient(): QueryClient | undefined {
     return nuxt.$queryClient as QueryClient | undefined
   }
 
-  function applyMessage(msg: MessageDTO) {
+  function applyMessage(msg: MessageDTO, mergeLiveState = false) {
+    if (msg.clientId) clearDeliveryTimer(msg.clientId)
     const qc = queryClient()
     if (!qc) return
     qc.setQueryData<InfiniteData<Page>>(['messages', msg.channelId], (old) => {
@@ -37,7 +46,18 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
         if (exists) {
           return {
             ...p,
-            messages: p.messages.map((m) => (m.id === msg.id || (msg.clientId && m.clientId === msg.clientId) ? msg : m)),
+            messages: p.messages.map((m) => {
+              if (m.id !== msg.id && (!msg.clientId || m.clientId !== msg.clientId)) return m
+              if (!mergeLiveState) return msg
+              return {
+                ...msg,
+                attachments: m.attachments,
+                mentions: m.mentions,
+                reactions: m.reactions,
+                pin: m.pin,
+                threadId: m.threadId,
+              }
+            }),
           }
         }
         return { ...p, messages: [...p.messages, msg] }
@@ -46,6 +66,35 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     })
     if (msg.attachments.length) void qc.invalidateQueries({ queryKey: ['files'] })
     void qc.invalidateQueries({ queryKey: ['threads'] })
+  }
+
+  function updateOptimisticMessage(clientId: string, update: (message: MessageDTO) => MessageDTO) {
+    const qc = queryClient()
+    if (!qc) return
+    qc.setQueryData<InfiniteData<Page>>(['messages', toValue(channelId)], (old) => {
+      if (!old) return old
+      return {
+        ...old,
+        pages: old.pages.map(page => ({
+          ...page,
+          messages: page.messages.map(message => message.clientId === clientId ? update(message) : message),
+        })),
+      }
+    })
+  }
+
+  function clearDeliveryTimer(clientId: string) {
+    const timer = deliveryTimers.get(clientId)
+    if (timer) clearTimeout(timer)
+    deliveryTimers.delete(clientId)
+  }
+
+  function watchDelivery(clientId: string) {
+    clearDeliveryTimer(clientId)
+    deliveryTimers.set(clientId, setTimeout(() => {
+      updateOptimisticMessage(clientId, message => ({ ...message, deliveryState: 'failed' }))
+      deliveryTimers.delete(clientId)
+    }, DELIVERY_TIMEOUT_MS))
   }
 
   function applyReadAck(channelId: string, unread: boolean) {
@@ -57,7 +106,9 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
       directChannel = true
       return {
         ...old,
-        channels: old.channels.map(channel => channel.id === channelId ? { ...channel, unread } : channel),
+        channels: old.channels.map(channel => channel.id === channelId
+          ? { ...channel, unread, unreadCount: unread ? channel.unreadCount : 0 }
+          : channel),
       }
     }
     qc.setQueriesData<ChannelList>({ queryKey: ['channels'] }, update)
@@ -72,6 +123,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     const id = toValue(channelId)
     if (!id || !import.meta.client || connecting || closed) return
     connecting = true
+    connection.value = attempt ? 'reconnecting' : 'connecting'
     try {
       const { token } = await api<{ token: string }>('/api/auth/ws-token', { method: 'POST' })
       if (closed || gen !== generation) return
@@ -90,17 +142,19 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
         switch (parsed.t) {
           case 'hello':
             authenticated = true
+            connection.value = 'connected'
             for (const message of outstanding.values()) socket.send(JSON.stringify(message))
             for (const queued of pending.splice(0)) socket.send(JSON.stringify(queued))
             if (pendingRead) socket.send(JSON.stringify(pendingRead))
             if (parsed.huddle) huddle.setState(parsed.huddle)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
+            presence.hydrateAgentTurns(id, parsed.agentTurns ?? [])
             break
           case 'message':
             applyMessage(parsed.message)
             break
           case 'message.update':
-            applyMessage(parsed.message)
+            applyMessage(parsed.message, parsed.streaming)
             break
           case 'thread.created': {
             const qc = queryClient()
@@ -135,10 +189,15 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             break
           }
           case 'ack':
+            clearDeliveryTimer(parsed.clientId)
+            updateOptimisticMessage(parsed.clientId, message => ({ ...message, id: parsed.id, deliveryState: undefined }))
             outstanding.delete(parsed.clientId)
             break
           case 'typing':
-            presence.markTyping(id, parsed.userId)
+            presence.markTyping(id, parsed.userId, parsed.active)
+            break
+          case 'agent.state':
+            presence.setAgentTurns(id, parsed.agentId, parsed.runs)
             break
           case 'presence':
             presence.apply(parsed.users)
@@ -163,21 +222,10 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
                   ...p,
                   messages: p.messages.map((m) => {
                     if (m.id !== parsed.messageId) return m
-                    const reactions = [...(m.reactions ?? [])]
-                    const idx = reactions.findIndex((r) => r.emoji === parsed.emoji)
-                    const me = parsed.userId === useSessionStore().user?.id
-                    if (parsed.op === 'add') {
-                      if (idx === -1) reactions.push({ emoji: parsed.emoji, count: 1, me })
-                      else {
-                        reactions[idx] = { ...reactions[idx]!, count: reactions[idx]!.count + 1, me: reactions[idx]!.me || me }
-                      }
+                    return {
+                      ...m,
+                      reactions: applyReactionChange(m.reactions ?? [], parsed, useSessionStore().user?.id),
                     }
-                    else if (idx >= 0) {
-                      const nextCount = reactions[idx]!.count - 1
-                      if (nextCount <= 0) reactions.splice(idx, 1)
-                      else reactions[idx] = { ...reactions[idx]!, count: nextCount, me: me ? false : reactions[idx]!.me }
-                    }
-                    return { ...m, reactions }
                   }),
                 })),
               }
@@ -207,6 +255,10 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             applyReadAck(parsed.channelId, parsed.unread)
             break
           case 'error':
+            if (parsed.clientId) {
+              clearDeliveryTimer(parsed.clientId)
+              updateOptimisticMessage(parsed.clientId, message => ({ ...message, deliveryState: 'failed' }))
+            }
             if (parsed.code === 'realtimekit_unconfigured') useUiStore().huddleSetupOpen = true
             break
         }
@@ -215,14 +267,18 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
         authenticated = false
         if (ws === socket) ws = null
         if (!closed && gen === generation) {
+          connection.value = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting'
           const delay = Math.min(12_000, 1500 * 2 ** attempt)
           attempt += 1
-          setTimeout(() => { void connect(gen) }, delay)
+          reconnectTimer = setTimeout(() => { void connect(gen) }, delay)
         }
       })
     }
     catch {
-      if (!closed && gen === generation) setTimeout(() => { void connect(gen) }, 3000)
+      if (!closed && gen === generation) {
+        connection.value = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting'
+        reconnectTimer = setTimeout(() => { void connect(gen) }, 3000)
+      }
     }
     finally {
       connecting = false
@@ -231,8 +287,16 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   }
 
   function send(msg: ClientMsg) {
-    if (msg.t === 'message.create') outstanding.set(msg.clientId, msg)
-    if (msg.t === 'read' && (!pendingRead || pendingRead.messageId < msg.messageId)) pendingRead = msg
+    if (msg.t === 'message.create') {
+      outstanding.set(msg.clientId, msg)
+      updateOptimisticMessage(msg.clientId, message => ({ ...message, deliveryState: 'sending' }))
+      watchDelivery(msg.clientId)
+    }
+    if (msg.t === 'read' && (!pendingRead || pendingRead.messageId < msg.messageId)) {
+      pendingRead = msg
+      queryClient()?.setQueryData(['readCursor', toValue(channelId)], msg.messageId)
+      applyReadAck(toValue(channelId), false)
+    }
     if (authenticated && ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(msg))
       return
@@ -242,6 +306,24 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     if (pending.length < 100) pending.push(msg)
   }
 
+  function retry(clientId: string) {
+    const message = outstanding.get(clientId)
+    if (!message) return
+    updateOptimisticMessage(clientId, current => ({ ...current, deliveryState: 'sending' }))
+    watchDelivery(clientId)
+    if (authenticated && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message))
+    else reconnectNow()
+  }
+
+  function reconnectNow() {
+    if (closed || authenticated || connecting || ws?.readyState === WebSocket.CONNECTING || ws?.readyState === WebSocket.OPEN) return
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    attempt = 0
+    connection.value = typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'reconnecting'
+    void connect(generation)
+  }
+
   function disconnect() {
     generation += 1
     closed = true
@@ -249,23 +331,46 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
     pending.splice(0)
     pendingRead = null
     outstanding.clear()
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    for (const timer of deliveryTimers.values()) clearTimeout(timer)
+    deliveryTimers.clear()
     ws?.close()
     ws = null
+    connection.value = 'offline'
   }
 
   watch(() => toValue(channelId), () => {
     generation += 1
     closed = false
     authenticated = false
+    attempt = 0
     pending.splice(0)
     pendingRead = null
     outstanding.clear()
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = null
+    for (const timer of deliveryTimers.values()) clearTimeout(timer)
+    deliveryTimers.clear()
+    connection.value = 'connecting'
     ws?.close()
     ws = null
     void connect(generation)
   }, { immediate: true })
 
-  onUnmounted(disconnect)
+  const resume = () => reconnectNow()
+  onMounted(() => {
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', resume)
+  })
 
-  return { send, connect, disconnect }
+  onUnmounted(() => {
+    window.removeEventListener('focus', resume)
+    window.removeEventListener('online', resume)
+    document.removeEventListener('visibilitychange', resume)
+    disconnect()
+  })
+
+  return { send, retry, connect, disconnect, connection }
 }

@@ -17,6 +17,16 @@ function authTimestamps() {
   }
 }
 
+/** Stable participant keys preserve legacy foreign keys without creating login identities for Agents. */
+export const identityKeys = sqliteTable('identity_keys', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull(),
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
+  image: text('image'),
+  ...authTimestamps(),
+})
+
 /** Better Auth owns the auth_* tables. Discoflare's domain identity lives in users. */
 export const authUsers = sqliteTable('auth_users', {
   id: text('id').primaryKey(),
@@ -34,7 +44,7 @@ export const authSessions = sqliteTable('auth_sessions', {
   ...authTimestamps(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
-  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => identityKeys.id, { onDelete: 'cascade' }),
 }, table => [
   index('auth_sessions_user_id_idx').on(table.userId),
 ])
@@ -44,7 +54,7 @@ export const authAccounts = sqliteTable('auth_accounts', {
   issuer: text('issuer').notNull(),
   accountId: text('account_id').notNull(),
   providerId: text('provider_id').notNull(),
-  userId: text('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => identityKeys.id, { onDelete: 'cascade' }),
   accessToken: text('access_token'),
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
@@ -96,6 +106,21 @@ export const authProviderCredentials = sqliteTable('auth_provider_credentials', 
   check('auth_provider_credentials_provider_check', sql`${table.provider} in ('github', 'twitter', 'telegram', 'turnstile')`),
 ])
 
+/** Installation-wide RealtimeKit credentials entered by the owner. The API token is AES-GCM encrypted. */
+export const realtimekitSettings = sqliteTable('realtimekit_settings', {
+  id: text('id').primaryKey().default('main'),
+  accountId: text('account_id').notNull(),
+  appId: text('app_id').notNull(),
+  apiTokenCiphertext: text('api_token_ciphertext').notNull(),
+  apiTokenIv: text('api_token_iv').notNull(),
+  apiTokenVersion: integer('api_token_version').notNull().default(1),
+  voicePreset: text('voice_preset').notNull().default('voice'),
+  avPreset: text('av_preset').notNull().default('group_call_host'),
+  ...isoTimestamps(),
+}, table => [
+  check('realtimekit_settings_singleton_check', sql`${table.id} = 'main'`),
+])
+
 export const roles = sqliteTable('roles', {
   id: text('id').primaryKey(),
   key: text('key').notNull().unique(),
@@ -108,7 +133,7 @@ export const roles = sqliteTable('roles', {
 
 /** Workspace participants. Humans map to Better Auth identities; agents do not log in. */
 export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
+  id: text('id').primaryKey().references(() => identityKeys.id, { onDelete: 'cascade' }),
   kind: text('kind', { enum: ['human', 'agent'] }).notNull().default('human'),
   handle: text('handle').unique(),
   displayName: text('display_name').notNull(),
@@ -140,6 +165,25 @@ export const agents = sqliteTable('agents', {
 }, table => [
   index('agents_status_idx').on(table.status),
   check('agents_status_check', sql`${table.status} in ('active', 'paused')`),
+])
+
+/** Workspace-visible state for active conversational turns. Think remains authoritative for execution. */
+export const agentTurns = sqliteTable('agent_turns', {
+  submissionId: text('submission_id').primaryKey(),
+  agentId: text('agent_id').notNull().references(() => agents.userId, { onDelete: 'cascade' }),
+  channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  sourceMessageId: text('source_message_id').notNull().references(() => messages.id, { onDelete: 'cascade' }),
+  initiatedBy: text('initiated_by').notNull().references(() => users.id),
+  requestId: text('request_id'),
+  status: text('status', { enum: ['queued', 'thinking', 'tool', 'waiting_approval'] }).notNull().default('queued'),
+  detail: text('detail'),
+  draftMessageId: text('draft_message_id').references(() => messages.id, { onDelete: 'set null' }),
+  approvalJson: text('approval_json'),
+  ...isoTimestamps(),
+}, table => [
+  index('agent_turns_channel_agent_idx').on(table.channelId, table.agentId, table.createdAt),
+  uniqueIndex('agent_turns_request_id_unique').on(table.requestId),
+  check('agent_turns_status_check', sql`${table.status} in ('queued', 'thinking', 'tool', 'waiting_approval')`),
 ])
 
 /** One row per installation. Its id is not copied into workspace-owned tables. */
@@ -350,6 +394,7 @@ export const taskBoards = sqliteTable('task_boards', {
   name: text('name').notNull(),
   position: integer('position').notNull().default(0),
   createdBy: text('created_by').notNull().references(() => users.id),
+  archivedAt: text('archived_at'),
   ...isoTimestamps(),
 }, table => [
   index('task_boards_position_idx').on(table.position),
@@ -361,6 +406,8 @@ export const tasks = sqliteTable('tasks', {
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
   status: text('status', { enum: ['backlog', 'ready', 'running', 'review', 'done', 'failed'] }).notNull().default('backlog'),
+  priority: text('priority', { enum: ['low', 'normal', 'high', 'urgent'] }).notNull().default('normal'),
+  dueAt: text('due_at'),
   position: integer('position').notNull().default(0),
   assigneeId: text('assignee_id').references(() => agents.userId, { onDelete: 'set null' }),
   channelId: text('channel_id').references(() => channels.id, { onDelete: 'set null' }),
@@ -368,11 +415,73 @@ export const tasks = sqliteTable('tasks', {
   resultSummary: text('result_summary'),
   resultDetails: text('result_details'),
   lastError: text('last_error'),
+  activeRunId: text('active_run_id'),
+  archivedAt: text('archived_at'),
   ...isoTimestamps(),
 }, table => [
   index('tasks_board_status_position_idx').on(table.boardId, table.status, table.position),
   index('tasks_assignee_id_idx').on(table.assigneeId),
   check('tasks_status_check', sql`${table.status} in ('backlog', 'ready', 'running', 'review', 'done', 'failed')`),
+  check('tasks_priority_check', sql`${table.priority} in ('low', 'normal', 'high', 'urgent')`),
+])
+
+export const taskLabels = sqliteTable('task_labels', {
+  id: text('id').primaryKey(),
+  boardId: text('board_id').notNull().references(() => taskBoards.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  color: text('color').notNull().default('neutral'),
+  position: integer('position').notNull().default(0),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('task_labels_board_name_unique').on(table.boardId, table.name),
+  index('task_labels_board_position_idx').on(table.boardId, table.position),
+])
+
+export const taskLabelLinks = sqliteTable('task_label_links', {
+  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  labelId: text('label_id').notNull().references(() => taskLabels.id, { onDelete: 'cascade' }),
+}, table => [
+  primaryKey({ columns: [table.taskId, table.labelId] }),
+  index('task_label_links_label_idx').on(table.labelId),
+])
+
+export const taskDependencies = sqliteTable('task_dependencies', {
+  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  dependsOnTaskId: text('depends_on_task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.taskId, table.dependsOnTaskId] }),
+  index('task_dependencies_depends_on_idx').on(table.dependsOnTaskId),
+  check('task_dependencies_not_self_check', sql`${table.taskId} <> ${table.dependsOnTaskId}`),
+])
+
+export const taskChecklistItems = sqliteTable('task_checklist_items', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  completed: integer('completed', { mode: 'boolean' }).notNull().default(false),
+  position: integer('position').notNull().default(0),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  index('task_checklist_items_task_position_idx').on(table.taskId, table.position),
+])
+
+export const taskAttachments = sqliteTable('task_attachments', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
+  uploaderId: text('uploader_id').notNull().references(() => users.id),
+  r2Key: text('r2_key').notNull().unique(),
+  filename: text('filename').notNull(),
+  contentType: text('content_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  width: integer('width'),
+  height: integer('height'),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  index('task_attachments_task_created_idx').on(table.taskId, table.createdAt),
+  check('task_attachments_size_check', sql`${table.sizeBytes} > 0`),
 ])
 
 export const taskRuns = sqliteTable('task_runs', {
@@ -380,20 +489,32 @@ export const taskRuns = sqliteTable('task_runs', {
   taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
   agentId: text('agent_id').notNull().references(() => agents.userId),
   workflowId: text('workflow_id').unique(),
-  status: text('status', { enum: ['queued', 'running', 'completed', 'failed'] }).notNull().default('queued'),
+  status: text('status', { enum: ['queued', 'running', 'completed', 'failed', 'cancelled'] }).notNull().default('queued'),
+  triggeredBy: text('triggered_by').references(() => users.id),
+  titleSnapshot: text('title_snapshot').notNull().default(''),
+  descriptionSnapshot: text('description_snapshot').notNull().default(''),
+  channelIdSnapshot: text('channel_id_snapshot'),
+  agentModelSnapshot: text('agent_model_snapshot').notNull().default(''),
+  agentInstructionsSnapshot: text('agent_instructions_snapshot').notNull().default(''),
+  taskStatusBefore: text('task_status_before', { enum: ['backlog', 'ready', 'review', 'done', 'failed'] }).notNull().default('ready'),
   summary: text('summary'),
   details: text('details'),
   error: text('error'),
+  progress: text('progress'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
+  cancelledAt: text('cancelled_at'),
+  cancelledBy: text('cancelled_by').references(() => users.id),
   createdAt: text('created_at').notNull(),
 }, table => [
   index('task_runs_task_created_idx').on(table.taskId, table.createdAt),
   index('task_runs_agent_status_idx').on(table.agentId, table.status),
-  check('task_runs_status_check', sql`${table.status} in ('queued', 'running', 'completed', 'failed')`),
+  check('task_runs_status_check', sql`${table.status} in ('queued', 'running', 'completed', 'failed', 'cancelled')`),
+  check('task_runs_previous_status_check', sql`${table.taskStatusBefore} in ('backlog', 'ready', 'review', 'done', 'failed')`),
 ])
 
 export const schema = {
+  identityKeys,
   authUsers,
   authSessions,
   authAccounts,
@@ -402,6 +523,7 @@ export const schema = {
   authProviderCredentials,
   users,
   agents,
+  agentTurns,
   workspace,
   roles,
   channelCategories,
@@ -420,5 +542,10 @@ export const schema = {
   auditLog,
   taskBoards,
   tasks,
+  taskLabels,
+  taskLabelLinks,
+  taskDependencies,
+  taskChecklistItems,
+  taskAttachments,
   taskRuns,
 }

@@ -13,7 +13,11 @@ self.addEventListener('push', (event) => {
     badge: '/favicon-32x32.png',
     data: { url: typeof payload.url === 'string' ? payload.url : '/' },
   }
-  event.waitUntil(self.registration.showNotification(title, options))
+  event.waitUntil((async () => {
+    const windows = await clients.matchAll({ type: 'window', includeUncontrolled: true })
+    if (windows.some(client => client.focused && client.visibilityState === 'visible')) return
+    await self.registration.showNotification(title, options)
+  })())
 })
 
 self.addEventListener('notificationclick', (event) => {

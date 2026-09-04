@@ -37,7 +37,7 @@ beforeEach(() => {
   sqlite = new DatabaseSync(':memory:')
   sqlite.exec(`
     CREATE TABLE users (id TEXT PRIMARY KEY, status TEXT NOT NULL);
-    CREATE TABLE channels (id TEXT PRIMARY KEY, type TEXT NOT NULL, visibility TEXT NOT NULL, parent_id TEXT);
+    CREATE TABLE channels (id TEXT PRIMARY KEY, name TEXT NOT NULL, type TEXT NOT NULL, visibility TEXT NOT NULL, parent_id TEXT);
     CREATE TABLE channel_members (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, hidden_at TEXT);
     INSERT INTO users VALUES
       ('author', 'active'),
@@ -53,11 +53,12 @@ afterEach(() => sqlite.close())
 
 describe('channel activity audience', () => {
   it('targets every other active member for a workspace channel', async () => {
-    sqlite.exec(`INSERT INTO channels VALUES ('general', 'text', 'workspace', NULL);`)
+    sqlite.exec(`INSERT INTO channels VALUES ('general', 'general', 'text', 'workspace', NULL);`)
 
     await expect(channelActivityAudience(db, 'general', 'author')).resolves.toEqual({
       sourceChannelId: 'general',
       rootChannelId: 'general',
+      rootName: 'general',
       rootType: 'text',
       recipientIds: ['member-a', 'member-b', 'outsider'],
     })
@@ -65,7 +66,7 @@ describe('channel activity audience', () => {
 
   it('does not leak private-channel activity to non-members', async () => {
     sqlite.exec(`
-      INSERT INTO channels VALUES ('private', 'text', 'private', NULL);
+      INSERT INTO channels VALUES ('private', 'private', 'text', 'private', NULL);
       INSERT INTO channel_members (channel_id, user_id) VALUES
         ('private', 'author'),
         ('private', 'member-a'),
@@ -75,6 +76,7 @@ describe('channel activity audience', () => {
     await expect(channelActivityAudience(db, 'private', 'author')).resolves.toEqual({
       sourceChannelId: 'private',
       rootChannelId: 'private',
+      rootName: 'private',
       rootType: 'text',
       recipientIds: ['member-a'],
     })
@@ -83,8 +85,8 @@ describe('channel activity audience', () => {
   it('maps a DM thread to its parent and only targets active DM participants', async () => {
     sqlite.exec(`
       INSERT INTO channels VALUES
-        ('dm', 'dm', 'private', NULL),
-        ('thread', 'thread', 'private', 'dm');
+        ('dm', 'dm', 'dm', 'private', NULL),
+        ('thread', 'thread', 'thread', 'private', 'dm');
       INSERT INTO channel_members (channel_id, user_id) VALUES
         ('dm', 'author'),
         ('dm', 'member-b'),
@@ -94,6 +96,7 @@ describe('channel activity audience', () => {
     await expect(channelActivityAudience(db, 'thread', 'author')).resolves.toEqual({
       sourceChannelId: 'thread',
       rootChannelId: 'dm',
+      rootName: 'dm',
       rootType: 'dm',
       recipientIds: ['member-b'],
     })
@@ -102,8 +105,8 @@ describe('channel activity audience', () => {
   it('unhides a DM root before publishing thread activity', async () => {
     sqlite.exec(`
       INSERT INTO channels VALUES
-        ('dm', 'dm', 'private', NULL),
-        ('thread', 'thread', 'private', 'dm');
+        ('dm', 'dm', 'dm', 'private', NULL),
+        ('thread', 'thread', 'thread', 'private', 'dm');
       INSERT INTO channel_members VALUES
         ('dm', 'author', NULL),
         ('dm', 'member-b', '2026-09-04T00:00:00Z');
@@ -118,13 +121,24 @@ describe('channel activity audience', () => {
       WORKSPACE_DO: { getByName: () => ({ notifyChannelActivity }) },
     }
 
-    await signalChannelActivity(env as never, 'thread', 'author', 'message-1')
+    await signalChannelActivity(env as never, {
+      id: 'message-1',
+      channelId: 'thread',
+      author: { id: 'author', kind: 'human', displayName: 'Alice', avatarR2Key: null },
+      content: 'hello from the thread',
+      attachmentCount: 0,
+    })
 
     expect(notifyChannelActivity).toHaveBeenCalledWith({
       t: 'channel.activity',
       sourceChannelId: 'thread',
       rootChannelId: 'dm',
       messageId: 'message-1',
+      notification: {
+        title: 'Alice',
+        body: 'hello from the thread',
+        url: '/channels/dm/threads/thread',
+      },
     }, ['member-b'])
   })
 })
@@ -145,6 +159,7 @@ describe('workspace event delivery', () => {
       sourceChannelId: 'thread',
       rootChannelId: 'private',
       messageId: '01990000-0000-7000-8000-000000000001',
+      notification: { title: 'Alice in #private', body: 'hello', url: '/channels/private/threads/thread' },
     }
 
     sendWorkspaceEvent(sockets, new Set(['member-a']), event)
@@ -165,9 +180,10 @@ describe('workspace unread cache events', () => {
       sourceChannelId: 'thread',
       rootChannelId: 'parent',
       messageId: '01990000-0000-7000-8000-000000000002',
+      notification: { title: 'Alice in #parent', body: 'hello', url: '/channels/parent/threads/thread' },
     })
 
-    expect(cache.getQueryData(['channels', 'main'])).toEqual({ channels: [{ id: 'parent', unread: true }] })
+    expect(cache.getQueryData(['channels', 'main'])).toEqual({ channels: [{ id: 'parent', unread: true, unreadCount: 1 }] })
   })
 
   it('ignores activity at or behind a cursor already read in another delivery order', () => {
@@ -180,6 +196,7 @@ describe('workspace unread cache events', () => {
       sourceChannelId: 'thread',
       rootChannelId: 'dm',
       messageId: '01990000-0000-7000-8000-000000000002',
+      notification: { title: 'Alice', body: 'hello', url: '/channels/dm/threads/thread' },
     })
 
     expect(cache.getQueryData(['dms'])).toEqual({ channels: [{ id: 'dm', unread: false }] })
@@ -199,8 +216,8 @@ describe('workspace unread cache events', () => {
     })
 
     expect(cache.getQueryData(['readCursor', 'thread'])).toBe('01990000-0000-7000-8000-000000000003')
-    expect(cache.getQueryData(['channels', 'main'])).toEqual({ channels: [{ id: 'parent', unread: false }] })
-    expect(cache.getQueryData(['dms'])).toEqual({ channels: [{ id: 'parent', unread: false }] })
+    expect(cache.getQueryData(['channels', 'main'])).toEqual({ channels: [{ id: 'parent', unread: false, unreadCount: 0 }] })
+    expect(cache.getQueryData(['dms'])).toEqual({ channels: [{ id: 'parent', unread: false, unreadCount: 0 }] })
   })
 
   it('invalidates lists so a hidden DM can reappear on new activity', () => {
@@ -213,9 +230,33 @@ describe('workspace unread cache events', () => {
       sourceChannelId: 'dm',
       rootChannelId: 'dm',
       messageId: '01990000-0000-7000-8000-000000000004',
+      notification: { title: 'Alice', body: 'hello', url: '/channels/dm' },
     })
 
     expect(cache.getQueryState(['channels', 'main'])?.isInvalidated).toBe(true)
     expect(cache.getQueryState(['dms'])?.isInvalidated).toBe(true)
+  })
+
+  it('invalidates task boards and the changed task detail', () => {
+    const cache = new QueryClient()
+    cache.setQueryData(['boards', 'main', false], { boards: [] })
+    cache.setQueryData(['task', 'task-1'], { task: { id: 'task-1' } })
+
+    applyWorkspaceRealtimeEvent(cache, { t: 'tasks.changed', boardId: 'board-1', taskId: 'task-1' })
+
+    expect(cache.getQueryState(['boards', 'main', false])?.isInvalidated).toBe(true)
+    expect(cache.getQueryState(['task', 'task-1'])?.isInvalidated).toBe(true)
+  })
+
+  it('invalidates the member directory when workspace membership changes', () => {
+    const cache = new QueryClient()
+    cache.setQueryData(['members', 'main'], { members: [] })
+
+    applyWorkspaceRealtimeEvent(cache, {
+      t: 'members.changed',
+      workspaceId: 'main',
+    } as never)
+
+    expect(cache.getQueryState(['members', 'main'])?.isInvalidated).toBe(true)
   })
 })

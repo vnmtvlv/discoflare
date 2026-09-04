@@ -1,4 +1,4 @@
-import { realtimekitConfigured } from '../../../workers/realtimekit'
+import { loadRealtimeKitConfig, realtimekitConfigured } from '../../../workers/realtimekit'
 import { ensureAdminFromEnv, readAdminEnv } from '../../utils/bootstrap'
 import { cf } from '../../utils/cf'
 import { ensureMigrated, userCount } from '../../utils/db'
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     notificationDo: Boolean(env.NOTIFICATION_DO),
     agentDo: Boolean(env.AGENT_DO),
     agentSandbox: Boolean(env.AGENT_SANDBOX),
-    agentWorkflow: Boolean(env.AGENT_TASK_WORKFLOW && env.AGENT_MESSAGE_WORKFLOW),
+    agentWorkflow: Boolean(env.AGENT_TASK_WORKFLOW),
     workersAi: Boolean(env.AI),
   }
 
@@ -69,7 +69,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     migrated,
     adminEnv: Boolean(readAdminEnv(env)),
     bindings,
-    realtimekit: realtimekitConfigured(env),
+    realtimekit: realtimekitConfigured(await loadRealtimeKitConfig(env)),
     twitterAuth: Boolean(env.TWITTER_CLIENT_ID?.trim() && env.TWITTER_CLIENT_SECRET?.trim()),
     ...readAppBranding(env),
   }

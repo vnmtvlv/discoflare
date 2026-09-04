@@ -9,11 +9,12 @@
     "generate:native": "node scripts/generate-native.mjs",
     "dev": "nuxt dev",
     "dev:remote": "node scripts/dev-remote.mjs",
-    "dev:full": "nuxt build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
+    "dev:full": "pnpm db:migrate:local && pnpm build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
     "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "preview": "nuxt build && wrangler dev",
     "deploy": "pnpm build && pnpm deploy:built",
     "deploy:built": "pnpm db:migrate && wrangler deploy",
+    "release:installer": "pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .installer/bundle && node scripts/build-installer-release.mjs",
     "env:init": "node scripts/init-env.mjs",
     "vapid:generate": "node scripts/generate-vapid.mjs",
     "postinstall": "nuxt prepare",
@@ -72,6 +73,15 @@
       },
       "TURNSTILE_SECRET_KEY": {
         "description": "Optional Cloudflare Turnstile secret key for email signup."
+      },
+      "REALTIMEKIT_ACCOUNT_ID": {
+        "description": "Optional RealtimeKit account ID. Deployment credentials override settings entered in Discoflare."
+      },
+      "REALTIMEKIT_APP_ID": {
+        "description": "Optional RealtimeKit app ID."
+      },
+      "REALTIMEKIT_API_KEY": {
+        "description": "Optional Cloudflare API token with Realtime permissions. Store this as a secret."
       },
       "VAPID_SUBJECT": {
         "description": "Web Push contact URI, normally mailto:admin@example.com."

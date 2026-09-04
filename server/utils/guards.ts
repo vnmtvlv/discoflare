@@ -92,6 +92,10 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     const parts = await db.select().from(channelMembers).where(eq(channelMembers.channelId, accessRoot.id))
     const userRows = await db.select().from(users).where(inArray(users.id, parts.map((p) => p.userId)))
     const participants = userRows.map(toPublicUser)
+    const canManageAgents = baseMember.isOwner || hasPermission(baseMember.perms, Permission.manageWorkspace)
+    if (participants.some(participant => participant.kind === 'agent') && !canManageAgents) {
+      fail(404, 'not_found', 'Channel not found')
+    }
     const memberRows = await db.select({ userId: users.id }).from(users)
       .where(and(inArray(users.id, parts.map((p) => p.userId)), eq(users.status, 'active')))
     const stillIn = new Set(memberRows.map((m) => m.userId))

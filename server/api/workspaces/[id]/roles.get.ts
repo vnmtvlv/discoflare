@@ -1,13 +1,17 @@
 import { eq } from 'drizzle-orm'
 import { roles, users } from '../../../../drizzle/schema'
+import { hasPermission, Permission } from '../../../../shared/permissions'
 import { requireMember } from '../../../utils/guards'
-import { cf } from '../../../utils/cf'
+import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { toRoleDto } from '../../../utils/role-policy'
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id')!
-  await requireMember(event, workspaceId)
+  const actor = await requireMember(event, workspaceId)
+  if (!hasPermission(actor.perms, Permission.manageRoles) && !hasPermission(actor.perms, Permission.manageChannels)) {
+    fail(403, 'forbidden', 'Missing permission')
+  }
   const { env } = cf(event)
   const db = getDb(env.DB)
   const [roleRows, memberRows] = await Promise.all([

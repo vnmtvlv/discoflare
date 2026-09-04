@@ -1,17 +1,37 @@
 import { isDmType } from '../shared/dm'
+import { hasPermission, Permission } from '../shared/permissions'
 import { asRpc, type DiscoflareEnv } from './env'
 
 type AgentIngressMessage = {
   messageId: string
   channelId: string
+  authorId: string
   authorName: string
   content: string
   mentionIds: string[]
+  mode?: 'queue' | 'steer'
+}
+
+type AgentReceiveMessage = Omit<AgentIngressMessage, 'mentionIds'> & {
+  hasImages: boolean
 }
 
 /** Starts one durable reply workflow per addressed agent. D1 remains the routing authority. */
 export async function signalAgentsForMessage(env: DiscoflareEnv, message: AgentIngressMessage): Promise<void> {
-  if (!message.content.trim()) return
+  const image = await env.DB.prepare(
+    "SELECT id FROM attachments WHERE message_id = ? AND content_type LIKE 'image/%' LIMIT 1",
+  ).bind(message.messageId).first<{ id: string }>()
+  const hasImages = Boolean(image)
+  if (!message.content.trim() && !hasImages) return
+  const actor = await env.DB.prepare(
+    `SELECT r.permissions_bitmask as permissions, w.owner_id as ownerId
+     FROM users u
+     JOIN roles r ON r.id = u.role_id
+     JOIN workspace w ON w.id = 'main'
+     WHERE u.id = ? AND u.status = 'active'`,
+  ).bind(message.authorId).first<{ permissions: number; ownerId: string }>()
+  if (!actor || (actor.ownerId !== message.authorId && !hasPermission(actor.permissions, Permission.manageWorkspace))) return
+
   const channel = await env.DB.prepare(
     'SELECT type, visibility, parent_id as parentId FROM channels WHERE id = ?',
   ).bind(message.channelId).first<{ type: string; visibility: string; parentId: string | null }>()
@@ -52,13 +72,16 @@ export async function signalAgentsForMessage(env: DiscoflareEnv, message: AgentI
 
   await Promise.allSettled((rows.results ?? []).map(async ({ id }) => {
     const stub = asRpc<{
-      receiveMessage: (input: Omit<AgentIngressMessage, 'mentionIds'>) => Promise<string>
+      receiveMessage: (input: AgentReceiveMessage) => Promise<string>
     }>(env.AGENT_DO.getByName(`agent:${id}`))
     await stub.receiveMessage({
       messageId: message.messageId,
       channelId: message.channelId,
+      authorId: message.authorId,
       authorName: message.authorName,
       content: message.content,
+      hasImages,
+      mode: message.mode,
     })
   }))
 }

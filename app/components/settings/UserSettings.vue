@@ -317,15 +317,7 @@ function navClass(id: Section) {
 
     <template v-else-if="section === 'privacy'">
       <h1 class="text-xl font-semibold text-highlighted">Privacy & Safety</h1>
-      <p class="mt-1 text-sm text-muted">Direct messages are limited to people who share this workspace.</p>
       <div class="mt-8 divide-y divide-default">
-        <div class="flex items-start justify-between gap-6 py-4">
-          <div>
-            <p class="font-medium text-highlighted">Allow direct messages</p>
-            <p class="text-sm text-muted mt-1">People in this workspace can start a 1:1 or group DM with you.</p>
-          </div>
-          <USwitch v-model="prefs.allowDms" />
-        </div>
         <div class="flex items-start justify-between gap-6 py-4">
           <div>
             <p class="font-medium text-highlighted">Display current activity</p>

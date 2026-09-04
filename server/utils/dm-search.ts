@@ -14,14 +14,15 @@ type DmSearchRow = {
   nickname: string | null
 }
 
-export async function searchDmMembers(database: D1Database, viewerId: string, query: string): Promise<DmSearchMember[]> {
+export async function searchDmMembers(database: D1Database, viewerId: string, query: string, includeAgents = true): Promise<DmSearchMember[]> {
   const filter = query
     ? 'AND (u.display_name LIKE ? OR u.nickname LIKE ? OR u.handle LIKE ?)'
     : ''
+  const kindFilter = includeAgents ? '' : "AND u.kind = 'human'"
   const statement = database.prepare(
      `SELECT u.id, u.kind, u.display_name, u.avatar_r2_key, u.handle, u.nickname
      FROM users u
-     WHERE u.status = 'active' AND u.id <> ? ${filter}
+     WHERE u.status = 'active' AND u.id <> ? ${kindFilter} ${filter}
      LIMIT 20`,
   )
   const pattern = `%${query}%`

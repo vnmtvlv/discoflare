@@ -39,6 +39,11 @@ function initials(ch: ChannelDTO) {
   return others.slice(0, 2).map((p) => p.displayName.slice(0, 1).toUpperCase()).join('')
 }
 
+function avatarUser(ch: ChannelDTO) {
+  const others = (ch.participants ?? []).filter(p => p.id !== session.user?.id)
+  return others.length === 1 ? others[0] : null
+}
+
 function togglePick(id: string) {
   picked.value = picked.value.includes(id) ? picked.value.filter((x) => x !== id) : [...picked.value, id]
 }
@@ -106,9 +111,17 @@ function searchName(member: DmSearchMember) {
           role="option"
           :aria-selected="selected === ch.id"
         >
-          <UAvatar size="2xs" :text="initials(ch)" />
+          <UserAvatar v-if="avatarUser(ch)" :user="avatarUser(ch)!" size="2xs" />
+          <UAvatar v-else size="2xs" :text="initials(ch)" />
           <span class="truncate flex-1">{{ titleOf(ch) }}</span>
-          <UChip v-if="ch.unread" size="sm" color="primary" standalone />
+          <UBadge
+            v-if="ch.unread && selected !== ch.id"
+            color="primary"
+            variant="solid"
+            size="sm"
+            :label="ch.unreadCount && ch.unreadCount > 99 ? '99+' : String(ch.unreadCount || '')"
+            :class="ch.unreadCount ? 'min-w-5 justify-center' : 'size-2 rounded-full p-0'"
+          />
         </NuxtLink>
         <UButton
           icon="i-ph-x"
@@ -147,7 +160,7 @@ function searchName(member: DmSearchMember) {
               @update:model-value="togglePick(m.id)"
             />
             <button type="button" class="flex-1 flex items-center gap-2 h-9 px-1 rounded-md hover:bg-elevated text-start" @click="openDm(m.id)">
-              <UAvatar size="xs" :text="searchName(m).slice(0, 1).toUpperCase()" />
+              <UserAvatar :user="m" size="xs" />
               <span class="min-w-0 flex-1">
                 <span class="block truncate text-sm">{{ searchName(m) }}</span>
                 <span v-if="m.handle || m.nickname" class="block truncate text-xs text-muted">

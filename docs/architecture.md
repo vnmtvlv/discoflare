@@ -16,8 +16,8 @@ Nuxt/Nitro Worker
   ├─ WorkspaceDO presence
   ├─ NotificationDO D1 outbox delivery + retries
   ├─ RateLimitDO per ip:/user:
-  ├─ AgentDO      one Think runtime per Agent
-  ├─ Workflows    durable Task Runs and chat replies
+  ├─ AgentDO      one coordinator + isolated Think facets
+  ├─ Workflows    durable Task Runs
   ├─ Workers AI   default model inference
   └─ Sandbox      one stable computer identity per Agent
                     └─ /workspace checkpoint → R2
@@ -29,8 +29,8 @@ RealtimeKit
 ## Rules
 
 1. Live path ≠ storage path. A Channel DO serializes writes, persists to D1, then broadcasts.
-2. D1 is history source of truth for messages, channel read cursors, users, and access control. Recorded audio is an ordinary Message Attachment stored in R2; it does not use RealtimeKit. File reads remain authenticated, and audio seeking uses single byte-range responses.
-3. Workspace DO owns ephemeral presence and recipient-targeted unread signals. It derives online/idle state from WebSocket attachments and fans out only message/read identifiers to authorized user sockets; presence and unread truth remain in D1, never on `users` or DO storage.
+2. D1 is history source of truth for messages, channel read cursors, users, access control, and owner-managed integration settings. RealtimeKit API tokens saved in Workspace Settings are AES-GCM encrypted with `AUTH_SECRET`; deployment credentials override them. Recorded audio is an ordinary Message Attachment stored in R2; it does not use RealtimeKit. File reads remain authenticated, and audio seeking uses single byte-range responses.
+3. Workspace DO owns ephemeral presence and recipient-targeted unread signals. It derives online/idle state from visible WebSocket attachments, honors each client's activity-visibility preference, and fans out only message/read identifiers to authorized user sockets; presence and unread truth remain in D1, never on `users` or DO storage.
 4. One Channel DO named `channel:<channelId>` and one Workspace DO named `workspace:main`. Typing is scoped to a Channel DO.
 5. Huddle media never transits the Channel DO.
 6. Single Worker. Durable Object classes are exported from `server/cloudflare-entry.ts`.
@@ -38,8 +38,9 @@ RealtimeKit
 8. A login method is effective only when both its owner-controlled switch and credentials/capability are present. Deployment credentials override encrypted D1 credentials and are never editable through the app.
 9. Web Push subscriptions and its delivery outbox live in D1. Message and huddle writes enqueue notification rows in the same D1 batch; `NotificationDO` uses alarms to deliver and retry without another Worker or process.
 10. Agents are real Members in the shared author/access model, but never authentication identities. `users.kind` distinguishes humans from agents; only humans have Better Auth identities and sessions.
-11. One `DiscoflareAgent` Durable Object is named `agent:<agentId>`. Think owns its SQLite-backed transcript, tool loop, recovery fibers, and workflow callbacks. D1 remains authoritative for Agent profiles and workspace-visible task state.
-12. One Task Run maps to one Cloudflare Workflow instance. Each addressed chat message also maps to one reply Workflow. Workflows own retryable execution steps; the Agent DO owns reasoning; the Sandbox owns command execution. These are deliberately separate failure and retry boundaries.
+11. One top-level `DiscoflareAgent` coordinator is named `agent:<agentId>`. Each Channel or Thread gets a `DiscoflareThink` sub-agent with its own SQLite transcript; each Task Run gets a separate Think sub-agent. Conversation memory and concurrent task reasoning cannot leak across those facets.
+12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
+12. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
 13. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
 14. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
 
@@ -47,15 +48,19 @@ RealtimeKit
 
 ```
 Human creates Task in D1
+  → D1 atomically claims the Task and snapshots its Task and Agent configuration
   → Worker asks agent:<id> Agent DO to start
-  → Agent DO creates Workflow with run id
+  → Agent coordinator opens an isolated Think facet for the run
+  → Think facet creates Workflow with run id
   → Workflow marks Task Run running in D1
   → Think runs the model through Workers AI
   → tools execute in the Agent's Sandbox
   → Sandbox /workspace checkpoints to R2
-  → Workflow records review/done/failed in D1
+  → Workflow records review/done/failed in D1 and clears the active-run claim
   → optional result Message is authored by the Agent
 ```
+
+Only a Workflow can enter or leave `running`. Cancellation terminates the Workflow and restores the pre-run Task status; reconciliation repairs Task and Task Run state from the Workflow status after an interrupted request. Task mutations and live progress fan out through the Workspace DO.
 
 The separation is intentional: D1 answers “what does the workspace believe?”, the Agent DO answers “what does this agent remember and coordinate?”, Workflow answers “where is this execution?”, Sandbox answers “where does code run?”, and R2 answers “which large bytes must survive?”.
 
@@ -64,14 +69,17 @@ The separation is intentional: D1 answers “what does the workspace believe?”
 ```text
 Human mentions Agent, or sends a DM containing an Agent
   → Worker validates the Message and Channel membership in D1
-  → Worker signals agent:<id> Agent DO
-  → Agent DO starts one idempotent reply Workflow for that Message
-  → Think reasons and may use the Agent's tools/computer
-  → In a 1:1 DM, Workflow creates/reuses a Thread rooted at that Message
-  → Workflow posts the reply as the Agent's normal workspace Message in that Thread
+  → Worker signals the agent:<id> coordinator
+  → Coordinator routes to the Channel/Thread's isolated Think facet
+  → Think durably queues one idempotent submission for that Message
+  → Lifecycle hooks expose tool progress and stream one editable Agent Message
+  → Risky actions park durably until an authorized Member approves or rejects them
+  → In a 1:1 DM, the facet creates/reuses a Thread rooted at that Message
 ```
 
 Replies in that DM Thread keep addressing the same Agent without another mention. Workspace-channel mentions and group-DM replies remain in their source Channel. An Agent-authored Message does not recursively enter this routing path. Paused Agents are not addressed, and a mentioned Agent cannot cross a private Channel boundary it has not joined.
+
+Image attachments are loaded from R2 only for the active turn and passed as inline model input when the selected Workers AI model supports vision. Binary image data is not persisted in the Think transcript. A text-only model is told that visual input was unavailable and must not claim that it inspected the image.
 
 ## Notifications
 

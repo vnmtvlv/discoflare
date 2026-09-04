@@ -7,9 +7,8 @@ export { ChannelDurableObject } from '../workers/channel-do'
 export { WorkspaceDurableObject } from '../workers/workspace-do'
 export { RateLimitDurableObject } from '../workers/rate-limit-do'
 export { NotificationDurableObject } from '../workers/notification-do'
-export { DiscoflareAgent } from '../workers/discoflare-agent'
+export { DiscoflareAgent, DiscoflareThink } from '../workers/discoflare-agent'
 export { AgentTaskWorkflow } from '../workers/agent-task-workflow'
-export { AgentMessageWorkflow } from '../workers/agent-message-workflow'
 export { Sandbox } from '@cloudflare/sandbox'
 
 const nitroApp = useNitroApp()

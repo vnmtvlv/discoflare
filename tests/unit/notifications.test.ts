@@ -7,6 +7,7 @@ import {
   pushRetryDelayMs,
 } from '../../shared/notifications'
 import { huddleNotificationStatement, messageNotificationStatement } from '../../workers/notifications'
+import { workerPushRequestInit } from '../../workers/push'
 
 type QueryResult = Record<string, unknown> | Array<Record<string, unknown>> | null
 
@@ -61,6 +62,23 @@ describe('notification helpers', () => {
     expect(pushDeliveryDisposition(429)).toBe('retry')
     expect(pushDeliveryDisposition(503)).toBe('retry')
     expect(pushDeliveryDisposition(400)).toBe('failed')
+  })
+
+  it('lets the Workers runtime calculate the outbound push content length', () => {
+    const request = workerPushRequestInit({
+      method: 'post',
+      headers: {
+        authorization: 'vapid token',
+        'content-length': '4096',
+        'content-type': 'application/octet-stream',
+      },
+      body: new Uint8Array([1, 2, 3]),
+    })
+
+    expect(request.headers.get('content-length')).toBeNull()
+    expect(request.headers.get('authorization')).toBe('vapid token')
+    expect(request.body).toEqual(new Uint8Array([1, 2, 3]))
+    expect(request.redirect).toBe('manual')
   })
 
   it('bounds retries and message previews', () => {

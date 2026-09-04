@@ -9,6 +9,7 @@ import { getDb } from '../../../../utils/db'
 import { writeAudit } from '../../../../utils/messages'
 import { assertRoleAssignable } from '../../../../utils/role-policy'
 import { parseBody } from '../../../../utils/validate'
+import { signalMembersChanged } from '../../../../../workers/member-events'
 
 const bodySchema = z.object({ roleId: z.string().min(8) })
 
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, workspaceId, Permission.manageRoles)
   if (userId === actor.ownerId) fail(403, 'forbidden', 'Owner role cannot be changed')
   const body = parseBody(bodySchema, await readBody(event))
-  const { env } = cf(event)
+  const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const [target, role] = await Promise.all([
     db.select({ id: users.id }).from(users).where(and(eq(users.id, userId), eq(users.status, 'active'))).limit(1),
@@ -36,5 +37,6 @@ export default defineEventHandler(async (event) => {
     targetId: userId,
     meta: { roleId: role[0].id, roleName: role[0].name },
   })
+  waitUntil(signalMembersChanged(env, workspaceId))
   return { ok: true }
 })

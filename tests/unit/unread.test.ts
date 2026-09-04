@@ -1,12 +1,17 @@
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { channelUnreadSql } from '../../workers/unread'
+import { channelUnreadCountSql, channelUnreadCountsSql, channelUnreadSql } from '../../workers/unread'
 
 let db: DatabaseSync
 
 function hasUnread(userId: string, channelId: string): boolean {
   const row = db.prepare(channelUnreadSql).get(channelId, channelId, userId) as { unread: number }
   return row.unread === 1
+}
+
+function unreadCount(userId: string, channelId: string): number {
+  const row = db.prepare(channelUnreadCountSql).get(userId, channelId, channelId) as { unread_count: number }
+  return row.unread_count
 }
 
 beforeEach(() => {
@@ -37,12 +42,49 @@ describe('channel unread aggregation', () => {
     `)
 
     expect(hasUnread('user-1', 'dm-1')).toBe(true)
+    expect(unreadCount('user-1', 'dm-1')).toBe(1)
 
     db.exec(`
       INSERT INTO channel_reads VALUES
         ('thread-1', 'user-1', '01990000-0000-7000-8000-000000000002');
     `)
     expect(hasUnread('user-1', 'dm-1')).toBe(false)
+    expect(unreadCount('user-1', 'dm-1')).toBe(0)
+  })
+
+  it('counts unread root and thread messages independently from their cursors', () => {
+    db.exec(`
+      INSERT INTO channels VALUES ('channel-1', 'text', NULL), ('thread-1', 'thread', 'channel-1');
+      INSERT INTO messages VALUES
+        ('01990000-0000-7000-8000-000000000001', 'channel-1'),
+        ('01990000-0000-7000-8000-000000000002', 'channel-1'),
+        ('01990000-0000-7000-8000-000000000003', 'thread-1');
+      INSERT INTO channel_reads VALUES
+        ('channel-1', 'user-1', '01990000-0000-7000-8000-000000000001');
+    `)
+
+    expect(unreadCount('user-1', 'channel-1')).toBe(2)
+  })
+
+  it('counts many root channels with one grouped query', () => {
+    db.exec(`
+      INSERT INTO channels VALUES
+        ('channel-1', 'text', NULL),
+        ('channel-2', 'text', NULL),
+        ('thread-1', 'thread', 'channel-1');
+      INSERT INTO messages VALUES
+        ('01990000-0000-7000-8000-000000000001', 'channel-1'),
+        ('01990000-0000-7000-8000-000000000002', 'thread-1'),
+        ('01990000-0000-7000-8000-000000000003', 'channel-2');
+      INSERT INTO channel_reads VALUES
+        ('channel-1', 'user-1', '01990000-0000-7000-8000-000000000001');
+    `)
+
+    const rows = db.prepare(channelUnreadCountsSql(2)).all('user-1', 'channel-1', 'channel-2')
+    expect(rows).toEqual([
+      { channel_id: 'channel-1', unread_count: 1 },
+      { channel_id: 'channel-2', unread_count: 1 },
+    ])
   })
 
   it('does not let an older tab regress a newer read cursor', () => {

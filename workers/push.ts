@@ -18,6 +18,14 @@ type OutboxRow = {
   auth: string
 }
 
+type BuiltPushRequest = Awaited<ReturnType<typeof buildPushPayload>>
+
+export function workerPushRequestInit(request: BuiltPushRequest) {
+  const headers = new Headers(request.headers)
+  headers.delete('content-length')
+  return { ...request, headers, redirect: 'manual' as const }
+}
+
 export function pushConfigured(env: DiscoflareEnv): boolean {
   return Boolean(env.VAPID_SUBJECT?.trim() && env.VAPID_PUBLIC_KEY?.trim() && env.VAPID_PRIVATE_KEY?.trim())
 }
@@ -32,8 +40,9 @@ async function deliverPush(env: DiscoflareEnv, row: OutboxRow) {
     return { disposition: 'failed' as const, error: 'invalid_payload' }
   }
 
+  let request: BuiltPushRequest
   try {
-    const request = await buildPushPayload({
+    request = await buildPushPayload({
       data: payload,
       options: {
         ttl: payload.tag.startsWith('huddle:') ? 90 : 4 * 60 * 60,
@@ -48,16 +57,35 @@ async function deliverPush(env: DiscoflareEnv, row: OutboxRow) {
       publicKey: env.VAPID_PUBLIC_KEY!.trim(),
       privateKey: env.VAPID_PRIVATE_KEY!.trim(),
     })
+  }
+  catch (error) {
+    return { disposition: 'retry' as const, error: pushErrorCode('build', error) }
+  }
+
+  try {
     const response = await fetch(row.endpoint, {
-      ...request,
-      redirect: 'error',
+      ...workerPushRequestInit(request),
       signal: AbortSignal.timeout(10_000),
     })
     return { disposition: pushDeliveryDisposition(response.status), error: `http_${response.status}` }
   }
-  catch {
-    return { disposition: 'retry' as const, error: 'network_error' }
+  catch (error) {
+    return { disposition: 'retry' as const, error: pushErrorCode('fetch', error, row.endpoint) }
   }
+}
+
+function pushErrorCode(stage: 'build' | 'fetch', error: unknown, endpoint?: string): string {
+  const name = error instanceof Error ? error.name : 'unknown'
+  const safeName = name.toLowerCase().replace(/[^a-z0-9]+/gu, '_').replace(/^_+|_+$/gu, '') || 'unknown'
+  if (!(error instanceof Error) || !error.message) return `${stage}_${safeName}`
+  const message = endpoint ? error.message.replaceAll(endpoint, '[endpoint]') : error.message
+  const safeMessage = message
+    .replace(/[A-Za-z0-9_-]{40,}/gu, '[token]')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, '_')
+    .replace(/^_+|_+$/gu, '')
+    .slice(0, 120)
+  return safeMessage ? `${stage}_${safeName}_${safeMessage}` : `${stage}_${safeName}`
 }
 
 export async function drainNotificationOutbox(env: DiscoflareEnv): Promise<void> {

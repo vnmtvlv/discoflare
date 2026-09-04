@@ -23,9 +23,13 @@ export default defineEventHandler(async (event) => {
   const page = hasMore ? rows.slice(0, limit) : rows
   const chronological = [...page].reverse()
   const dtos = await hydrateMessages(env, chronological, access.user.id)
+  const read = await env.DB.prepare(
+    'SELECT last_read_message_id as lastReadMessageId FROM channel_reads WHERE channel_id = ? AND user_id = ?',
+  ).bind(id, access.user.id).first<{ lastReadMessageId: string | null }>()
   return {
     frozen: access.frozen,
     messages: dtos,
     nextCursor: hasMore ? page[page.length - 1]?.id ?? null : null,
+    lastReadMessageId: read?.lastReadMessageId ?? null,
   }
 })

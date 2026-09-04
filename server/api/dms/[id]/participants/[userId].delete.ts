@@ -4,7 +4,7 @@ import { requireChannelAccess } from '../../../../utils/guards'
 import { cf, fail } from '../../../../utils/cf'
 import { getDb } from '../../../../utils/db'
 import { fanoutDm, loadParticipants } from '../../../../utils/dms'
-import { endMeeting } from '../../../../../workers/realtimekit'
+import { endMeeting, loadRealtimeKitConfig } from '../../../../../workers/realtimekit'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const remaining = await loadParticipants(env, id)
   await fanoutDm(env, id, { t: 'dm.participants', participants: remaining })
   if (!remaining.length && access.channel.huddleMeetingId) {
-    await endMeeting(env, access.channel.huddleMeetingId)
+    await endMeeting(await loadRealtimeKitConfig(env), access.channel.huddleMeetingId)
   }
   return { ok: true }
 })
