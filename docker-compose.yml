@@ -1,6 +1,6 @@
 services:
   discoflare:
-    image: ghcr.io/vnmtvlv/discoflare:${DISCOFLARE_VERSION:-0.1.1}
+    image: ghcr.io/vnmtvlv/discoflare:${DISCOFLARE_VERSION:-0.1.2}
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
