@@ -17,6 +17,16 @@ One workspace for humans and agents.
 
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
+## Repositories
+
+Discoflare is developed across three independent repositories so each product surface can keep its own deployment and release lifecycle:
+
+- **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the core Nuxt application, API, and Cloudflare runtime.
+- **[discoflare.com](https://github.com/vnmtvlv/discoflare-com)** — The public website and guided Cloudflare installer.
+- **`discoflare-clients`** — The separately maintained iOS, macOS, and browser extension shells built from this repository's generated frontend.
+
+This repository remains the source of truth for the product runtime and shared frontend. `sandbox.discoflare.com` is a deployment of this repository, not a separate application.
+
 ## What you can do
 
 ### Built-in apps
