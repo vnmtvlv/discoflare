@@ -58,6 +58,7 @@ export type DiscoflareEnv = {
   APP_TITLE?: string
   APP_SUBTITLE?: string
   ADMIN_EMAIL?: string
+  ADMIN_SETUP_TOKEN?: string
   ADMIN_PASSWORD?: string
   ADMIN_NAME?: string
   ADMIN_HANDLE?: string

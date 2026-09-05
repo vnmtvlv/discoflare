@@ -1,10 +1,14 @@
-import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { randomBytes } from 'node:crypto'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 
-const required = ['PUBLIC_ORIGIN', 'AUTH_SECRET', 'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'ADMIN_NAME']
+const required = ['PUBLIC_ORIGIN', 'AUTH_SECRET', 'ADMIN_EMAIL']
 const forwarded = [
   ...required,
+  'ADMIN_SETUP_TOKEN',
+  'ADMIN_PASSWORD',
+  'ADMIN_NAME',
   'ADMIN_HANDLE',
   'ADMIN_WORKSPACE',
   'APP_NAME',
@@ -50,6 +54,30 @@ const wrangler = fileURLToPath(new URL('../node_modules/wrangler/bin/wrangler.js
 
 await mkdir(dataDir, { recursive: true })
 await mkdir(envDir, { recursive: true })
+
+if (!process.env.ADMIN_PASSWORD?.trim() && !process.env.ADMIN_SETUP_TOKEN?.trim()) {
+  const setupTokenFile = `${dataDir}/owner-setup-token`
+  try {
+    const storedToken = (await readFile(setupTokenFile, 'utf8')).trim()
+    if (storedToken.length < 32) throw new Error('Stored owner setup token is invalid')
+    process.env.ADMIN_SETUP_TOKEN = storedToken
+  }
+  catch {
+    process.env.ADMIN_SETUP_TOKEN = randomBytes(32).toString('base64url')
+    await writeFile(setupTokenFile, `${process.env.ADMIN_SETUP_TOKEN}\n`, { mode: 0o600 })
+  }
+}
+
+if (process.env.ADMIN_SETUP_TOKEN?.trim() && process.env.ADMIN_SETUP_TOKEN.trim().length < 32) {
+  throw new Error('ADMIN_SETUP_TOKEN must be at least 32 characters')
+}
+
+if (!process.env.ADMIN_PASSWORD?.trim() && process.env.ADMIN_SETUP_TOKEN?.trim()) {
+  const setupUrl = new URL('/setup', process.env.PUBLIC_ORIGIN)
+  setupUrl.hash = `claim=${encodeURIComponent(process.env.ADMIN_SETUP_TOKEN.trim())}`
+  console.log(`Owner setup: ${setupUrl}`)
+}
+
 await writeFile(
   envFile,
   `${forwarded

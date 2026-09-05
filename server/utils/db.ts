@@ -76,3 +76,12 @@ export async function userCount(db: D1Database): Promise<number> {
     return 0
   }
 }
+
+export async function workspaceReady(db: D1Database): Promise<boolean> {
+  try {
+    return Boolean(await db.prepare("SELECT id FROM workspace WHERE id = 'main'").first())
+  }
+  catch {
+    return false
+  }
+}

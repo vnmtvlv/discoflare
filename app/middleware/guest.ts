@@ -6,4 +6,5 @@ export default defineNuxtRouteMiddleware(async () => {
     else await session.refresh(asSessionFetcher(useRequestFetch()))
   }
   if (session.user) return navigateTo('/')
+  if (session.health && !session.health.ready) return navigateTo('/setup')
 })

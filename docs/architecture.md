@@ -46,6 +46,7 @@ RealtimeKit
 16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
 17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts, R2 owns raw MIME and attachment bytes, Email Routing invokes the same Worker, and `MAIL_EMAIL` sends new mail and replies. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
 18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, and Worker bindings persist after OAuth expires; the installed Worker does not retain the token. Daily mailbox and access changes are D1-only because one catch-all route rejects addresses that do not map to an enabled Mailbox.
+19. A fresh installation is not ready until its deployment-selected Owner completes the private Owner Setup Claim on the workspace origin. The claim is random and single-use by state: normal signup is rejected before the `main` Workspace exists, and every setup attempt is rejected after the Owner and Workspace are created atomically.
 
 ## Email flow
 

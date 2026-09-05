@@ -31,7 +31,7 @@ onMounted(async () => {
     await navigateTo(safeNextPath())
     return
   }
-  if (session.health && session.health.users === 0) await navigateTo('/setup')
+  if (session.health && !session.health.ready) await navigateTo('/setup')
   if (route.query.verified === '1') toast.add({ title: 'Email verified. You can sign in.', color: 'success' })
   if (route.query.reset === '1') toast.add({ title: 'Password reset. You can sign in.', color: 'success' })
 })
@@ -181,13 +181,13 @@ const canCreateAccount = computed(() => Boolean(
       <UButton type="submit" size="lg" label="Sign in" block :loading="busy" class="mt-2" />
     </UForm>
 
-    <div v-if="canCreateAccount || session.health?.users === 0" class="mt-8 space-y-2 border-t border-default pt-5 text-sm text-muted">
+    <div v-if="canCreateAccount || session.health?.ready === false" class="mt-8 space-y-2 border-t border-default pt-5 text-sm text-muted">
       <p v-if="canCreateAccount">
         New here?
         <ULink :to="signupPath" class="text-default font-medium">Create account</ULink>
       </p>
 
-      <p v-if="session.health?.users === 0">
+      <p v-if="session.health?.ready === false">
         First machine?
         <ULink to="/setup" class="text-default font-medium">Run setup</ULink>
       </p>

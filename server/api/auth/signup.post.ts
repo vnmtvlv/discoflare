@@ -5,7 +5,7 @@ import { ensureDomainUser, sessionUser, visibleAuthEmail } from '../../utils/aut
 import { emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from '../../utils/auth-config'
 import { authFromEvent, resolveAuthBaseURL } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
-import { ensureMigrated, getDb } from '../../utils/db'
+import { ensureMigrated, getDb, workspaceReady } from '../../utils/db'
 import { parseBody } from '../../utils/validate'
 import { recordOnboardingAcceptance, requireCurrentOnboardingAcceptance } from '../../utils/onboarding'
 
@@ -22,6 +22,7 @@ export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
   await ensureMigrated(env.DB)
+  if (!(await workspaceReady(env.DB))) fail(409, 'workspace_not_ready', 'The workspace owner must complete setup first')
   const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
   const publicConfig = publicAuthConfig(runtime)
 

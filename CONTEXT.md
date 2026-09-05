@@ -90,6 +90,10 @@ _Avoid_: Link (alone), invite URL as the entity
 The installation-wide admission policy. `open` makes a newly authenticated User an active Member; `invite_only` keeps a new User pending until they accept an Invite.
 _Avoid_: Hiding signup UI as the policy, workspace visibility
 
+**Owner Setup Claim**:
+The private, deployment-issued permission for the intended Owner email to create the first account on the new workspace origin. It stops working as soon as the `main` Workspace exists; it is not an open first-user race or a reusable Invite.
+_Avoid_: First user wins, installer password, permanent setup token
+
 **Login Method**:
 An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.
 _Avoid_: Provider credentials as workspace data, enabled UI button as backend authorization

@@ -5,7 +5,7 @@ const { api } = useApi()
 
 onMounted(async () => {
   if (!session.ready) await session.refresh(api)
-  if (session.health && session.health.users === 0) {
+  if (session.health && !session.health.ready) {
     await navigateTo('/setup')
     return
   }

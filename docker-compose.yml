@@ -1,14 +1,15 @@
 services:
   discoflare:
-    image: ghcr.io/vnmtvlv/discoflare:${DISCOFLARE_VERSION:-0.1.0}
+    image: ghcr.io/vnmtvlv/discoflare:${DISCOFLARE_VERSION:-0.1.1}
     restart: unless-stopped
     stop_grace_period: 30s
     environment:
       PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the public URL, for example https://chat.example.com}
       AUTH_SECRET: ${AUTH_SECRET:?Set a random secret of at least 32 characters}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?Set the initial owner email}
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set the initial owner password}
-      ADMIN_NAME: ${ADMIN_NAME:?Set the initial owner name}
+      ADMIN_SETUP_TOKEN: ${ADMIN_SETUP_TOKEN:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-}
       ADMIN_HANDLE: ${ADMIN_HANDLE:-}
       ADMIN_WORKSPACE: ${ADMIN_WORKSPACE:-HQ}
       APP_NAME: ${APP_NAME:-Discoflare}

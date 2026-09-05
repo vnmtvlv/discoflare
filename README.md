@@ -59,13 +59,13 @@ Huddle media ────────────────► RealtimeKit
 
 ## Deploy
 
-Use the installer at `discoflare.com/deploy` for the complete path: connect Cloudflare, choose an account and domain, choose the Discoflare subdomain and first mailbox, and enter the first owner. The temporary OAuth grant provisions the Worker, storage, custom hostname, Email Routing, Email Sending, and the workspace mailbox; the deployed Worker does not retain the Cloudflare API token.
+Use the installer at `discoflare.com/deploy` for the complete path: connect Cloudflare, choose an account and domain, choose the Discoflare and email subdomains, and enter the intended owner email. The temporary OAuth grant provisions the Worker, storage, custom hostname, Email Routing, Email Sending, and the workspace mailbox; the deployed Worker does not retain the Cloudflare API token.
 
 The **Deploy to Cloudflare** button above remains a source-build fallback. It provisions the resources declared in `wrangler.jsonc`, but cannot choose or configure the mail domain because that flow has no installer OAuth session. No model API key is required for the default Workers AI model.
 
 Agents require a Workers Paid account with Containers enabled. The Worker becomes reachable before the first container image has finished provisioning, so chat may be ready several minutes before the first agent task can start. That is still one deploy and one Cloudflare account, but not an atomic instant rollout.
 
-The first health request applies the bootstrap and creates the owner and workspace. `/setup` reports readiness; it cannot be used to claim an unconfigured installation. The source repository must be public before the deploy button can clone it.
+The installer returns a private one-time setup link on the new workspace domain. The intended owner sets their name and password there, so password managers associate the credential with the workspace instead of `discoflare.com`. The claim is random, carried in the URL fragment so it is not sent in the initial HTTP request, and becomes unusable once the owner and workspace are created. Normal signup is blocked until that happens. The source repository must be public before the deploy button can clone it.
 
 The owner can configure OAuth and Turnstile after signing in, without redeploying. Verification email needs a one-time Cloudflare Email Service binding and sender-domain setup. See the [deployment guide](docs/deployment.md).
 
@@ -84,7 +84,7 @@ The published container runs the chat product locally with persistent D1, R2, KV
 docker compose up -d
 ```
 
-Set `PUBLIC_ORIGIN`, `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME` before starting. In Coolify, deploy the root `docker-compose.yml` in normal Docker Compose mode and route the `discoflare` service to port `3000`; Coolify supplies the proxy labels. Keep exactly one replica and back up the `discoflare-data` volume with the container stopped.
+Set `PUBLIC_ORIGIN`, `AUTH_SECRET`, and `ADMIN_EMAIL` before starting. The container creates a stable private owner-setup link in its logs; open it to choose the owner name and password on the workspace domain. `ADMIN_PASSWORD` remains available for legacy unattended bootstrap. In Coolify, deploy the root `docker-compose.yml` in normal Docker Compose mode and route the `discoflare` service to port `3000`; Coolify supplies the proxy labels. Keep exactly one replica and back up the `discoflare-data` volume with the container stopped.
 
 The multi-architecture image is published at `ghcr.io/vnmtvlv/discoflare`. Huddles still require RealtimeKit connectivity; text chat, recorded audio messages, and attachments use the local persistent volume. The Cloudflare agent execution plane (Workers AI, Workflows, and Sandbox Containers) is not emulated by this single-node Docker appliance. See the [deployment guide](docs/deployment.md#docker--coolify).
 

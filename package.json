@@ -1,6 +1,6 @@
 {
   "name": "discoflare",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.3",
@@ -95,11 +95,8 @@
       "ADMIN_EMAIL": {
         "description": "Email for the first owner account."
       },
-      "ADMIN_PASSWORD": {
-        "description": "Strong password for the first owner account (8+ characters)."
-      },
-      "ADMIN_NAME": {
-        "description": "Display name for the first owner account."
+      "ADMIN_SETUP_TOKEN": {
+        "description": "Optional private 32+ character claim used to create the first owner on the workspace domain."
       },
       "AGENT_MODEL": {
         "description": "Default Workers AI model for workspace agents. The included default is @cf/moonshotai/kimi-k2.7-code."

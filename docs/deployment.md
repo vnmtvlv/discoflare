@@ -2,19 +2,20 @@
 
 ## Discoflare installer
 
-The OAuth installer at `discoflare.com/deploy` is the complete Cloudflare path for workspace mail. The operator selects an account, an active zone such as `example.com`, the app label such as `chat`, and the first mailbox local part such as `inbox`. Installation then:
+The OAuth installer at `discoflare.com/deploy` is the complete Cloudflare path for workspace mail. The operator selects an account, an active zone such as `example.com`, the app label such as `chat`, an email subdomain, the first mailbox local part such as `inbox`, and the intended owner email. Installation then:
 
 1. refuses to replace a custom hostname attached to another Worker, non-Cloudflare MX records, or another enabled catch-all email route;
-2. enables Cloudflare Email Routing and Email Sending for the selected domain;
-3. deploys Discoflare with a `MAIL_EMAIL` send binding and mail-domain variables;
-4. attaches `chat.example.com` to the Worker and routes catch-all domain email to it; and
-5. creates `inbox@example.com` in D1 when the workspace owner is bootstrapped.
+2. enables Cloudflare Email Routing and Email Sending for the selected email subdomain;
+3. deploys Discoflare with a `MAIL_EMAIL` send binding, mail-domain variables, the intended owner email, and a random private owner-setup claim;
+4. attaches `chat.example.com` to the Worker and routes catch-all email for the configured mail domain to it;
+5. opens a private setup link on `chat.example.com`, where the intended owner creates their name and password; and
+6. creates the owner, workspace, and first mailbox in one bootstrap transaction before marking the workspace ready.
 
-The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
+The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
 
-The Cloudflare OAuth client registered for `discoflare.com` must allow the Zone Read, DNS Read/Write, Email Routing Rules Read/Write, and Email Sending Read/Write permissions requested by the installer. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
+The Cloudflare OAuth client registered for `discoflare.com` must allow Zone Read, Zone Settings Read/Write, DNS Read/Write, Email Routing Rules Read/Write, and Email Sending Read/Write permissions requested by the installer. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
 
-Enabling Email Routing makes Cloudflare the MX provider for the selected domain. Choose a separate Cloudflare zone if the main company domain already receives mail elsewhere; the installer deliberately stops instead of replacing those MX records.
+Enabling Email Routing makes Cloudflare the MX provider for the selected email subdomain. The app subdomain is mirrored by default but can be changed independently. The installer deliberately stops instead of replacing existing non-Cloudflare MX records.
 
 ## One-click
 
@@ -39,9 +40,9 @@ The GitHub deploy button remains a source-build fallback. It does not have a tem
 
 For one-click deployment:
 
-1. Enter `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`, and `AUTH_SECRET` in the deploy form.
-2. Open the resulting Worker URL. The first health request creates the owner and workspace when the database is empty.
-3. Sign in. `/setup` reports readiness and never accepts owner credentials.
+1. Enter `ADMIN_EMAIL`, a random 32-character-or-longer `ADMIN_SETUP_TOKEN`, and `AUTH_SECRET` in the deploy form.
+2. Open `/setup#claim=<ADMIN_SETUP_TOKEN>` on the resulting Worker URL.
+3. Create the owner name and password there. The workspace becomes ready and signs the owner in.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
 5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that the Sandbox is unavailable immediately after deploy, wait for container provisioning and retry the Task.
@@ -50,12 +51,11 @@ For a manual deployment, set the owner and auth secrets:
 
 ```
 wrangler secret put ADMIN_EMAIL
-wrangler secret put ADMIN_PASSWORD
-wrangler secret put ADMIN_NAME
+wrangler secret put ADMIN_SETUP_TOKEN
 wrangler secret put AUTH_SECRET
 ```
 
-Optional: `ADMIN_HANDLE` (used if `ADMIN_NAME` is empty), `ADMIN_WORKSPACE` (default `HQ`).
+Open `/setup#claim=<ADMIN_SETUP_TOKEN>` on the deployed origin. Optional: `ADMIN_WORKSPACE` (default `HQ`). `ADMIN_PASSWORD`, `ADMIN_NAME`, and `ADMIN_HANDLE` remain supported only for legacy unattended bootstrap.
 
 ### Web Push
 
@@ -132,8 +132,7 @@ The owner can configure RealtimeKit in **Workspace Settings → Huddles**. Its A
 
 ```
 wrangler secret put ADMIN_EMAIL
-wrangler secret put ADMIN_PASSWORD
-wrangler secret put ADMIN_NAME
+wrangler secret put ADMIN_SETUP_TOKEN
 wrangler secret put AUTH_SECRET
 wrangler secret put GITHUB_CLIENT_ID
 wrangler secret put GITHUB_CLIENT_SECRET
@@ -182,8 +181,6 @@ Create a `.env` beside the Compose file:
 PUBLIC_ORIGIN=https://chat.example.com
 AUTH_SECRET=replace-with-a-random-32-character-or-longer-secret
 ADMIN_EMAIL=owner@example.com
-ADMIN_PASSWORD=replace-with-a-strong-password
-ADMIN_NAME=Owner
 # optional Web Push; paste the values from `pnpm vapid:generate`
 VAPID_SUBJECT=mailto:admin@example.com
 VAPID_PUBLIC_KEY=
@@ -195,6 +192,8 @@ Then start it:
 ```bash
 docker compose up -d
 ```
+
+The container generates a stable private owner-setup claim in the persistent data volume and prints its workspace setup link to the container logs. Open that link to choose the owner name and password on `PUBLIC_ORIGIN`. Set `ADMIN_SETUP_TOKEN` explicitly if the platform should manage that claim. `ADMIN_PASSWORD` and `ADMIN_NAME` remain supported for legacy unattended bootstrap.
 
 For Coolify:
 

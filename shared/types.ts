@@ -450,9 +450,12 @@ export type InvitePreviewDTO = {
 
 export type SetupHealth = {
   ok: boolean
+  ready: boolean
   users: number
   migrated: boolean
   adminEnv: boolean
+  ownerSetup: boolean
+  ownerEmailHint: string | null
   bindings: {
     db: boolean
     r2: boolean
