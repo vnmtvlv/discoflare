@@ -1,30 +1,52 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { parseArgs, parseEnv } from 'node:util'
 
-if (existsSync('.env')) process.loadEnvFile('.env')
+function options() {
+  const args = process.argv.slice(2)
+  while (args[0] === '--') args.shift()
+  const { values, positionals } = parseArgs({
+    args,
+    options: { 'env-file': { type: 'string' }, help: { type: 'boolean', short: 'h' } },
+    allowPositionals: true,
+  })
+  if (values.help) return null
+  if (positionals.length > 1) throw new Error('Pass one remote URL, optionally with --env-file <path>.')
 
-const target = process.argv.slice(2).find(argument => argument !== '--')
-  ?? process.env.DISCOFLARE_DEV_PROXY_ORIGIN
+  const envFile = resolve(values['env-file'] ?? '.env')
+  if (values['env-file'] && !existsSync(envFile)) throw new Error('The selected env file does not exist.')
+  const fileEnv = existsSync(envFile) ? parseEnv(readFileSync(envFile, 'utf8')) : {}
+  const env = { ...fileEnv, ...process.env }
+  const target = positionals[0] ?? env.DISCOFLARE_DEV_PROXY_ORIGIN
+  if (!target) throw new Error('Set DISCOFLARE_DEV_PROXY_ORIGIN in the environment or selected env file, or pass a remote URL.')
 
-if (!target) {
-  console.error('Missing DISCOFLARE_DEV_PROXY_ORIGIN. Set it in .env or pass a URL after `pnpm dev:remote --`.')
+  let url
+  try { url = new URL(target) }
+  catch { throw new Error('The remote URL must be an HTTP or HTTPS origin.') }
+  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('The remote URL must be an HTTP or HTTPS origin without credentials, a path, query, or fragment.')
+  }
+  return { envFile, env: { ...env, DISCOFLARE_DEV_PROXY_ORIGIN: url.origin } }
+}
+
+let config
+try { config = options() }
+catch (error) {
+  console.error(error.message)
   process.exit(1)
 }
 
-let origin
-try {
-  origin = new URL(target).origin
-}
-catch {
-  console.error(`Invalid remote Discoflare URL: ${target}`)
-  process.exit(1)
+if (!config) {
+  console.log('Usage: pnpm dev:remote -- [https://chat.example.com] [--env-file .env.personal]')
+  process.exit(0)
 }
 
 const pnpm = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-console.log(`Proxying local /api to ${origin}; WebSockets connect directly`)
-const result = spawnSync(pnpm, ['exec', 'nuxt', 'dev'], {
+console.log(`Proxying local /api to ${config.env.DISCOFLARE_DEV_PROXY_ORIGIN}; WebSockets connect directly`)
+const result = spawnSync(pnpm, ['exec', 'nuxt', 'dev', '--dotenv', config.envFile], {
   cwd: process.cwd(),
-  env: { ...process.env, DISCOFLARE_DEV_PROXY_ORIGIN: origin },
+  env: config.env,
   stdio: 'inherit',
 })
 

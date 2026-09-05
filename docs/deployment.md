@@ -198,4 +198,4 @@ Full realtime locally:
 pnpm dev:full
 ```
 
-Sandbox-backed development is documented separately in [Sandbox development](sandbox-development.md).
+Remote development is documented separately in [Remote development](remote-development.md).

@@ -112,7 +112,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 - `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
 - Agent Sandbox development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
-- `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
+- `pnpm dev:remote` — local frontend with HTTP requests proxied to a selected deployment and WebSockets connected directly to it. Personal targets live in ignored env files; see [Remote development](remote-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 - The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.
 
