@@ -145,10 +145,10 @@ async function signUpWith(provider: Exclude<AuthLoginMethod, 'email'>) {
             <UInput v-model="state.email" type="email" size="lg" autocomplete="email" class="w-full" />
           </UFormField>
           <UFormField name="password" label="Password">
-            <UInput v-model="state.password" type="password" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.password" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
           <UFormField name="confirm" label="Confirm password">
-            <UInput v-model="state.confirm" type="password" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.confirm" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
         </template>
         <AuthTurnstileWidget

@@ -261,16 +261,16 @@ async function logout() {
       <h2 v-if="hasPassword" class="mt-10 text-xs font-bold uppercase tracking-wide text-muted">Password and Authentication</h2>
       <div v-if="hasPassword" class="mt-3 max-w-sm space-y-3">
         <UFormField label="Current password">
-          <UInput v-model="password.current" type="password" class="w-full" autocomplete="current-password" />
+          <FormPasswordInput v-model="password.current" class="w-full" autocomplete="current-password" />
         </UFormField>
         <UFormField label="New password" hint="At least 8 characters">
-          <UInput v-model="password.next" type="password" class="w-full" autocomplete="new-password" />
+          <FormPasswordInput v-model="password.next" class="w-full" autocomplete="new-password" />
         </UFormField>
         <UFormField
           label="Confirm new password"
           :error="passwordError || undefined"
         >
-          <UInput v-model="password.confirm" type="password" class="w-full" autocomplete="new-password" />
+          <FormPasswordInput v-model="password.confirm" class="w-full" autocomplete="new-password" />
         </UFormField>
         <UButton
           label="Change Password"

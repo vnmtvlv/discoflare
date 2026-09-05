@@ -4,9 +4,8 @@ import type { MailboxDTO, MailMessageDTO, MailThreadDTO, MailThreadStatus } from
 import { formatDateTime } from '~~/shared/format'
 import { isMailFolder, mailPath } from '~~/shared/paths'
 
-definePageMeta({ middleware: ['auth'] })
+definePageMeta({ layout: 'workspace', middleware: ['auth'] })
 
-const { workspaceId } = useWorkspace()
 const { api, serverUrl } = useApi()
 const route = useRoute()
 const qc = useQueryClient()
@@ -134,7 +133,7 @@ function messageSender(message: MailMessageDTO) {
 </script>
 
 <template>
-  <LayoutAppShell :workspace-id="workspaceId || undefined">
+  <div class="h-full min-h-0 min-w-0">
     <div class="grid h-full min-h-0 min-w-0 grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)]">
       <section class="min-h-0 overflow-y-auto border-e border-default" :class="activeThreadId ? 'hidden md:block' : 'block'">
         <div class="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-default bg-default/90 px-3 backdrop-blur">
@@ -238,5 +237,5 @@ function messageSender(message: MailMessageDTO) {
         <UButton label="Send email" trailing-icon="i-ph-paper-plane-tilt" :loading="sending" :disabled="!composeTo.trim() || !composeSubject.trim() || !composeBody.trim()" @click="compose" />
       </template>
     </UModal>
-  </LayoutAppShell>
+  </div>
 </template>

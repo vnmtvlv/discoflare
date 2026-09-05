@@ -30,3 +30,19 @@ export function boardPath(boardId?: string | null, archived = false): string {
   const suffix = query.toString()
   return suffix ? `/tasks?${suffix}` : '/tasks'
 }
+
+export function databasePath(databaseId?: string | null, archived = false): string {
+  const query = new URLSearchParams()
+  if (databaseId) query.set('database', databaseId)
+  if (archived) query.set('archived', '1')
+  const suffix = query.toString()
+  return suffix ? `/databases?${suffix}` : '/databases'
+}
+
+export function documentPath(documentId?: string | null): string {
+  return documentId ? `/documents?document=${encodeURIComponent(documentId)}` : '/documents'
+}
+
+export function canvasPath(canvasId?: string | null): string {
+  return canvasId ? `/canvases?canvas=${encodeURIComponent(canvasId)}` : '/canvases'
+}

@@ -11,7 +11,7 @@ import type {
 } from '~~/shared/types'
 import { boardPath } from '~~/shared/paths'
 
-definePageMeta({ middleware: ['auth', 'manage-tasks'] })
+definePageMeta({ layout: 'workspace', middleware: ['auth', 'manage-tasks'] })
 
 const { workspaceId } = useWorkspace()
 const { api } = useApi()
@@ -440,7 +440,7 @@ const boardMenu = computed(() => [[
 </script>
 
 <template>
-  <LayoutAppShell :workspace-id="workspaceId || undefined">
+  <div class="flex h-full min-h-0 min-w-0 flex-col">
     <main class="flex-1 min-w-0 min-h-0 flex flex-col">
       <header class="h-12 px-4 flex items-center gap-2 shrink-0 shadow-[0_1px_0_var(--ui-border)]">
         <UIcon name="i-ph-kanban" class="size-5" />
@@ -715,5 +715,5 @@ const boardMenu = computed(() => [[
         <UButton color="error" label="Confirm" :loading="saving" @click="confirmMutation" />
       </template>
     </UModal>
-  </LayoutAppShell>
+  </div>
 </template>

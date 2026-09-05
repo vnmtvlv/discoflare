@@ -1,10 +1,7 @@
 <script setup lang="ts">
-definePageMeta({ middleware: ['auth'] })
-const { workspaceId } = useWorkspace()
+definePageMeta({ layout: 'workspace', middleware: ['auth'] })
 </script>
 
 <template>
-  <LayoutAppShell :workspace-id="workspaceId || undefined">
-    <NuxtPage />
-  </LayoutAppShell>
+  <NuxtPage />
 </template>

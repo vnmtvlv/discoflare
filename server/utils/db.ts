@@ -15,6 +15,10 @@ import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_bound
 import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
 import onboardingSql from '../../drizzle/migrations/0013_onboarding.sql?raw'
 import workspaceMailSql from '../../drizzle/migrations/0014_workspace_mail.sql?raw'
+import workspaceDatabasesSql from '../../drizzle/migrations/0015_workspace_databases.sql?raw'
+import telemetrySettingsSql from '../../drizzle/migrations/0016_telemetry_settings.sql?raw'
+import backupDestinationSql from '../../drizzle/migrations/0017_backup_destination.sql?raw'
+import documentsAndCanvasesSql from '../../drizzle/migrations/0018_documents_and_canvases.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -52,6 +56,10 @@ export const INIT_SQL = d1ExecSql([
   agentIdentityBoundarySql,
   onboardingSql,
   workspaceMailSql,
+  workspaceDatabasesSql,
+  telemetrySettingsSql,
+  backupDestinationSql,
+  documentsAndCanvasesSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

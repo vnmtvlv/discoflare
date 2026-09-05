@@ -37,6 +37,16 @@ export function authSecret(env: DiscoflareEnv, baseURL?: string): string {
   return secret
 }
 
+export function authEmailBinding(env: DiscoflareEnv): SendEmail | undefined {
+  return env.EMAIL ?? env.MAIL_EMAIL
+}
+
+export function installedMailboxSender(env: DiscoflareEnv): string | null {
+  const localPart = env.MAIL_DEFAULT_LOCAL_PART?.trim().toLowerCase()
+  const domain = env.MAIL_DOMAIN?.trim().toLowerCase()
+  return localPart && domain ? `${localPart}@${domain}` : null
+}
+
 function envCredential(env: DiscoflareEnv, provider: AuthCredentialProvider): Credential | null {
   const pair = provider === 'github'
     ? [env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET]
@@ -113,7 +123,7 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
   }))
 
   const deploymentFrom = env.EMAIL_FROM?.trim() || null
-  const from = deploymentFrom ?? settings.emailFrom?.trim() ?? null
+  const from = deploymentFrom ?? settings.emailFrom?.trim() ?? installedMailboxSender(env)
   const fromName = env.EMAIL_FROM_NAME?.trim() || settings.emailFromName?.trim() || null
   const enabled = {
     email: settings.emailEnabled,
@@ -122,7 +132,7 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
     telegram: settings.telegramEnabled,
     turnstile: settings.turnstileEnabled,
   }
-  const binding = Boolean(env.EMAIL)
+  const binding = Boolean(authEmailBinding(env))
 
   return {
     registrationMode: settings.registrationMode,

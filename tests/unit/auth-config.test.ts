@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emailVerificationRequired, publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
+import { authEmailBinding, emailVerificationRequired, installedMailboxSender, publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
 
 function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig {
   return {
@@ -12,6 +12,15 @@ function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig 
 }
 
 describe('public auth config', () => {
+  it('uses an installed workspace mailbox for auth email delivery', () => {
+    const mailEmail = { send: () => Promise.resolve() } as unknown as SendEmail
+    const legacyEmail = { send: () => Promise.resolve() } as unknown as SendEmail
+
+    expect(authEmailBinding({ MAIL_EMAIL: mailEmail } as never)).toBe(mailEmail)
+    expect(authEmailBinding({ EMAIL: legacyEmail, MAIL_EMAIL: mailEmail } as never)).toBe(legacyEmail)
+    expect(installedMailboxSender({ MAIL_DEFAULT_LOCAL_PART: 'Inbox', MAIL_DOMAIN: 'Fox.Discoflare.com' } as never)).toBe('inbox@fox.discoflare.com')
+  })
+
   it('requires both credentials and the owner switch for social login', () => {
     const config = runtime({
       enabled: { email: true, github: true, twitter: false, telegram: false, turnstile: false },

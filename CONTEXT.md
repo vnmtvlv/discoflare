@@ -65,6 +65,30 @@ _Avoid_: Agent-local todo list, queue as product language
 A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may create Tasks.
 _Avoid_: Workflow (that is the execution primitive), prompt
 
+**Database**:
+A human-managed collection of structured Records in the workspace. A Database has an ordered custom schema made from typed Fields and is stored as logical product data inside the installation D1.
+_Avoid_: A separately provisioned D1 database, spreadsheet, Task Board
+
+**Database Field**:
+A named typed property in a Database. Scalar Fields map to bounded internal text, number, boolean, date, or select storage slots; the internal slot name is never product language or part of the public API.
+_Avoid_: Dynamically altering D1 for each Field, exposing `text_1` or another slot to people
+
+**Database Record**:
+One titled row in a Database with values addressed by Database Field identity. Record versions prevent a stale browser from silently overwriting a newer edit.
+_Avoid_: Generic Item, Task unless it has Task execution semantics
+
+**Document**:
+A human-managed rich-text knowledge item in the Data app. Documents are versioned workspace state stored in the installation D1.
+_Avoid_: Attachment, Message, external document provider
+
+**Canvas**:
+A human-managed spatial surface in the Data app containing positioned Canvas Items and Connections. The Canvas, its Items, and its Connections are durable workspace state in the installation D1.
+_Avoid_: Whiteboard service, image file, using a Durable Object as the source of truth
+
+**Canvas Item**:
+A movable note or text card on a Canvas. It owns its content, geometry, color, and edit version; a Connection relates two Items without embedding either one.
+_Avoid_: Database Record, Task, free-form untyped blob
+
 **Task Run**:
 One durable, cancellable execution attempt for a Task. It snapshots the Task and Agent launch configuration, retains progress and outcome history, and can be reconciled with its Cloudflare Workflow after an interruption. The assigned Agent Durable Object owns reasoning memory; the Sandbox owns active processes.
 _Avoid_: Treating a Task and its retryable execution as the same record

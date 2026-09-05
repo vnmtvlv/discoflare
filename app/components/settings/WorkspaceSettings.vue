@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import * as z from 'zod'
 import type { FormSubmitEvent, TableColumn } from '@nuxt/ui'
 import type { AuditEntryDTO, ChannelCategoryDTO, ChannelDTO, ChannelRoleOverrideDTO, WorkspaceDTO, MemberDTO, RoleDTO } from '~~/shared/types'
+import type { UpdateStatusDTO } from '~~/shared/releases'
 import { channelPermissionMasks, channelPermissionMode, ChannelPermissionGrants, type ChannelPermissionGrantKey, type ChannelPermissionMode } from '~~/shared/channel-permissions'
 import { hasPermission, MemberPermissions, Permission, permissionBitmask, PermissionGrants, type PermissionGrantKey } from '~~/shared/permissions'
 import { formatDateTime } from '~~/shared/format'
@@ -69,11 +70,17 @@ const auditQ = useQuery({
   enabled: computed(() => open.value && section.value === 'audit'),
 })
 const isOwner = computed(() => mine.value?.role.key === 'owner')
+const updatesQ = useQuery({
+  queryKey: computed(() => ['updates', props.workspaceId]),
+  queryFn: () => $fetch<UpdateStatusDTO>(`/api/workspaces/${props.workspaceId}/updates`),
+  enabled: computed(() => open.value && isOwner.value),
+  staleTime: 6 * 60 * 60 * 1000,
+})
 
 watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = n }, { immediate: true })
 
 const workspaceNav = computed(() => [
-  ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview', icon: 'i-ph-house', keywords: ['name', 'icon', 'rename', 'delete workspace'] }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview', icon: 'i-ph-house', keywords: ['name', 'icon', 'rename'] }] : []),
   ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels', icon: 'i-ph-hash', keywords: ['categories', 'private', 'voice'] }] : []),
   ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles', icon: 'i-ph-shield', keywords: ['permissions', 'admin', 'access'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents', icon: 'i-ph-robot', keywords: ['bots', 'automation', 'tasks'] }] : []),
@@ -81,16 +88,26 @@ const workspaceNav = computed(() => [
   ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email', icon: 'i-ph-envelope-simple', keywords: ['mail', 'mailbox', 'inbox', 'domain'] }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication', icon: 'i-ph-key', keywords: ['login', 'signup', 'oauth', 'github', 'sso', 'registration'] }] : []),
   ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),
+  ...(isOwner.value ? [{ id: 'backups' as const, label: 'Backups', icon: 'i-ph-archive', keywords: ['backup', 'download', 'export', 'restore', 'd1', 'r2'] }] : []),
+  ...(isOwner.value ? [{
+    id: 'updates' as const,
+    label: 'Updates',
+    icon: 'i-ph-arrows-clockwise',
+    badge: updatesQ.data.value?.updateAvailable ? String(updatesQ.data.value.releasesBehind) : undefined,
+    keywords: ['release', 'version', 'upgrade', 'github'],
+  }] : []),
+  ...(isOwner.value ? [{ id: 'telemetry' as const, label: 'Telemetry', icon: 'i-ph-chart-line-up', keywords: ['anonymous', 'heartbeat', 'privacy', 'stats'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log', icon: 'i-ph-list-magnifying-glass', keywords: ['history', 'activity', 'log'] }] : []),
 ])
 const userNav = computed(() => [
   ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members', icon: 'i-ph-users', keywords: ['people', 'kick', 'assign role'] }] : []),
   ...(can(Permission.invite) ? [{ id: 'invites' as const, label: 'Invites', icon: 'i-ph-user-plus', keywords: ['invite link', 'join', 'share'] }] : []),
 ])
-const availableNav = computed(() => [...workspaceNav.value, ...userNav.value])
+const availableNav = computed(() => groups.value.flatMap(group => group.items))
 const groups = computed(() => [
   { label: 'Workspace', items: workspaceNav.value },
   ...(userNav.value.length ? [{ label: 'User Management', items: userNav.value }] : []),
+  ...(isOwner.value ? [{ label: 'Danger Zone', items: [{ id: 'danger', label: 'Delete server', icon: 'i-ph-warning-octagon', keywords: ['danger', 'remove', 'destroy', 'uninstall'] }] }] : []),
 ])
 
 
@@ -826,7 +843,27 @@ function roleLabel(name: string) {
       <SettingsOnboardingSettings :workspace-id="workspaceId" />
     </template>
 
-    <template v-else>
+    <template v-else-if="section === 'updates'">
+      <SettingsUpdateSettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'backups'">
+      <SettingsBackupSettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'telemetry'">
+      <SettingsTelemetrySettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'danger'">
+      <SettingsDangerZoneSettings
+        :workspace-id="workspaceId"
+        :workspace-name="workspaceName"
+        @backups="section = 'backups'"
+      />
+    </template>
+
+    <template v-else-if="section === 'audit'">
       <h1 class="text-xl font-semibold text-highlighted">Audit Log</h1>
       <USkeleton v-if="auditQ.isPending.value" class="h-40 mt-6" />
       <UAlert v-else-if="auditQ.error.value" color="error" title="Need manage permission." class="mt-6" />

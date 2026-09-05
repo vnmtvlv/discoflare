@@ -3,6 +3,7 @@ import { useNitroApp } from 'nitropack/runtime'
 import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'
 import type { DiscoflareEnv } from '../workers/env'
 import { receiveWorkspaceEmail } from '../workers/mail-ingress'
+import { sendTelemetryHeartbeat } from './utils/telemetry'
 
 export { ChannelDurableObject } from '../workers/channel-do'
 export { WorkspaceDurableObject } from '../workers/workspace-do'
@@ -57,5 +58,8 @@ export default {
   },
   async email(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
     await receiveWorkspaceEmail(message, env)
+  },
+  async scheduled(_controller: ScheduledController, env: DiscoflareEnv, context: ExecutionContext): Promise<void> {
+    context.waitUntil(sendTelemetryHeartbeat(env).catch(error => console.warn('Anonymous telemetry heartbeat failed', error)))
   },
 }
