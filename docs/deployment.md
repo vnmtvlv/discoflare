@@ -48,6 +48,24 @@ To complete first-owner setup after the manual GitHub deployment:
 5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that the Sandbox is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
+### Manual workspace backups
+
+The owner can open **Workspace Settings → Backups** and create a streaming TAR archive in either of two places: download it to the current device, or upload it manually to a configured S3-compatible bucket. The Worker exports D1 as ordered SQL fragments and streams every object from its bound R2 bucket into the archive with a metadata sidecar that preserves the original R2 key, HTTP metadata, custom metadata, ETag, size, and upload timestamp.
+
+To restore D1, concatenate `database/*.sql` in filename order into one `restore.sql` and import that entire file into an empty database with `wrangler d1 execute <database-name> --remote --file=restore.sql`. Do not import the fragments separately: related rows and cycles require deferred foreign-key checks across the complete import. Restore each numbered R2 `.bin` object under the original key and metadata from its adjacent `.json` file. Confirm `summary.json` is present before using the archive.
+
+Device downloads may take a long time and require the browser connection to remain open. Bucket uploads use the destination's S3 multipart API and also run only while the manual request remains connected; no scheduled backup is configured. Use a separate private destination bucket rather than the R2 bucket bound as `FILES`, so backups do not recursively include older backups and do not share the same failure boundary as live files.
+
+The S3 Endpoint, Region, Bucket, Prefix, Access Key ID, and Secret Access Key are entered in the owner UI. The Secret Access Key is AES-GCM encrypted in D1 using `AUTH_SECRET`, is never returned by the API, and can be tested with a temporary upload/delete operation. Keep the workspace idle until either backup operation completes. The archive contains authentication records and workspace content, so store it as sensitive data. It does not include Worker environment secrets, KV tickets, Durable Object live state, running Agent turns, or external RealtimeKit data. A usable disaster-recovery set therefore also preserves `AUTH_SECRET` and the deployment configuration separately.
+
+### Managed server deletion
+
+Only the workspace Owner can start deletion from **Workspace Settings → Danger Zone**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
+
+The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer disables only the catch-all email rule when it still targets that Worker, removes the exact Email Sending subdomain, detaches the custom Worker domain, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, KV, Workflow, and Container resources. It never follows or deletes the independently configured S3 backup destination. Zone-wide Email Routing settings and unrelated DNS or email rules are left alone.
+
+Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Danger Zone links to the Cloudflare dashboard for manual cleanup.
+
 For a manual deployment, set the owner and auth secrets:
 
 ```
@@ -74,6 +92,12 @@ wrangler secret put VAPID_PRIVATE_KEY
 On iOS and iPadOS, install Discoflare on the Home Screen before enabling Push. Every browser requires the permission request to follow a direct user action.
 
 Then run `pnpm deploy`. It applies the D1 migrations through the `DB` binding and deploys the Worker.
+
+### Anonymous project heartbeat
+
+The guided installer configures `DISCOFLARE_TELEMETRY_ID`, `DISCOFLARE_TELEMETRY_TOKEN`, and a weekly Cron Trigger. The scheduled request contains only the random installation ID, version, timestamp, and boolean capability flags. The workspace owner can disable it in **Workspace Settings → Telemetry**; the scheduled handler then makes no outbound request.
+
+Manual deployments have the same Cron Trigger but no telemetry credentials, so they do not report by default. To opt a manual deployment in, provision a unique ID and secret with the project registry and configure the corresponding Worker values.
 
 The build script raises Node's heap limit for the Nuxt bundle; the deploy command reuses that output instead of building a second time.
 
@@ -107,14 +131,14 @@ The callback origin must be the deployed workspace URL. `discoflare.com` is the 
 Email login works for an existing verified account without email delivery. New email signup requires all of the following:
 
 1. Onboard the sender domain in Cloudflare Email Service.
-2. Add a Worker send binding named `EMAIL`. The guided installer does not provision this login-email binding automatically.
-3. Set a sender in the Authentication UI, or set `EMAIL_FROM` as a deployment value.
+2. Add a Worker send binding named `EMAIL`, or use the guided installer's existing `MAIL_EMAIL` binding.
+3. Set a sender in the Authentication UI or with `EMAIL_FROM`. Guided mail-enabled installations default to their initial workspace mailbox address.
 4. Configure and enable Turnstile.
 5. Select **Open signup**, or send the person an Invite.
 
-After the `EMAIL` binding exists, signup policy, sender, provider credentials, and enabled methods can be changed in the app without a source rebuild or redeploy. If credentials are instead stored as Worker secrets, updating them creates a new Worker version by design.
+After an email binding exists, signup policy, sender, provider credentials, and enabled methods can be changed in the app without a source rebuild or redeploy. If credentials are instead stored as Worker secrets, updating them creates a new Worker version by design.
 
-Password reset follows the same delivery boundary: the link appears only when email login is enabled and both the `EMAIL` binding and verified sender are available. Reset links expire after one hour and completing a reset revokes the account's existing sessions.
+Password reset follows the same delivery boundary: the link appears only when email login is enabled and both an email binding and verified sender are available. Reset links expire after one hour and completing a reset revokes the account's existing sessions.
 
 For a manual Wrangler config, restrict the binding to the verified sender:
 

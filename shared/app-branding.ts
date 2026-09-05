@@ -1,5 +1,5 @@
 export const DEFAULT_APP_NAME = 'Discoflare'
-export const DEFAULT_APP_TITLE = 'One workspace for humans, agents, and tasks.'
+export const DEFAULT_APP_TITLE = 'One workspace for humans and agents.'
 export const DEFAULT_APP_SUBTITLE = 'Built on your Cloudflare stack.'
 
 type AppBrandingEnv = {

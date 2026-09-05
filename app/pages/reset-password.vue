@@ -53,10 +53,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
       <UAlert v-if="error" class="mt-6" color="error" variant="subtle" :title="error" />
       <UForm :schema="schema" :state="state" class="mt-7 space-y-4" @submit="onSubmit">
         <UFormField name="password" label="New password">
-          <UInput v-model="state.password" type="password" size="lg" autocomplete="new-password" class="w-full" autofocus />
+          <FormPasswordInput v-model="state.password" size="lg" autocomplete="new-password" class="w-full" autofocus />
         </UFormField>
         <UFormField name="confirm" label="Confirm new password">
-          <UInput v-model="state.confirm" type="password" size="lg" autocomplete="new-password" class="w-full" />
+          <FormPasswordInput v-model="state.confirm" size="lg" autocomplete="new-password" class="w-full" />
         </UFormField>
         <UButton type="submit" size="lg" label="Reset password" block :loading="busy" />
       </UForm>

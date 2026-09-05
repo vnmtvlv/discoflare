@@ -5,7 +5,7 @@ import type { H3Event } from 'h3'
 import { authAccounts, authSessions, authUsers, authVerifications } from '../../drizzle/schema'
 import type { DiscoflareEnv } from '../../workers/env'
 import { readAppBranding } from '../../shared/app-branding'
-import { authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
+import { authEmailBinding, authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
 import { cf } from './cf'
 import { getDb } from './db'
 import { hashPassword, verifyPassword } from './password'
@@ -50,9 +50,10 @@ async function sendAuthEmail(
   action: string,
   url: string,
 ) {
-  if (!env.EMAIL) throw new Error('Cloudflare Email Service binding is unavailable')
+  const email = authEmailBinding(env)
+  if (!email) throw new Error('Cloudflare Email Service binding is unavailable')
   const safeUrl = escapeHtml(url)
-  await env.EMAIL.send({
+  await email.send({
     to,
     from: fromName ? { email: from, name: fromName } : from,
     subject,

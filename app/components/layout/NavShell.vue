@@ -3,10 +3,10 @@ import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { DropdownMenuItem } from '@nuxt/ui'
 import type { ChannelCategoryDTO as Category, ChannelDTO as Ch, MailboxDTO, WorkspaceDTO as W, MemberDTO as M } from '~~/shared/types'
 import { Permission } from '~~/shared/permissions'
-import { channelPath } from '~~/shared/paths'
+import { channelPath, mailPath } from '~~/shared/paths'
 import { useClipboard } from '@vueuse/core'
 
-type Mode = 'chat' | 'tasks' | 'mail'
+type Mode = 'chat' | 'tasks' | 'mail' | 'databases'
 
 const props = defineProps<{ workspaceId: string }>()
 const route = useRoute()
@@ -54,6 +54,9 @@ const mailboxes = computed(() => mailboxesQ.data.value?.mailboxes ?? [])
 const mode = computed<Mode>(() => {
   if (route.path.startsWith('/tasks')) return 'tasks'
   if (route.path.startsWith('/mail')) return 'mail'
+  if (route.path.startsWith('/databases')) return 'databases'
+  if (route.path.startsWith('/documents')) return 'databases'
+  if (route.path.startsWith('/canvases')) return 'databases'
   return 'chat'
 })
 
@@ -65,11 +68,52 @@ const chatTarget = computed(() => {
   return last?.workspaceId === props.workspaceId ? channelPath(last.channelId) : '/channels'
 })
 
+const mailTarget = computed(() => {
+  const first = mailboxes.value[0]
+  return first ? mailPath(first.channelId) : '/mail'
+})
+
 const modes = computed(() => [
-  { value: 'chat' as const, label: 'Chat', icon: 'i-ph-chat-circle', to: chatTarget.value, dot: chatUnread.value },
-  ...(can(Permission.manageTasks) ? [{ value: 'tasks' as const, label: 'Tasks', icon: 'i-ph-kanban', to: '/tasks', dot: false }] : []),
-  { value: 'mail' as const, label: 'Mail', icon: 'i-ph-envelope-simple', to: '/mail', dot: mailUnread.value },
+  { value: 'chat' as const, label: 'Chat', icon: 'i-ph-chat-circle', to: chatTarget.value, dot: chatUnread.value, shortcut: '1' },
+  ...(can(Permission.manageTasks) ? [{ value: 'tasks' as const, label: 'Tasks', icon: 'i-ph-kanban', to: '/tasks', dot: false, shortcut: '2' }] : []),
+  { value: 'mail' as const, label: 'Mail', icon: 'i-ph-envelope-simple', to: mailTarget.value, dot: mailUnread.value, shortcut: '3' },
+  ...(can(Permission.manageDatabases) ? [{ value: 'databases' as const, label: 'Data', icon: 'i-ph-table', to: '/databases', dot: false, shortcut: '4' }] : []),
 ])
+
+const commandHeld = useState('app-switcher-command-held', () => false)
+function onAppShortcutKeydown(event: KeyboardEvent) {
+  if (event.key === 'Meta') {
+    commandHeld.value = true
+    return
+  }
+  if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return
+  commandHeld.value = true
+  const target = modes.value.find(item => item.shortcut === event.key)
+  if (!target) return
+  event.preventDefault()
+  void navigateTo(target.to)
+}
+
+function onAppShortcutKeyup(event: KeyboardEvent) {
+  if (event.key === 'Meta' || !event.metaKey) commandHeld.value = false
+}
+
+function clearCommandHeld() {
+  commandHeld.value = false
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onAppShortcutKeydown)
+  window.addEventListener('keyup', onAppShortcutKeyup)
+  window.addEventListener('blur', clearCommandHeld)
+})
+
+onBeforeUnmount(() => {
+  clearCommandHeld()
+  window.removeEventListener('keydown', onAppShortcutKeydown)
+  window.removeEventListener('keyup', onAppShortcutKeyup)
+  window.removeEventListener('blur', clearCommandHeld)
+})
 
 const newName = ref('')
 const newType = ref<'text' | 'voice'>('text')
@@ -225,10 +269,20 @@ watch(nav.inviteOpen, (open) => {
         :key="item.value"
         :to="item.to"
         class="relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-[11px]"
-        :class="mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
+        :class="commandHeld
+          ? 'bg-primary/10 text-highlighted ring-1 ring-inset ring-primary/50'
+          : mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
         :aria-current="mode === item.value ? 'page' : undefined"
+        :aria-keyshortcuts="`Meta+${item.shortcut}`"
       >
-        <UIcon :name="item.icon" class="size-[18px]" />
+        <span
+          v-if="commandHeld"
+          class="flex size-[18px] items-center justify-center rounded bg-primary text-[11px] font-bold leading-none text-inverted shadow-sm"
+          aria-hidden="true"
+        >
+          {{ item.shortcut }}
+        </span>
+        <UIcon v-else :name="item.icon" class="size-[18px]" />
         <span>{{ item.label }}</span>
         <span
           v-if="item.dot && mode !== item.value"
@@ -241,6 +295,7 @@ watch(nav.inviteOpen, (open) => {
     <div class="flex-1 overflow-y-auto pb-2">
       <LayoutChatNav v-if="mode === 'chat'" :workspace-id="workspaceId" />
       <LayoutTasksNav v-else-if="mode === 'tasks'" :workspace-id="workspaceId" />
+      <LayoutDatabasesNav v-else-if="mode === 'databases'" :workspace-id="workspaceId" />
       <LayoutMailNav v-else />
     </div>
 

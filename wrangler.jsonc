@@ -11,6 +11,9 @@
   "observability": {
     "enabled": true
   },
+  "triggers": {
+    "crons": ["17 4 * * 1"]
+  },
   "routes": [
     { "pattern": "sandbox.discoflare.com", "custom_domain": true }
   ],

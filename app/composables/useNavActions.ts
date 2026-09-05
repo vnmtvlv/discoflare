@@ -10,6 +10,9 @@ export function useNavActions() {
   const inviteOpen = useState('nav:invite', () => false)
   const workspaceSettingsOpen = useState('nav:workspace-settings', () => false)
   const createBoardOpen = useState('nav:create-board', () => false)
+  const createDatabaseOpen = useState('nav:create-database', () => false)
+  const createDocumentOpen = useState('nav:create-document', () => false)
+  const createCanvasOpen = useState('nav:create-canvas', () => false)
   const composeOpen = useState('nav:compose', () => false)
 
   function openCreateChannel(categoryId: string | null = null) {
@@ -24,6 +27,9 @@ export function useNavActions() {
     inviteOpen,
     workspaceSettingsOpen,
     createBoardOpen,
+    createDatabaseOpen,
+    createDocumentOpen,
+    createCanvasOpen,
     composeOpen,
     openCreateChannel,
   }

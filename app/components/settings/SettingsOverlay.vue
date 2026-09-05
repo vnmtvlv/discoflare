@@ -5,6 +5,7 @@ export type SettingsItem = {
   id: string
   label: string
   icon: string
+  badge?: string
   /** Extra terms the search box should match, for settings people look for by another name. */
   keywords?: string[]
 }
@@ -152,6 +153,7 @@ defineShortcuts({
                 >
                   <UIcon :name="item.icon" class="size-[18px] shrink-0" />
                   <span class="min-w-0 flex-1 truncate">{{ item.label }}</span>
+                  <UBadge v-if="item.badge" :label="item.badge" color="warning" variant="subtle" size="sm" />
                   <UIcon v-if="isMobile" name="i-ph-caret-right" class="size-4 shrink-0 text-dimmed" />
                 </button>
               </nav>

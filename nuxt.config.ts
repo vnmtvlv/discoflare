@@ -58,13 +58,17 @@ export default defineNuxtConfig({
       plugins: [rawSqlPlugin],
     },
     errorHandler: './server/error',
-    cloudflare: {
-      nodeCompat: true,
-      deployConfig: false,
-      dev: {
-        configPath: 'wrangler.dev.jsonc',
-      },
-    },
+    ...(remoteFrontend
+      ? {}
+      : {
+          cloudflare: {
+            nodeCompat: true,
+            deployConfig: false,
+            dev: {
+              configPath: 'wrangler.dev.jsonc',
+            },
+          },
+        }),
     typescript: {
       tsConfig: {
         compilerOptions: {

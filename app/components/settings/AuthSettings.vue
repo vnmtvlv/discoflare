@@ -154,10 +154,10 @@ onMounted(load)
               <UInput v-model="providers[provider.id].publicKey" class="w-full" :disabled="auth.providers[provider.id].source === 'deployment'" />
             </UFormField>
             <UFormField :label="provider.secretLabel">
-              <UInput
+              <FormPasswordInput
                 v-model="providers[provider.id].secret"
-                type="password"
                 class="w-full"
+                visibility-label="secret"
                 :disabled="auth.providers[provider.id].source === 'deployment'"
                 :placeholder="auth.providers[provider.id].configured ? 'Saved; enter to replace' : ''"
               />
@@ -190,10 +190,10 @@ onMounted(load)
             <UInput v-model="providers.turnstile.publicKey" class="w-full" :disabled="auth.providers.turnstile.source === 'deployment'" />
           </UFormField>
           <UFormField label="Secret key">
-            <UInput
+            <FormPasswordInput
               v-model="providers.turnstile.secret"
-              type="password"
               class="w-full"
+              visibility-label="secret key"
               :disabled="auth.providers.turnstile.source === 'deployment'"
               :placeholder="auth.providers.turnstile.configured ? 'Saved; enter to replace' : ''"
             />

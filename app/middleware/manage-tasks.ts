@@ -7,9 +7,17 @@ export default defineNuxtRouteMiddleware(async () => {
   if (!session.user) return
 
   const { api, native } = useApi()
-  const response = import.meta.client && native
-    ? await api<{ members: MemberDTO[] }>(`/api/workspaces/${WORKSPACE_ID}/members`)
-    : await useRequestFetch()<{ members: MemberDTO[] }>(`/api/workspaces/${WORKSPACE_ID}/members`)
+  const queryClient = useNuxtApp().$queryClient
+  const queryKey = ['members', WORKSPACE_ID]
+  let response = import.meta.client
+    ? queryClient.getQueryData<{ members: MemberDTO[] }>(queryKey)
+    : undefined
+  if (!response) {
+    response = import.meta.client && native
+      ? await api<{ members: MemberDTO[] }>(`/api/workspaces/${WORKSPACE_ID}/members`)
+      : await useRequestFetch()<{ members: MemberDTO[] }>(`/api/workspaces/${WORKSPACE_ID}/members`)
+    if (import.meta.client) queryClient.setQueryData(queryKey, response)
+  }
   const { members } = response
   const member = members.find(item => item.user.id === session.user?.id)
   if (!member || (member.role.key !== 'owner' && !hasPermission(member.role.permissions, Permission.manageTasks))) {

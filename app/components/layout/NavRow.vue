@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { NuxtLink } from '#components'
+
 const props = withDefaults(defineProps<{
   to?: string
   active?: boolean
@@ -13,11 +15,13 @@ const tone = computed(() => {
   if (props.unread || props.ancestor) return 'text-highlighted font-medium hover:bg-elevated/80'
   return 'text-muted hover:bg-elevated/80 hover:text-default'
 })
+
+const rowComponent = computed(() => props.to ? NuxtLink : 'button')
 </script>
 
 <template>
   <component
-    :is="to ? resolveComponent('NuxtLink') : 'button'"
+    :is="rowComponent"
     :to="to"
     :type="to ? undefined : 'button'"
     class="relative flex h-11 w-full items-center gap-1.5 rounded-md px-2 text-start text-[15px] md:h-8"

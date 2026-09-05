@@ -2,51 +2,56 @@
 
 # Discoflare
 
-Self-hosted team chat that runs on your Cloudflare account.
+One workspace for humans and agents.
 
 [Website](https://discoflare.com) · [Sandbox](https://sandbox.discoflare.com) · [Architecture](docs/architecture.md) · [Deployment guide](docs/deployment.md) · MIT licensed
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)
+| Managed server creation | Manual deployment |
+| --- | --- |
+| Discoflare provisions the server and required resources in your Cloudflare account. | You connect the source repository and configure the Cloudflare resources yourself. |
+| [![Create a server](https://img.shields.io/badge/Create_a_server-Discoflare-2563EB?style=for-the-badge)](https://discoflare.com/deploy) | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare) |
 
 <p align="center">
   <img src="docs/screenshots/design-review-thread.jpg" alt="Discoflare design review with an image, reactions, and a live thread" width="100%" />
 </p>
 
-<table>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/campaign-assets.jpg" alt="A campaign asset shared in Discoflare with the workspace member rail open" />
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/customer-story-files.jpg" alt="A customer story image in Discoflare with channel files open" />
-    </td>
-  </tr>
-  <tr>
-    <td align="center"><sub><strong>Campaign assets</strong> · Feedback stays beside the work.</sub></td>
-    <td align="center"><sub><strong>Customer stories</strong> · Files stay with their conversation.</sub></td>
-  </tr>
-</table>
-
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
 ## What you can do
 
-- Create public and private text channels.
-- Chat in real time with Direct Messages, typing, presence, unread state, replies, threads, reactions, and mentions.
-- Receive optional Web Push notifications for mentions, Direct Messages, and new huddles.
-- Record audio messages or upload attachments to your own R2 bucket.
-- Start voice huddles with Cloudflare RealtimeKit.
-- Keep members in chat by default while Owner, Admin, or explicitly delegated custom roles manage invites, roles, workspace settings, and audit history.
-- Control invite-only or open registration and enable email, GitHub, X, and Telegram login methods.
-- Publish versioned Terms, Privacy, and workspace Rules with the built-in rich-text editor; new accounts must accept the current version.
-- Offer password reset when email login, an `EMAIL` binding, and a verified sender are configured.
-- Let workspace administrators create AI agents as participants, give them custom avatars, and use vision-capable Workers AI models to inspect image attachments.
-- Manage realtime boards with ordered tasks, labels, dependencies, checklists, attachments, durable run history, cancellation, and recovery.
-- Receive and send domain email in shared Mailboxes, read conversations as chat Threads, add Internal Notes, and assign read, send, or manage access to humans and Agents.
+### Built-in apps
+
+Four apps bring conversations, work, email, and knowledge into one workspace:
+
+- **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, or start voice huddles with optional Cloudflare RealtimeKit. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
+- **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Assign Agents to execute Tasks, follow their progress, and retain run history with cancellation and recovery.
+- **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
+- **Data** — Keep structured information and knowledge together. Build Databases with typed custom fields, inline record editing, filtering, and sorting; write rich-text Documents; and connect notes and text cards on Canvases.
+
+### AI agents
+
+- Add AI participants with custom profiles and avatars, powered by Workers AI.
+- Let authorized members work with Agents in chat or assign them Tasks, with a Sandbox computer for executing commands.
+- Use vision-capable models to inspect image attachments.
+
+### Workspace controls
+
+- **Access and roles** — Keep members in chat by default and delegate administrative access through custom roles. Manage invites, workspace settings, and audit history.
+- **Registration and login** — Choose invite-only or open registration and enable email, GitHub, X, and Telegram login. Password reset is available when email login, an `EMAIL` binding, and a verified sender are configured.
+- **Onboarding** — Publish versioned Terms, Privacy, and workspace Rules with the built-in rich-text editor. New accounts must accept the current version.
+- **Backups** — As the Owner, manually download a backup containing a logical D1 export and every R2 object, or upload it to a separately configured S3-compatible bucket.
 
 ## How it works
 
-One Nuxt Worker serves the app and API and receives Cloudflare-routed email. D1 stores shared workspace, chat, mail, agent profile, board, task, and run records. R2 stores attachments, raw email, and agent-computer checkpoints. KV holds short-lived WebSocket tickets. Durable Objects coordinate live channels, presence, notification delivery, rate limits, and isolated Think memory for each Agent conversation and Task Run. Cloudflare Workflows orchestrate task runs; Cloudflare Sandbox containers execute commands; Workers AI performs inference. RealtimeKit carries huddle media and remains optional.
+One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Each installation contains one workspace, with storage and live coordination in the same Cloudflare account.
+
+| Layer | Cloudflare services | Responsibility |
+| --- | --- | --- |
+| App and API | Workers | Serve the frontend, handle API requests, and receive routed email. |
+| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data app content, Agents, boards, Tasks, and Task Runs. R2 stores attachments, raw email, and agent-computer checkpoints. |
+| Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation and Task Run. KV holds short-lived WebSocket tickets. |
+| Agent execution | Workflows, Sandbox, Workers AI | Orchestrate Task Runs, execute commands in containers, and run model inference. |
+| Voice and video | RealtimeKit | Carry optional huddle media. |
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
@@ -57,69 +62,125 @@ Task ──► Agent DO ──► Workflow ──► Workers AI
 Huddle media ────────────────► RealtimeKit
 ```
 
+See the [architecture guide](docs/architecture.md) for runtime boundaries and storage invariants.
+
 ## Deploy
 
-Use the installer at `discoflare.com/deploy` for the complete path: connect Cloudflare, choose an account and domain, choose the Discoflare and email subdomains, and enter the intended owner email. The temporary OAuth grant provisions the Worker, storage, custom hostname, Email Routing, Email Sending, and the workspace mailbox; the deployed Worker does not retain the Cloudflare API token.
+### Requirements
 
-The **Deploy to Cloudflare** button above remains a source-build entry point for people who prefer GitHub and Workers Builds. Treat it as a manual deployment path, not as the guided installer: you must create or select the D1, R2, and KV resources in your Cloudflare account, adapt `wrangler.jsonc`, configure bindings and secrets, choose the build and deploy commands, attach the public hostname, configure optional email routing and sending, run migrations, and verify the resulting Worker yourself. No model API key is required for the default Workers AI model.
+- A Cloudflare account to host the workspace and its resources.
+- For Agents, a Workers Paid account with Containers enabled. The default Workers AI model needs no model API key.
 
-Agents require a Workers Paid account with Containers enabled. The Worker becomes reachable before the first container image has finished provisioning, so chat may be ready several minutes before the first agent task can start. That is still one deploy and one Cloudflare account, but not an atomic instant rollout.
+Chat may be ready several minutes before the first Agent Task can start, while the first container image finishes provisioning.
 
-The installer returns a private one-time setup link on the new workspace domain. The intended owner sets their name and password there, so password managers associate the credential with the workspace instead of `discoflare.com`. The claim is random, carried in the URL fragment so it is not sent in the initial HTTP request, and becomes unusable once the owner and workspace are created. Normal signup is blocked until that happens. The source repository must be public before the deploy button can clone it.
+### Managed server creation
 
-The owner can configure OAuth and Turnstile after signing in, without redeploying. Verification email needs a one-time Cloudflare Email Service binding and sender-domain setup. See the [deployment guide](docs/deployment.md).
+1. Open the [Discoflare installer](https://discoflare.com/deploy) and connect Cloudflare.
+2. Choose an account, domain, and Discoflare and email subdomains, then enter the intended Owner email.
+3. Let the installer provision the Worker, storage, custom hostname, Email Routing, Email Sending, and workspace Mailbox.
+4. Follow the private, one-time setup link on your new workspace domain to set the Owner's name and password.
 
-After completing the manual Cloudflare resource, binding, and secret setup:
+The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. The random setup claim is carried in the URL fragment, so it is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. Normal signup stays blocked until setup is complete.
+
+### Manual deployment
+
+Use the **Deploy to Cloudflare** button above to open the public source repository in Cloudflare Workers Builds. The repository must be public for the button to clone it.
+
+Follow the [deployment guide](docs/deployment.md) to create or select the D1, R2, and KV resources, adapt `wrangler.jsonc`, configure bindings and secrets, attach the public hostname, and configure optional email routing and sending.
+
+Once the resources, bindings, and secrets are ready, deploy from your checkout:
 
 ```bash
 pnpm install
 pnpm deploy
 ```
 
+The deploy script builds the Worker, applies remote D1 migrations, and deploys it. Verify the resulting Worker after deployment.
+
+### Optional services
+
+- **Login and signup protection** — The Owner can configure OAuth and Turnstile after signing in, without redeploying.
+- **Verification and password-reset email** — Configure a Cloudflare Email Service binding and verified sender domain. See the [email setup guide](docs/deployment.md#verification-and-password-reset-email).
+- **Huddles** — Connect RealtimeKit in **Workspace Settings → Huddles**. Deployment secrets remain available as an override. Text chat works without it, and the app explains when credentials are missing.
+- **Web Push** — Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push requires HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
+
+## Manage your installation
+
+### Backups
+
+In **Workspace Settings → Backups**, the Owner can manually download a streaming TAR archive or upload it to a separately configured S3-compatible bucket.
+
+- **Included:** ordered SQL fragments for D1, every R2 object, and original object key metadata, including sensitive workspace and authentication data.
+- **Outside the archive:** environment secrets and live Durable Object, KV, and external RealtimeKit state.
+- **Backup credentials:** S3 credentials entered in the UI are encrypted with `AUTH_SECRET` and never returned by the API.
+
+### Telemetry
+
+Guided installations receive a random installation ID and secret for an anonymous weekly project heartbeat. It reports the Discoflare version and boolean availability of supported Cloudflare resource types; it never reports workspace names, domains, people, messages, files, or usage amounts.
+
+The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deployments do not report unless the three `DISCOFLARE_TELEMETRY_*` values are configured explicitly.
+
+### Server deletion
+
+For managed installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the installation through a temporary Cloudflare OAuth session.
+
+A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, Workflow, Container application, custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
+
+Manual deployments show Cloudflare cleanup guidance because Discoflare cannot prove that their bound resources are not shared.
+
 ## Local development
+
+### First run
 
 ```bash
 pnpm install
 pnpm env:init
+```
+
+`pnpm env:init` creates or completes `.env`, generates `AUTH_SECRET`, and preserves existing values. Edit the Owner values before first boot, then initialize the database and start the app:
+
+```bash
 pnpm db:migrate:local
 pnpm dev
 ```
 
-For production-equivalent WebSockets and Durable Object hibernation (and agent Sandbox development when Docker and a Cloudflare login are available):
-
-```bash
-pnpm dev:full
-```
-
-To run the current code against the disposable pilot environment, configure `.env.sandbox` and use `pnpm dev:sandbox`. This mutates the real sandbox resources; see the [sandbox development guide](docs/sandbox-development.md).
-
-For frontend-only work against a deployed Discoflare backend, set `DISCOFLARE_DEV_PROXY_ORIGIN` in `.env` and use `pnpm dev:remote`. Native clients are packaged from this same frontend by the separate MIT-licensed `discoflare-clients` repository.
-
-`pnpm env:init` creates or completes `.env`, generates `AUTH_SECRET`, and preserves existing values. Edit the owner values before first boot. To add local sample users:
+To add local sample users:
 
 ```bash
 pnpm db:seed
 ```
 
-Text chat works without RealtimeKit. The owner can connect it in **Workspace Settings → Huddles**; deployment secrets remain available as an override. When credentials are absent, the app remains usable and explains the missing configuration.
+### Development modes
 
-Web Push is optional. Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push needs HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
+| Mode | Command | When to use it |
+| --- | --- | --- |
+| Local app | `pnpm dev` | Run Nuxt with local bindings for everyday development. |
+| Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets and Durable Object hibernation. Agent Sandbox development also needs Docker and a Cloudflare login. |
+| Remote backend | `pnpm dev:remote` | Work on the local frontend against a deployed server. Set `DISCOFLARE_DEV_PROXY_ORIGIN` in `.env`. |
+| Pilot sandbox | `pnpm dev:sandbox` | Run current code against the disposable pilot environment using `.env.sandbox`. This mutates real sandbox resources. |
+
+See the [sandbox development guide](docs/sandbox-development.md) before using the pilot environment.
+
+### Native clients
+
+The separate MIT-licensed `discoflare-clients` repository packages native clients from this same frontend. This repository provides the static frontend build through `pnpm generate:native`.
 
 ## Scripts
 
-| Script | |
-|---|---|
-| `pnpm dev` | Nuxt + local bindings |
-| `pnpm dev:full` | wrangler dev on the built Worker |
-| `pnpm dev:remote` | local frontend proxied to a deployed Discoflare server |
-| `pnpm dev:sandbox` | remote preview against sandbox resources |
-| `pnpm generate:native` | static native-client build for the Capacitor shell |
-| `pnpm env:init` | safely initialize `.env` from `.env.example` |
-| `pnpm vapid:generate` | generate a stable Web Push VAPID key pair |
-| `pnpm deploy` | build + remote D1 migration + wrangler deploy |
-| `pnpm db:migrate:local` | apply D1 SQL locally |
-| `pnpm typecheck` | `nuxt typecheck` |
-| `pnpm test` | unit tests |
+Development commands are listed above. Other common scripts:
+
+| Script | Purpose |
+| --- | --- |
+| `pnpm env:init` | Safely initialize `.env` from `.env.example`. |
+| `pnpm db:migrate:local` | Apply D1 SQL migrations locally. |
+| `pnpm db:seed` | Add local sample users. |
+| `pnpm vapid:generate` | Generate a stable Web Push VAPID key pair. |
+| `pnpm lint` | Run ESLint. |
+| `pnpm typecheck` | Check types with `nuxt typecheck`. |
+| `pnpm test` | Run unit tests. |
+| `pnpm build` | Build the Nuxt Worker. |
+| `pnpm generate:native` | Build the static frontend for native clients. |
+| `pnpm deploy` | Build, apply remote D1 migrations, and deploy the Worker. |
 
 ## License
 

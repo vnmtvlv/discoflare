@@ -1,6 +1,6 @@
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import { sql } from 'drizzle-orm'
-import { check, index, integer, primaryKey, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
+import { check, index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core'
 import { CHANNEL_PERMISSION_MASK } from '../shared/channel-permissions'
 
 function isoTimestamps() {
@@ -218,6 +218,34 @@ export const workspace = sqliteTable('workspace', {
   ...isoTimestamps(),
 }, table => [
   check('workspace_singleton_check', sql`${table.id} = 'main'`),
+])
+
+/** Owner-controlled anonymous project heartbeat. No workspace data is included. */
+export const telemetrySettings = sqliteTable('telemetry_settings', {
+  id: text('id').primaryKey().default('main'),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  updatedAt: text('updated_at').notNull(),
+}, table => [
+  check('telemetry_settings_singleton_check', sql`${table.id} = 'main'`),
+])
+
+/** Owner-configured S3-compatible destination for manual off-site backups. */
+export const backupDestinations = sqliteTable('backup_destinations', {
+  id: text('id').primaryKey().default('main'),
+  endpoint: text('endpoint').notNull(),
+  region: text('region').notNull().default('auto'),
+  bucket: text('bucket').notNull(),
+  prefix: text('prefix').notNull().default('discoflare'),
+  accessKeyId: text('access_key_id').notNull(),
+  secretAccessKeyCiphertext: text('secret_access_key_ciphertext').notNull(),
+  secretAccessKeyIv: text('secret_access_key_iv').notNull(),
+  secretAccessKeyVersion: integer('secret_access_key_version').notNull().default(1),
+  lastBackupKey: text('last_backup_key'),
+  lastBackupAt: text('last_backup_at'),
+  lastBackupSizeBytes: integer('last_backup_size_bytes'),
+  ...isoTimestamps(),
+}, table => [
+  check('backup_destinations_singleton_check', sql`${table.id} = 'main'`),
 ])
 
 export const channelCategories = sqliteTable('channel_categories', {
@@ -483,6 +511,157 @@ export const auditLog = sqliteTable('audit_log', {
   index('audit_log_actor_id_idx').on(table.actorId),
 ])
 
+/** User-created databases are logical collections inside the installation D1. */
+export const databaseDefinitions = sqliteTable('database_definitions', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  position: integer('position').notNull().default(0),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  archivedAt: text('archived_at'),
+  ...isoTimestamps(),
+}, table => [
+  index('database_definitions_position_idx').on(table.position),
+])
+
+/** A field maps a human name and type onto one whitelisted database_items slot. */
+export const databaseFields = sqliteTable('database_fields', {
+  id: text('id').primaryKey(),
+  databaseId: text('database_id').notNull().references(() => databaseDefinitions.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  type: text('type', { enum: ['text', 'number', 'boolean', 'date', 'select'] }).notNull(),
+  slot: text('slot').notNull(),
+  configJson: text('config_json').notNull().default('{}'),
+  position: integer('position').notNull().default(0),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('database_fields_name_unique').on(table.databaseId, table.name),
+  uniqueIndex('database_fields_slot_unique').on(table.databaseId, table.type, table.slot),
+  index('database_fields_position_idx').on(table.databaseId, table.position),
+  check('database_fields_type_check', sql`${table.type} in ('text', 'number', 'boolean', 'date', 'select')`),
+])
+
+/** Scalar custom fields use bounded typed slots; semantic names stay in database_fields. */
+export const databaseItems = sqliteTable('database_items', {
+  id: text('id').primaryKey(),
+  databaseId: text('database_id').notNull().references(() => databaseDefinitions.id, { onDelete: 'cascade' }),
+  title: text('title').notNull(),
+  position: integer('position').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  text1: text('text_1'),
+  text2: text('text_2'),
+  text3: text('text_3'),
+  text4: text('text_4'),
+  text5: text('text_5'),
+  text6: text('text_6'),
+  text7: text('text_7'),
+  text8: text('text_8'),
+  text9: text('text_9'),
+  text10: text('text_10'),
+  text11: text('text_11'),
+  text12: text('text_12'),
+  text13: text('text_13'),
+  text14: text('text_14'),
+  text15: text('text_15'),
+  text16: text('text_16'),
+  number1: real('number_1'),
+  number2: real('number_2'),
+  number3: real('number_3'),
+  number4: real('number_4'),
+  number5: real('number_5'),
+  number6: real('number_6'),
+  number7: real('number_7'),
+  number8: real('number_8'),
+  boolean1: integer('boolean_1', { mode: 'boolean' }),
+  boolean2: integer('boolean_2', { mode: 'boolean' }),
+  boolean3: integer('boolean_3', { mode: 'boolean' }),
+  boolean4: integer('boolean_4', { mode: 'boolean' }),
+  boolean5: integer('boolean_5', { mode: 'boolean' }),
+  boolean6: integer('boolean_6', { mode: 'boolean' }),
+  boolean7: integer('boolean_7', { mode: 'boolean' }),
+  boolean8: integer('boolean_8', { mode: 'boolean' }),
+  date1: text('date_1'),
+  date2: text('date_2'),
+  date3: text('date_3'),
+  date4: text('date_4'),
+  date5: text('date_5'),
+  date6: text('date_6'),
+  date7: text('date_7'),
+  date8: text('date_8'),
+  select1: text('select_1'),
+  select2: text('select_2'),
+  select3: text('select_3'),
+  select4: text('select_4'),
+  select5: text('select_5'),
+  select6: text('select_6'),
+  select7: text('select_7'),
+  select8: text('select_8'),
+  ...isoTimestamps(),
+}, table => [
+  index('database_items_database_position_idx').on(table.databaseId, table.position),
+  check('database_items_version_check', sql`${table.version} > 0`),
+])
+
+/** Rich-text documents are durable workspace data; live collaboration can layer on later. */
+export const documents = sqliteTable('documents', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  content: text('content').notNull().default(''),
+  position: integer('position').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  index('documents_position_idx').on(table.position),
+  check('documents_version_check', sql`${table.version} > 0`),
+])
+
+export const canvases = sqliteTable('canvases', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  position: integer('position').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  index('canvases_position_idx').on(table.position),
+  check('canvases_version_check', sql`${table.version} > 0`),
+])
+
+export const canvasNodes = sqliteTable('canvas_nodes', {
+  id: text('id').primaryKey(),
+  canvasId: text('canvas_id').notNull().references(() => canvases.id, { onDelete: 'cascade' }),
+  kind: text('kind', { enum: ['note', 'text'] }).notNull().default('note'),
+  content: text('content').notNull().default(''),
+  x: real('x').notNull().default(0),
+  y: real('y').notNull().default(0),
+  width: real('width').notNull().default(240),
+  height: real('height').notNull().default(144),
+  color: text('color', { enum: ['neutral', 'orange', 'blue', 'green', 'red'] }).notNull().default('neutral'),
+  version: integer('version').notNull().default(1),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  index('canvas_nodes_canvas_idx').on(table.canvasId, table.createdAt),
+  check('canvas_nodes_kind_check', sql`${table.kind} in ('note', 'text')`),
+  check('canvas_nodes_color_check', sql`${table.color} in ('neutral', 'orange', 'blue', 'green', 'red')`),
+  check('canvas_nodes_version_check', sql`${table.version} > 0`),
+])
+
+export const canvasEdges = sqliteTable('canvas_edges', {
+  id: text('id').primaryKey(),
+  canvasId: text('canvas_id').notNull().references(() => canvases.id, { onDelete: 'cascade' }),
+  fromNodeId: text('from_node_id').notNull().references(() => canvasNodes.id, { onDelete: 'cascade' }),
+  toNodeId: text('to_node_id').notNull().references(() => canvasNodes.id, { onDelete: 'cascade' }),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: text('created_at').notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+}, table => [
+  uniqueIndex('canvas_edges_nodes_unique').on(table.canvasId, table.fromNodeId, table.toNodeId),
+  index('canvas_edges_canvas_idx').on(table.canvasId, table.createdAt),
+  check('canvas_edges_not_self_check', sql`${table.fromNodeId} <> ${table.toNodeId}`),
+])
+
 /** Task boards are shared product state, so they live in D1 rather than an Agent DO. */
 export const taskBoards = sqliteTable('task_boards', {
   id: text('id').primaryKey(),
@@ -642,6 +821,13 @@ export const schema = {
   emailThreads,
   emailMessages,
   auditLog,
+  databaseDefinitions,
+  databaseFields,
+  databaseItems,
+  documents,
+  canvases,
+  canvasNodes,
+  canvasEdges,
   taskBoards,
   tasks,
   taskLabels,

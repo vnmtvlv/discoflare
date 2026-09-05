@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { channelPath } from '../../shared/paths'
+import { canvasPath, channelPath, databasePath, documentPath } from '../../shared/paths'
 
 describe('channelPath', () => {
   it('is /channels/{id} with no workspace id', () => {
@@ -10,5 +10,25 @@ describe('channelPath', () => {
   })
   it('appends threads', () => {
     expect(channelPath({ id: 'abc' }, 'thr')).toBe('/channels/abc/threads/thr')
+  })
+})
+
+describe('databasePath', () => {
+  it('keeps the selected database in the URL', () => {
+    expect(databasePath('db-1')).toBe('/databases?database=db-1')
+  })
+
+  it('can address the archived view', () => {
+    expect(databasePath(null, true)).toBe('/databases?archived=1')
+  })
+})
+
+describe('Data resource paths', () => {
+  it('keeps the selected document in the URL', () => {
+    expect(documentPath('doc 1')).toBe('/documents?document=doc%201')
+  })
+
+  it('keeps the selected canvas in the URL', () => {
+    expect(canvasPath('canvas 1')).toBe('/canvases?canvas=canvas%201')
   })
 })

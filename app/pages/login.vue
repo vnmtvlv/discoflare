@@ -170,9 +170,8 @@ const canCreateAccount = computed(() => Boolean(
         <template v-if="authConfig?.passwordResetEnabled" #hint>
           <ULink to="/forgot-password" class="text-sm font-medium text-default">Forgot password?</ULink>
         </template>
-        <UInput
+        <FormPasswordInput
           v-model="state.password"
-          type="password"
           size="lg"
           autocomplete="current-password"
           class="w-full"

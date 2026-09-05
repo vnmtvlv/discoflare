@@ -110,10 +110,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
             <UInput v-model="state.name" size="lg" autocomplete="name" class="w-full" />
           </UFormField>
           <UFormField name="password" label="Password">
-            <UInput v-model="state.password" type="password" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.password" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
           <UFormField name="confirm" label="Confirm password">
-            <UInput v-model="state.confirm" type="password" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.confirm" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
           <UButton type="submit" size="lg" label="Create owner" block :loading="busy" />
         </UForm>

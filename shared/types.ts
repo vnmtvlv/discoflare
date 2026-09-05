@@ -1,4 +1,5 @@
 import type { JSONContent } from '@tiptap/core'
+import type { DatabaseFieldType, DatabaseValue } from './database'
 
 export type PresenceStatus = 'online' | 'idle' | 'offline'
 export type UserStatus = 'pending' | 'active' | 'removed'
@@ -147,6 +148,108 @@ export type TaskBoardDTO = {
   updatedAt: string
   labels: TaskLabelDTO[]
   tasks: TaskDTO[]
+}
+
+export type DatabaseFieldDTO = {
+  id: string
+  databaseId: string
+  name: string
+  type: DatabaseFieldType
+  options: string[]
+  position: number
+  createdAt: string
+  updatedAt: string
+}
+
+export type DatabaseItemDTO = {
+  id: string
+  databaseId: string
+  title: string
+  position: number
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  values: Record<string, DatabaseValue>
+}
+
+export type DatabaseDTO = {
+  id: string
+  name: string
+  position: number
+  createdBy: string
+  archivedAt: string | null
+  createdAt: string
+  updatedAt: string
+  fields: DatabaseFieldDTO[]
+  items: DatabaseItemDTO[]
+}
+
+export type DocumentDTO = {
+  id: string
+  title: string
+  content: string
+  position: number
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type DocumentSummaryDTO = Omit<DocumentDTO, 'content'>
+
+export type CanvasNodeKind = 'note' | 'text'
+export type CanvasNodeColor = 'neutral' | 'orange' | 'blue' | 'green' | 'red'
+
+export type CanvasNodeDTO = {
+  id: string
+  canvasId: string
+  kind: CanvasNodeKind
+  content: string
+  x: number
+  y: number
+  width: number
+  height: number
+  color: CanvasNodeColor
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type CanvasEdgeDTO = {
+  id: string
+  canvasId: string
+  fromNodeId: string
+  toNodeId: string
+  createdBy: string
+  createdAt: string
+}
+
+export type CanvasDTO = {
+  id: string
+  title: string
+  position: number
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+  nodes: CanvasNodeDTO[]
+  edges: CanvasEdgeDTO[]
+}
+
+export type CanvasSummaryDTO = Omit<CanvasDTO, 'nodes' | 'edges'> & {
+  nodeCount: number
+}
+
+export type DatabaseSummaryDTO = Pick<DatabaseDTO, 'id' | 'name' | 'archivedAt'> & {
+  itemCount: number
+}
+
+export type DataResourcesDTO = {
+  databases: DatabaseSummaryDTO[]
+  documents: DocumentSummaryDTO[]
+  canvases: CanvasSummaryDTO[]
 }
 
 export type MailboxPermission = 'read' | 'send' | 'manage'
@@ -449,6 +552,7 @@ export type InvitePreviewDTO = {
 }
 
 export type SetupHealth = {
+  version: string
   ok: boolean
   ready: boolean
   users: number

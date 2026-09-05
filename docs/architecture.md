@@ -9,7 +9,7 @@ Browser (Nuxt)
         ▼
 Nuxt/Nitro Worker
   Better Auth, admission policy, REST, email ingress, R2, RealtimeKit tokens
-  ├─ D1          catalog + message history
+  ├─ D1          catalog + message history + Data resources
   ├─ R2          FILES
   ├─ KV          TICKETS
   ├─ ChannelDO   live sockets, typing, huddle flag
@@ -30,6 +30,7 @@ RealtimeKit
 
 1. Live path ≠ storage path. A Channel DO serializes writes, persists to D1, then broadcasts.
 2. D1 is history source of truth for messages, channel read cursors, users, access control, and owner-managed integration settings. RealtimeKit API tokens saved in Workspace Settings are AES-GCM encrypted with `AUTH_SECRET`; deployment credentials override them. Recorded audio is an ordinary Message Attachment stored in R2; it does not use RealtimeKit. File reads remain authenticated, and audio seeking uses single byte-range responses.
+   User-created Databases, Documents, and Canvases are logical resources in this same D1, not separately provisioned Cloudflare databases. Database Fields allocate from bounded typed columns on `database_items`; APIs expose Field ids and types, never physical slot names. Documents store rich text, while Canvases keep positioned Items and Connections in normalized tables. Versions provide optimistic concurrency. Durable Objects are not the source of truth for Data resources.
 3. Workspace DO owns ephemeral presence and recipient-targeted unread signals. It derives online/idle state from visible WebSocket attachments, honors each client's activity-visibility preference, and fans out only message/read identifiers to authorized user sockets; presence and unread truth remain in D1, never on `users` or DO storage.
 4. One Channel DO named `channel:<channelId>` and one Workspace DO named `workspace:main`. Typing is scoped to a Channel DO.
 5. Huddle media never transits the Channel DO.
@@ -47,6 +48,7 @@ RealtimeKit
 17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts, R2 owns raw MIME and attachment bytes, Email Routing invokes the same Worker, and `MAIL_EMAIL` sends new mail and replies. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
 18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, and Worker bindings persist after OAuth expires; the installed Worker does not retain the token. Daily mailbox and access changes are D1-only because one catch-all route rejects addresses that do not map to an enabled Mailbox.
 19. A fresh installation is not ready until its deployment-selected Owner completes the private Owner Setup Claim on the workspace origin. The claim is random and single-use by state: normal signup is rejected before the `main` Workspace exists, and every setup attempt is rejected after the Owner and Workspace are created atomically.
+20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. The Data navigation index returns only lightweight resource metadata, and each Document or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 
 ## Email flow
 
@@ -112,6 +114,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 - Agent Sandbox development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
 - `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
+- The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.
 
 ## Threads and reads
 
