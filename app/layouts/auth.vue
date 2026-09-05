@@ -44,9 +44,9 @@ useHead(() => ({ title: appName.value }))
       <div class="auth-shape auth-shape-three" aria-hidden="true" />
     </aside>
 
-    <main class="flex min-h-[28rem] flex-col lg:min-h-full">
-      <div class="flex flex-1 items-center justify-center px-6 pb-[max(3rem,var(--df-safe-area-bottom))] pt-[max(3rem,var(--df-safe-area-top))]">
-        <div class="w-full max-w-[400px]">
+    <main class="auth-panel relative flex min-h-[28rem] flex-col lg:min-h-full">
+      <div class="relative z-10 flex flex-1 items-center justify-center px-6 pb-[max(3rem,var(--df-safe-area-bottom))] pt-[max(3rem,var(--df-safe-area-top))]">
+        <div class="w-full max-w-[26rem] sm:rounded-2xl sm:border sm:border-default sm:bg-elevated/60 sm:p-8 sm:shadow-xl sm:shadow-black/20 sm:backdrop-blur-sm">
           <slot />
         </div>
       </div>
@@ -62,6 +62,20 @@ useHead(() => ({ title: appName.value }))
     transparent 1px
   );
   background-size: 28px 28px;
+}
+
+.auth-panel::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 60%;
+  pointer-events: none;
+  background: radial-gradient(
+    75% 60% at 50% 0%,
+    color-mix(in srgb, var(--ui-primary) 7%, transparent),
+    transparent 70%
+  );
 }
 
 .auth-shape {

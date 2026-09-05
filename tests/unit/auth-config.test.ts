@@ -27,6 +27,7 @@ describe('public auth config', () => {
     expect(publicAuthConfig(config)).toMatchObject({
       signupEnabled: true,
       emailSignupEnabled: true,
+      passwordResetEnabled: false,
       turnstile: { enabled: false, siteKey: null },
     })
     expect(emailVerificationRequired(config)).toBe(false)
@@ -41,9 +42,11 @@ describe('public auth config', () => {
     })
     expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: false, emailSignupEnabled: true })
     expect(emailVerificationRequired(config)).toBe(true)
+    expect(publicAuthConfig(config).passwordResetEnabled).toBe(true)
     config.email.binding = false
     config.email.verificationReady = false
     expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: false, emailSignupEnabled: false })
+    expect(publicAuthConfig(config).passwordResetEnabled).toBe(false)
     expect(emailVerificationRequired(config)).toBe(false)
   })
 })

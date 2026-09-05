@@ -1,6 +1,24 @@
 # Deployment
 
+## Discoflare installer
+
+The OAuth installer at `discoflare.com/deploy` is the complete Cloudflare path for workspace mail. The operator selects an account, an active zone such as `example.com`, the app label such as `chat`, and the first mailbox local part such as `inbox`. Installation then:
+
+1. refuses to replace a custom hostname attached to another Worker, non-Cloudflare MX records, or another enabled catch-all email route;
+2. enables Cloudflare Email Routing and Email Sending for the selected domain;
+3. deploys Discoflare with a `MAIL_EMAIL` send binding and mail-domain variables;
+4. attaches `chat.example.com` to the Worker and routes catch-all domain email to it; and
+5. creates `inbox@example.com` in D1 when the workspace owner is bootstrapped.
+
+The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
+
+The Cloudflare OAuth client registered for `discoflare.com` must allow the Zone Read, DNS Read/Write, Email Routing Rules Read/Write, and Email Sending Read/Write permissions requested by the installer. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
+
+Enabling Email Routing makes Cloudflare the MX provider for the selected domain. Choose a separate Cloudflare zone if the main company domain already receives mail elsewhere; the installer deliberately stops instead of replacing those MX records.
+
 ## One-click
+
+The GitHub deploy button remains a source-build fallback. It does not have a temporary Cloudflare OAuth token, so it cannot select a zone or provision the custom hostname, Email Routing rules, and Email Sending domain. Use `discoflare.com/deploy` for the complete mail-enabled installation.
 
 ```md
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)
@@ -81,7 +99,7 @@ https://your-domain.example/api/auth/callback/telegram
 
 The callback origin must be the deployed workspace URL. `discoflare.com` is the separate marketing site, not an authentication callback host. In invite-only mode, a new identity remains pending until it accepts an invite. In open mode, it becomes an active Member immediately.
 
-### Verification email
+### Verification and password-reset email
 
 Email login works for an existing verified account without email delivery. New email signup requires all of the following:
 
@@ -93,6 +111,8 @@ Email login works for an existing verified account without email delivery. New e
 
 After the `EMAIL` binding exists, signup policy, sender, provider credentials, and enabled methods can be changed in the app without a source rebuild or redeploy. If credentials are instead stored as Worker secrets, updating them creates a new Worker version by design.
 
+Password reset follows the same delivery boundary: the link appears only when email login is enabled and both the `EMAIL` binding and verified sender are available. Reset links expire after one hour and completing a reset revokes the account's existing sessions.
+
 For a manual Wrangler config, restrict the binding to the verified sender:
 
 ```jsonc
@@ -103,6 +123,8 @@ For a manual Wrangler config, restrict the binding to the verified sender:
 ```
 
 Keep `AUTH_SECRET` stable. Rotating it invalidates sessions and makes D1-stored provider secrets unreadable; replace those secrets in the Authentication UI after a rotation.
+
+The authentication `EMAIL` binding and workspace `MAIL_EMAIL` binding are intentionally separate. `EMAIL` may be restricted to the login sender; `MAIL_EMAIL` sends only after Discoflare's mailbox permission check.
 
 ## Secrets
 

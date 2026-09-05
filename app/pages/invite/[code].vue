@@ -33,6 +33,10 @@ async function accept() {
     await navigateTo({ path: '/login', query: { next: route.fullPath } })
     return
   }
+  if (session.user.onboardingRequired) {
+    await navigateTo({ path: '/signup/accept', query: { next: route.fullPath } })
+    return
+  }
   busy.value = true
   try {
     const res = await $fetch<{ workspaceId: string; channelId: string | null }>(`/api/invites/${code.value}/accept`, { method: 'POST' })
@@ -50,7 +54,7 @@ async function accept() {
 
 <template>
   <div>
-    <h1 class="text-xl font-medium tracking-tight text-highlighted">Join workspace</h1>
+    <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Join workspace</h1>
     <USkeleton v-if="loading" class="mt-4 h-12 w-full" />
     <template v-else>
       <p v-if="invite" class="mt-1.5 text-sm text-muted">

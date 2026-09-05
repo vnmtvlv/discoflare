@@ -6,6 +6,7 @@ import { cf } from './cf'
 import { ensureMigrated, getDb, userCount } from './db'
 import { hashPassword } from './password'
 import type { DiscoflareEnv } from '../../workers/env'
+import { ensureWorkspaceMailFromEnv } from './workspace-mail'
 
 export type AdminSeed = {
   email: string
@@ -119,9 +120,13 @@ export async function ensureAdminFromEnv(event: H3Event): Promise<{ users: numbe
   const { env } = cf(event)
   await ensureMigrated(env.DB)
   const users = await userCount(env.DB)
-  if (users > 0) return { users, provisioned: false }
+  if (users > 0) {
+    await ensureWorkspaceMailFromEnv(env)
+    return { users, provisioned: false }
+  }
   const seed = readAdminEnv(env)
   if (!seed) return { users: 0, provisioned: false }
   await provisionWorkspace(event, seed)
+  await ensureWorkspaceMailFromEnv(env)
   return { users: 1, provisioned: true }
 }

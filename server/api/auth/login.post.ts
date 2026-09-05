@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ensureDomainUser, publicUser, visibleAuthEmail } from '../../utils/auth'
+import { ensureDomainUser, sessionUser, visibleAuthEmail } from '../../utils/auth'
 import { authFromEvent } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
 import { ensureMigrated } from '../../utils/db'
@@ -46,5 +46,5 @@ export default defineEventHandler(async (event) => {
   const signedIn = await res.json() as { user: { id: string; email: string; name: string; image?: string | null } }
   const row = await ensureDomainUser(event, signedIn.user)
 
-  return { user: { ...publicUser(row), email: visibleAuthEmail(signedIn.user.email) } }
+  return { user: await sessionUser(event, row, visibleAuthEmail(signedIn.user.email)) }
 })

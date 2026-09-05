@@ -10,6 +10,12 @@ import { cf, fail } from './cf'
 import { getDb } from './db'
 import { writeAudit } from './messages'
 import { signalMembersChanged } from '../../workers/member-events'
+import {
+  consumeSocialOnboardingTicket,
+  hasAcceptedCurrentOnboarding,
+  loadCurrentOnboarding,
+  recordOnboardingAcceptance,
+} from './onboarding'
 
 type AuthIdentity = { id: string; email: string; name: string; image?: string | null }
 
@@ -23,8 +29,16 @@ export async function ensureDomainUser(event: H3Event, identity: AuthIdentity) {
   let row = (await db.select().from(users).where(eq(users.id, identity.id)).limit(1))[0]
   if (row) return row
 
-  const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
-  const memberRole = runtime.registrationMode === 'open'
+  const [runtime, onboarding] = await Promise.all([
+    loadAuthRuntimeConfig(env, getRequestURL(event).origin),
+    loadCurrentOnboarding(env),
+  ])
+  const socialRevisionId = await consumeSocialOnboardingTicket(event)
+  if (socialRevisionId && socialRevisionId === onboarding.revisionId) {
+    await recordOnboardingAcceptance(env, identity.id, socialRevisionId)
+  }
+  const accepted = await hasAcceptedCurrentOnboarding(env, identity.id, onboarding)
+  const memberRole = runtime.registrationMode === 'open' && accepted
     ? (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
     : null
   const created = nowIso()
@@ -64,6 +78,48 @@ export function publicUser(row: { id: string; kind: 'human' | 'agent'; displayNa
   }
 }
 
+export async function sessionUser(
+  event: H3Event,
+  row: typeof users.$inferSelect,
+  email: string | null,
+): Promise<SessionUser> {
+  const { env } = cf(event)
+  return {
+    ...publicUser(row),
+    email,
+    status: row.status,
+    onboardingRequired: row.status === 'pending' && !(await hasAcceptedCurrentOnboarding(env, row.id)),
+  }
+}
+
+export async function activateOpenMember(event: H3Event, userId: string) {
+  const { env, waitUntil } = cf(event)
+  const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
+  if (runtime.registrationMode !== 'open') return
+  if (!(await hasAcceptedCurrentOnboarding(env, userId))) return
+  const db = getDb(env.DB)
+  const row = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]
+  if (!row || row.status !== 'pending') return
+  const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
+  if (!memberRole) fail(500, 'internal', 'Member role missing')
+  const joinedAt = nowIso()
+  await db.update(users).set({
+    status: 'active',
+    roleId: memberRole.id,
+    joinedAt,
+    updatedAt: joinedAt,
+  }).where(eq(users.id, userId))
+  await writeAudit(env, {
+    workspaceId: 'main',
+    actorId: userId,
+    action: 'member.join',
+    targetType: 'user',
+    targetId: userId,
+    meta: { admission: 'open', onboarding: true },
+  })
+  waitUntil(signalMembersChanged(env, 'main'))
+}
+
 export async function currentUser(event: H3Event): Promise<SessionUser | null> {
   const { env } = cf(event)
   const db = getDb(env.DB)
@@ -71,15 +127,9 @@ export async function currentUser(event: H3Event): Promise<SessionUser | null> {
   const sess = await auth.api.getSession({ headers: event.headers })
   if (sess?.user?.id) {
     const row = (await db.select().from(users).where(eq(users.id, sess.user.id)).limit(1))[0]
-    if (row) return { ...publicUser(row), email: visibleAuthEmail(sess.user.email) }
+    if (row) return sessionUser(event, row, visibleAuthEmail(sess.user.email))
     const createdRow = await ensureDomainUser(event, sess.user)
-    return {
-      id: sess.user.id,
-      kind: 'human',
-      displayName: sess.user.name || 'member',
-      avatarR2Key: createdRow.avatarR2Key,
-      email: visibleAuthEmail(sess.user.email),
-    }
+    return sessionUser(event, createdRow, visibleAuthEmail(sess.user.email))
   }
   return null
 }

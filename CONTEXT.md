@@ -20,6 +20,14 @@ _Avoid_: Folder, section as a separate data model, category as a Channel type
 A workspace member granted access to a private Channel. Direct Message participants are Channel Members, and Threads inherit access from their parent Channel.
 _Avoid_: DM participant as a separate entity, channel role
 
+**Mailbox**:
+A private Channel that owns one workspace email address. Read access is represented by Channel membership; Mailbox access additionally grants `read`, `send`, or `manage`. A Mailbox stays out of the chat Channel list and appears in the separate Mail app.
+_Avoid_: Separate mailbox message store, external inbox account
+
+**Email Conversation**:
+A Thread under a Mailbox Channel. Incoming and outgoing emails are Messages with protocol metadata; an Internal Note is an ordinary Message in the same Thread and is never sent outside the workspace.
+_Avoid_: Email chain as a second conversation model, showing quoted replies as nested email chrome
+
 **Direct Message**:
 A private Channel among workspace members. Two members is 1:1; three to twenty-five is a group.
 _Avoid_: Friend chat, private message, Group DM as a separate kind, DM voice channel
@@ -86,8 +94,12 @@ _Avoid_: Hiding signup UI as the policy, workspace visibility
 An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.
 _Avoid_: Provider credentials as workspace data, enabled UI button as backend authorization
 
+**Onboarding Revision**:
+An immutable, owner-published bundle of Terms, Privacy policy, and Workspace rules. A new User accepts the current revision before open admission or Invite acceptance; publishing a later revision does not interrupt existing Members.
+_Avoid_: External policy URL, mutable acceptance, forcing existing Members to re-accept
+
 **Message**:
-A chat event in a Channel containing written content, Attachments, or both. A recorded audio message is a Message with an audio Attachment, not a Huddle.
+A chat or email event in a Channel containing written content, Attachments, or both. A recorded audio message is a Message with an audio Attachment, not a Huddle. Email-specific sender, recipient, threading, and delivery fields live in a companion record; Internal Notes need none.
 _Avoid_: Post, comment
 
 **Attachment**:

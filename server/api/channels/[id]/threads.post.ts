@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { attachments, channels, messages } from '../../../../drizzle/schema'
 import { newId, nowIso } from '../../../../shared/ids'
 import { threadTitle } from '../../../../shared/threads'
+import { Permission } from '../../../../shared/permissions'
 import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -15,7 +16,7 @@ const bodySchema = z.object({
 
 export default defineEventHandler(async (event) => {
   const parentId = getRouterParam(event, 'id')!
-  const access = await requireChannelAccess(event, parentId)
+  const access = await requireChannelAccess(event, parentId, Permission.sendMessages)
   if (access.channel.type !== 'text' && access.channel.type !== 'dm') fail(400, 'bad_request', 'Threads hang off text or DMs')
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)

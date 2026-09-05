@@ -15,6 +15,7 @@ import { signalChannelActivity, signalChannelRead } from './channel-activity'
 import { signalAgentsForMessage } from './agent-ingress'
 import { listAgentTurns } from './agent-turns'
 import { AGENT_REACTION_EMOJIS, replaceAgentReaction } from './agent-reactions'
+import { mailPermissionAllows } from '../shared/mail'
 
 type Sock = { userId: string; user: PublicUser }
 type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean; canManageAgents: boolean }
@@ -183,12 +184,21 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       'SELECT id, type, visibility, parent_id as parentId FROM channels WHERE id = ?',
     ).bind(this.channelId()).first<{ id: string; type: string; visibility: string; parentId: string | null }>()
     if (!channel) throw new Error('Channel not found')
+    const accessChannelId = channel.type === 'thread' && channel.parentId ? channel.parentId : channel.id
     if (channel.visibility === 'private') {
-      const accessChannelId = channel.type === 'thread' && channel.parentId ? channel.parentId : channel.id
       const access = await this.env.DB.prepare(
         'SELECT 1 FROM channel_members WHERE channel_id = ? AND user_id = ?',
       ).bind(accessChannelId, agent.id).first()
       if (!access) throw new Error('Agent cannot access this private channel')
+    }
+    const mailbox = await this.env.DB.prepare(
+      `SELECT mb.enabled, a.permission
+       FROM email_mailboxes mb
+       LEFT JOIN email_mailbox_access a ON a.channel_id = mb.channel_id AND a.user_id = ?
+       WHERE mb.channel_id = ?`,
+    ).bind(agent.id, accessChannelId).first<{ enabled: number; permission: 'read' | 'send' | 'manage' | null }>()
+    if (mailbox && (!mailbox.enabled || !mailbox.permission || !mailPermissionAllows(mailbox.permission, 'send'))) {
+      throw new Error('Agent cannot send in this mailbox')
     }
 
     const id = newId()
@@ -224,6 +234,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   async updateAgentMessage(input: z.infer<typeof agentUpdateSchema>): Promise<void> {
     const body = agentUpdateSchema.parse(input)
+    const authz = await this.loadAuthz(body.agentId)
+    if (!authz || !hasPermission(authz.perms, Permission.sendMessages)) throw new Error('Agent cannot edit in this channel')
     const row = await this.env.DB.prepare(
       `SELECT m.id
        FROM messages m
@@ -240,6 +252,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   async setAgentReaction(input: z.infer<typeof agentReactionSchema>): Promise<void> {
     const body = agentReactionSchema.parse(input)
+    const authz = await this.loadAuthz(body.agentId)
+    if (!authz || !hasPermission(authz.perms, Permission.sendMessages)) throw new Error('Agent cannot react in this channel')
     const target = await this.env.DB.prepare(
       `SELECT m.id
        FROM messages m
@@ -276,10 +290,10 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         await this.onCreate(ws, sock, authz, createSchema.parse(JSON.parse(raw)))
         break
       case 'message.update':
-        await this.onUpdate(ws, sock, updateSchema.parse(JSON.parse(raw)))
+        await this.onUpdate(ws, sock, authz, updateSchema.parse(JSON.parse(raw)))
         break
       case 'message.delete':
-        await this.onDelete(ws, sock, (JSON.parse(raw) as { id: string }).id)
+        await this.onDelete(ws, sock, authz, (JSON.parse(raw) as { id: string }).id)
         break
       case 'agent.control':
         await this.onAgentControl(ws, sock, authz, agentControlSchema.parse(JSON.parse(raw)))
@@ -459,7 +473,11 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     await agent.controlConversation({ channelId: this.channelId(), action: body.action, executionId: body.executionId })
   }
 
-  private async onUpdate(ws: WebSocket, sock: Sock, body: z.infer<typeof updateSchema>) {
+  private async onUpdate(ws: WebSocket, sock: Sock, authz: Authz, body: z.infer<typeof updateSchema>) {
+    if (!hasPermission(authz.perms, Permission.sendMessages)) {
+      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot edit messages in this channel' })
+      return
+    }
     const row = await this.env.DB.prepare(
       'SELECT id, author_id, channel_id, content, reply_to_id, created_at, deleted_at FROM messages WHERE id = ?',
     ).bind(body.id).first<{
@@ -493,7 +511,11 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     if (dto) this.broadcast({ t: 'message.update', message: dto })
   }
 
-  private async onDelete(ws: WebSocket, sock: Sock, id: string) {
+  private async onDelete(ws: WebSocket, sock: Sock, authz: Authz, id: string) {
+    if (!hasPermission(authz.perms, Permission.sendMessages)) {
+      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot delete messages in this channel' })
+      return
+    }
     const row = await this.env.DB.prepare(
       'SELECT author_id, channel_id FROM messages WHERE id = ?',
     ).bind(id).first<{ author_id: string; channel_id: string }>()
@@ -702,6 +724,19 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         'SELECT allow_mask, deny_mask FROM channel_role_overrides WHERE channel_id = ? AND role_id = ?',
       ).bind(accessRoot.id, membership.roleId).first<{ allow_mask: number; deny_mask: number }>()
       perms = resolveChannelPermissions(perms, override && { allow: override.allow_mask, deny: override.deny_mask })
+    }
+    const mailbox = await this.env.DB.prepare(
+      `SELECT mb.enabled, a.permission
+       FROM email_mailboxes mb
+       LEFT JOIN email_mailbox_access a ON a.channel_id = mb.channel_id AND a.user_id = ?
+       WHERE mb.channel_id = ?`,
+    ).bind(userId, accessRoot.id).first<{ enabled: number; permission: 'read' | 'send' | 'manage' | null }>()
+    if (mailbox) {
+      if (!mailbox.enabled || !mailbox.permission) return null
+      perms &= ~Permission.startHuddle
+      if (!mailPermissionAllows(mailbox.permission, 'send')) {
+        perms &= ~(Permission.sendMessages | Permission.attachFiles)
+      }
     }
     return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false, canManageAgents }
   }

@@ -6,6 +6,7 @@ import { NotificationDurableObject } from './notification-do'
 import { DiscoflareAgent, DiscoflareThink } from './discoflare-agent'
 import { AgentTaskWorkflow } from './agent-task-workflow'
 import { Sandbox } from '@cloudflare/sandbox'
+import { receiveWorkspaceEmail } from './mail-ingress'
 
 export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, DiscoflareThink, AgentTaskWorkflow, Sandbox }
 
@@ -23,5 +24,8 @@ export default {
       }
     }
     return new Response('discoflare durable objects', { status: 200 })
+  },
+  async email(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
+    await receiveWorkspaceEmail(message, env)
   },
 }

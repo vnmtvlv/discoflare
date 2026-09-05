@@ -92,6 +92,20 @@
       "when": 1788562800000,
       "tag": "0012_agent_identity_boundary",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1788606000000,
+      "tag": "0013_onboarding",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1788613200000,
+      "tag": "0014_workspace_mail",
+      "breakpoints": true
     }
   ]
 }

@@ -1,3 +1,5 @@
+import type { JSONContent } from '@tiptap/core'
+
 export type PresenceStatus = 'online' | 'idle' | 'offline'
 export type UserStatus = 'pending' | 'active' | 'removed'
 export type UserKind = 'human' | 'agent'
@@ -147,8 +149,53 @@ export type TaskBoardDTO = {
   tasks: TaskDTO[]
 }
 
+export type MailboxPermission = 'read' | 'send' | 'manage'
+export type MailThreadStatus = 'inbox' | 'archive' | 'spam' | 'trash'
+
+export type MailboxDTO = {
+  channelId: string
+  address: string
+  displayName: string
+  enabled: boolean
+  permission: MailboxPermission
+  unreadCount: number
+}
+
+export type MailThreadDTO = {
+  channelId: string
+  mailboxChannelId: string
+  subject: string
+  status: MailThreadStatus
+  participants: string[]
+  preview: string
+  lastMessageAt: string
+  unread: boolean
+}
+
+export type MailMessageDTO = MessageDTO & {
+  email: null | {
+    direction: 'inbound' | 'outbound'
+    fromAddress: string
+    fromName: string | null
+    to: string[]
+    cc: string[]
+    bcc: string[]
+    deliveryStatus: 'received' | 'pending' | 'sent' | 'failed'
+  }
+}
+
+export type MailSettingsDTO = {
+  configured: boolean
+  domain: string | null
+  appHostname: string | null
+  sendingBound: boolean
+  mailboxes: Array<MailboxDTO & { access: Array<{ userId: string; permission: MailboxPermission }> }>
+}
+
 export type SessionUser = PublicUser & {
   email: string | null
+  status: UserStatus
+  onboardingRequired: boolean
 }
 
 export type RegistrationMode = 'open' | 'invite_only'
@@ -159,8 +206,23 @@ export type PublicAuthConfig = {
   registrationMode: RegistrationMode
   signupEnabled: boolean
   emailSignupEnabled: boolean
+  passwordResetEnabled: boolean
   methods: Record<AuthLoginMethod, boolean>
   turnstile: { enabled: boolean; siteKey: string | null }
+}
+
+export type RichTextDocument = JSONContent & {
+  type: 'doc'
+}
+
+export type PublicOnboardingConfig = {
+  revisionId: string | null
+  version: number
+  privacy: RichTextDocument | null
+  terms: RichTextDocument | null
+  rules: RichTextDocument | null
+  acceptanceRequired: boolean
+  publishedAt: string | null
 }
 
 export type AuthProviderAdminDTO = {

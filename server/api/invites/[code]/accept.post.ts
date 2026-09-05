@@ -6,6 +6,7 @@ import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
 import { signalMembersChanged } from '../../../../workers/member-events'
+import { hasAcceptedCurrentOnboarding } from '../../../utils/onboarding'
 
 export default defineEventHandler(async (event) => {
   const code = getRouterParam(event, 'code')!
@@ -19,6 +20,9 @@ export default defineEventHandler(async (event) => {
 
   const existing = (await db.select().from(users).where(eq(users.id, user.id)).limit(1))[0]
   if (existing?.status !== 'active') {
+    if (!(await hasAcceptedCurrentOnboarding(env, user.id))) {
+      fail(403, 'acceptance_required', 'Accept the published workspace documents before joining')
+    }
     const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
     if (!memberRole) fail(500, 'internal', 'Member role missing')
     await db.update(users).set({

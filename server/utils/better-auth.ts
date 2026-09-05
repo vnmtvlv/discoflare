@@ -4,6 +4,7 @@ import { drizzleAdapter } from '@better-auth/drizzle-adapter'
 import type { H3Event } from 'h3'
 import { authAccounts, authSessions, authUsers, authVerifications } from '../../drizzle/schema'
 import type { DiscoflareEnv } from '../../workers/env'
+import { readAppBranding } from '../../shared/app-branding'
 import { authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
 import { cf } from './cf'
 import { getDb } from './db'
@@ -39,19 +40,28 @@ function escapeHtml(value: string): string {
   })[char]!)
 }
 
-async function sendVerificationEmail(env: DiscoflareEnv, from: string, fromName: string | null, to: string, url: string) {
+async function sendAuthEmail(
+  env: DiscoflareEnv,
+  from: string,
+  fromName: string | null,
+  to: string,
+  subject: string,
+  introduction: string,
+  action: string,
+  url: string,
+) {
   if (!env.EMAIL) throw new Error('Cloudflare Email Service binding is unavailable')
   const safeUrl = escapeHtml(url)
   await env.EMAIL.send({
     to,
     from: fromName ? { email: from, name: fromName } : from,
-    subject: 'Verify your Discoflare email',
-    text: `Verify your email address: ${url}\n\nThis link expires in one hour.`,
-    html: `<p>Verify your email address to join Discoflare.</p><p><a href="${safeUrl}">Verify email</a></p><p>This link expires in one hour.</p>`,
+    subject,
+    text: `${introduction}\n\n${action}: ${url}\n\nThis link expires in one hour.`,
+    html: `<p>${escapeHtml(introduction)}</p><p><a href="${safeUrl}">${escapeHtml(action)}</a></p><p>This link expires in one hour.</p>`,
   })
 }
 
-export async function createAuth(env: DiscoflareEnv, baseURL: string) {
+export async function createAuth(env: DiscoflareEnv, baseURL: string, waitUntil: (promise: Promise<unknown>) => void = promise => void promise) {
   const config = await loadAuthRuntimeConfig(env, baseURL)
   const publicConfig = publicAuthConfig(config)
   const github = config.credentials.github
@@ -59,6 +69,7 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
   const telegram = config.credentials.telegram
   const turnstile = config.credentials.turnstile
   const requireEmailVerification = emailVerificationRequired(config)
+  const appName = readAppBranding(env).appName
 
   return betterAuth({
     secret: authSecret(env, baseURL),
@@ -77,6 +88,22 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
       disableSignUp: !publicConfig.emailSignupEnabled,
       requireEmailVerification,
       minPasswordLength: 8,
+      resetPasswordTokenExpiresIn: 60 * 60,
+      revokeSessionsOnPasswordReset: true,
+      sendResetPassword: config.email.verificationReady
+        ? async ({ user, url }) => {
+            waitUntil(sendAuthEmail(
+              env,
+              config.email.from!,
+              config.email.fromName,
+              user.email,
+              `Reset your ${appName} password`,
+              `A password reset was requested for your ${appName} account.`,
+              'Reset password',
+              url,
+            ))
+          }
+        : undefined,
       password: {
         hash: async password => hashPassword(password),
         verify: async ({ password, hash }) => verifyPassword(password, hash),
@@ -89,7 +116,16 @@ export async function createAuth(env: DiscoflareEnv, baseURL: string) {
           autoSignInAfterVerification: false,
           expiresIn: 60 * 60,
           sendVerificationEmail: async ({ user, url }) => {
-            await sendVerificationEmail(env, config.email.from!, config.email.fromName, user.email, url)
+            waitUntil(sendAuthEmail(
+              env,
+              config.email.from!,
+              config.email.fromName,
+              user.email,
+              `Verify your ${appName} email`,
+              `Verify your email address to join ${appName}.`,
+              'Verify email',
+              url,
+            ))
           },
         }
       : undefined,
@@ -177,6 +213,6 @@ export function resolveAuthBaseURL(configuredOrigin: string | undefined, request
 }
 
 export async function authFromEvent(event: H3Event) {
-  const { env } = cf(event)
-  return createAuth(env, resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin))
+  const { env, waitUntil } = cf(event)
+  return createAuth(env, resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin), waitUntil)
 }

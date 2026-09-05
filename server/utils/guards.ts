@@ -1,9 +1,10 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { H3Event } from 'h3'
-import { channelRoleOverrides, channels, channelMembers, roles, users, workspace } from '../../drizzle/schema'
+import { channelRoleOverrides, channels, channelMembers, emailMailboxAccess, emailMailboxes, roles, users, workspace } from '../../drizzle/schema'
 import { resolveChannelPermissions } from '../../shared/channel-permissions'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
+import { mailPermissionAllows } from '../../shared/mail'
 import type { ChannelType, PublicUser } from '../../shared/types'
 import { requireUser } from './auth'
 import { cf, fail } from './cf'
@@ -86,6 +87,23 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   if (accessRoot.visibility === 'private') {
     const part = (await db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1))[0]
     if (!part) fail(404, 'not_found', 'Channel not found')
+  }
+
+  const mailbox = (await db.select({ enabled: emailMailboxes.enabled }).from(emailMailboxes)
+    .where(eq(emailMailboxes.channelId, accessRoot.id)).limit(1))[0]
+  if (mailbox) {
+    if (!mailbox.enabled) fail(404, 'not_found', 'Channel not found')
+    const grant = (await db.select({ permission: emailMailboxAccess.permission }).from(emailMailboxAccess).where(and(
+      eq(emailMailboxAccess.channelId, accessRoot.id),
+      eq(emailMailboxAccess.userId, user.id),
+    )).limit(1))[0]
+    if (!grant) fail(404, 'not_found', 'Channel not found')
+    if (flag === Permission.manageChannels) fail(403, 'forbidden', 'Manage mailboxes in email settings')
+    if (flag === Permission.startHuddle) fail(403, 'forbidden', 'Huddles are unavailable for mailboxes')
+    const mutationWithoutFlag = !['GET', 'HEAD'].includes(event.method.toUpperCase()) && flag === undefined
+    if ((mutationWithoutFlag || flag === Permission.sendMessages || flag === Permission.attachFiles) && !mailPermissionAllows(grant.permission, 'send')) {
+      fail(403, 'forbidden', 'Mailbox is read only')
+    }
   }
 
   if (rootType === 'dm') {

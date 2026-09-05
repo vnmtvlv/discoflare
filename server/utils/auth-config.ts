@@ -152,6 +152,7 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
     registrationMode: config.registrationMode,
     signupEnabled: config.registrationMode === 'open' && (emailSignupEnabled || methods.github || methods.twitter || methods.telegram),
     emailSignupEnabled,
+    passwordResetEnabled: methods.email && config.email.verificationReady,
     methods,
     turnstile: {
       enabled: turnstileReady,

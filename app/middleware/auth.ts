@@ -8,4 +8,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   if (!session.user) {
     return navigateTo({ path: '/login', query: { next: to.fullPath } })
   }
+  if (session.user.onboardingRequired && to.path !== '/signup/accept') {
+    return navigateTo({ path: '/signup/accept', query: { next: to.fullPath } })
+  }
 })

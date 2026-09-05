@@ -12,8 +12,10 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const privateAccess = await db.select({ channelId: channelMembers.channelId }).from(channelMembers).where(eq(channelMembers.userId, member.user.id))
   const privateIds = new Set(privateAccess.map(row => row.channelId))
+  const mailboxRows = await env.DB.prepare('SELECT channel_id as channelId FROM email_mailboxes').all<{ channelId: string }>()
+  const mailboxIds = new Set((mailboxRows.results ?? []).map(row => row.channelId))
   const list = (await db.select().from(channels).orderBy(channels.position))
-    .filter((ch) => ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
+    .filter((ch) => !mailboxIds.has(ch.id) && ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
   const unread = await channelUnreadCounts(env.DB, member.user.id, list.map(channel => channel.id))
 
   return {

@@ -28,6 +28,10 @@ const channelsQ = useQuery({
   queryKey: computed(() => ['channels', props.workspaceId]),
   queryFn: () => api<{ categories: Category[]; channels: Ch[] }>(`/api/workspaces/${props.workspaceId}/channels`),
 })
+const mailboxesQ = useQuery({
+  queryKey: ['mailboxes'],
+  queryFn: () => api<{ mailboxes: Array<{ channelId: string }> }>('/api/mail/mailboxes'),
+})
 const workspacesQ = useQuery({
   queryKey: ['workspaces'],
   queryFn: () => api<{ workspaces: W[] }>('/api/workspaces'),
@@ -225,8 +229,18 @@ watch(() => channelsQ.data.value?.channels, (list) => {
     </UDropdownMenu>
 
     <div class="flex-1 overflow-y-auto pt-3 pb-2">
-      <div v-if="can(Permission.manageTasks)" class="px-2 pb-3">
+      <div class="px-2 pb-3 space-y-1">
         <NuxtLink
+          v-if="mailboxesQ.data.value?.mailboxes.length"
+          to="/mail"
+          class="flex h-11 items-center gap-2 rounded-md px-2 text-[15px] md:h-9"
+          :class="route.path === '/mail' ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
+        >
+          <UIcon name="i-ph-envelope-simple" class="size-[18px] shrink-0" />
+          <span>Mail</span>
+        </NuxtLink>
+        <NuxtLink
+          v-if="can(Permission.manageTasks)"
           to="/tasks"
           class="flex h-11 items-center gap-2 rounded-md px-2 text-[15px] md:h-9"
           :class="route.path === '/tasks' ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"

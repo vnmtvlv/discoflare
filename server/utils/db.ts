@@ -13,6 +13,8 @@ import taskManagementSql from '../../drizzle/migrations/0009_task_management.sql
 import realtimekitSettingsSql from '../../drizzle/migrations/0010_realtimekit_settings.sql?raw'
 import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_boundary.sql?raw'
 import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
+import onboardingSql from '../../drizzle/migrations/0013_onboarding.sql?raw'
+import workspaceMailSql from '../../drizzle/migrations/0014_workspace_mail.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -48,6 +50,8 @@ export const INIT_SQL = d1ExecSql([
   realtimekitSettingsSql,
   adminTaskBoundarySql,
   agentIdentityBoundarySql,
+  onboardingSql,
+  workspaceMailSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

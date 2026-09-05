@@ -6,12 +6,16 @@ import { authFromEvent } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
 import { ensureMigrated, getDb } from '../../utils/db'
 import { parseBody } from '../../utils/validate'
+import { createSocialOnboardingTicket, requireCurrentOnboardingAcceptance } from '../../utils/onboarding'
 
 const bodySchema = z.object({
   provider: z.enum(['github', 'twitter', 'telegram']),
   callbackURL: z.string().url().max(1000),
   errorCallbackURL: z.string().url().max(1000),
   inviteCode: z.string().trim().max(100).optional(),
+  mode: z.enum(['login', 'signup']).default('login'),
+  accepted: z.boolean().default(false),
+  onboardingRevisionId: z.string().max(100).nullable().optional(),
 })
 
 export default defineEventHandler(async (event): Promise<{ url: string | null }> => {
@@ -32,7 +36,12 @@ export default defineEventHandler(async (event): Promise<{ url: string | null }>
       && (!invite.expiresAt || new Date(invite.expiresAt).getTime() >= Date.now())
       && (invite.maxUses === 0 || invite.uses < invite.maxUses))
   }
-  const requestSignUp = runtime.registrationMode === 'open' || validInvite
+  const signupAllowed = runtime.registrationMode === 'open' || validInvite
+  if (body.mode === 'signup' && !signupAllowed) fail(403, 'invite_required', 'A valid invite is required')
+  const onboarding = body.mode === 'signup'
+    ? await requireCurrentOnboardingAcceptance(env, body.onboardingRevisionId, body.accepted)
+    : null
+  const requestSignUp = body.mode === 'signup'
   const auth = await authFromEvent(event)
   const response = await auth.api.signInSocial({
     headers: event.headers,
@@ -46,6 +55,7 @@ export default defineEventHandler(async (event): Promise<{ url: string | null }>
     asResponse: true,
   })
   if (!response.ok) fail(response.status, 'social_login_failed', 'Could not start social login')
+  if (body.mode === 'signup') await createSocialOnboardingTicket(event, onboarding?.revisionId ?? null)
   for (const cookie of response.headers.getSetCookie?.() ?? []) appendResponseHeader(event, 'set-cookie', cookie)
   const payload = await response.json() as { url?: string | null }
   return { url: payload.url ?? null }

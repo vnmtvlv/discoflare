@@ -26,6 +26,7 @@ export type DiscoflareEnv = {
   AGENT_TASK_WORKFLOW: Workflow<AgentTaskWorkflowParams>
   AI: Ai
   EMAIL?: SendEmail
+  MAIL_EMAIL?: SendEmail
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
   REALTIMEKIT_APP_ID?: string
@@ -45,6 +46,10 @@ export type DiscoflareEnv = {
   TURNSTILE_SECRET_KEY?: string
   EMAIL_FROM?: string
   EMAIL_FROM_NAME?: string
+  MAIL_DOMAIN?: string
+  MAIL_ZONE_ID?: string
+  MAIL_APP_HOSTNAME?: string
+  MAIL_DEFAULT_LOCAL_PART?: string
   AUTH_REGISTRATION_MODE?: string
   VAPID_SUBJECT?: string
   VAPID_PUBLIC_KEY?: string

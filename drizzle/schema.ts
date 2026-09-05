@@ -106,6 +106,29 @@ export const authProviderCredentials = sqliteTable('auth_provider_credentials', 
   check('auth_provider_credentials_provider_check', sql`${table.provider} in ('github', 'twitter', 'telegram', 'turnstile')`),
 ])
 
+/** Immutable published Privacy, Terms, and workspace Rules bundle. */
+export const onboardingRevisions = sqliteTable('onboarding_revisions', {
+  id: text('id').primaryKey(),
+  version: integer('version').notNull(),
+  privacyJson: text('privacy_json').notNull(),
+  termsJson: text('terms_json').notNull(),
+  rulesJson: text('rules_json').notNull(),
+  createdBy: text('created_by').notNull().references(() => identityKeys.id),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  uniqueIndex('onboarding_revisions_version_unique').on(table.version),
+])
+
+/** The exact published onboarding bundle accepted by an authentication identity. */
+export const onboardingAcceptances = sqliteTable('onboarding_acceptances', {
+  userId: text('user_id').notNull().references(() => identityKeys.id, { onDelete: 'cascade' }),
+  revisionId: text('revision_id').notNull().references(() => onboardingRevisions.id, { onDelete: 'cascade' }),
+  acceptedAt: text('accepted_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.userId, table.revisionId] }),
+  index('onboarding_acceptances_revision_idx').on(table.revisionId),
+])
+
 /** Installation-wide RealtimeKit credentials entered by the owner. The API token is AES-GCM encrypted. */
 export const realtimekitSettings = sqliteTable('realtimekit_settings', {
   id: text('id').primaryKey().default('main'),
@@ -375,6 +398,78 @@ export const notificationOutbox = sqliteTable('notification_outbox', {
   check('notification_outbox_kind_check', sql`${table.kind} in ('mention', 'dm_message', 'huddle_started')`),
 ])
 
+/** Cloudflare-managed mail domain attached to this single-workspace installation. */
+export const emailDomains = sqliteTable('email_domains', {
+  id: text('id').primaryKey().default('main'),
+  zoneId: text('zone_id').notNull(),
+  domain: text('domain').notNull(),
+  appHostname: text('app_hostname').notNull(),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('email_domains_domain_unique').on(table.domain),
+  check('email_domains_singleton_check', sql`${table.id} = 'main'`),
+])
+
+/** A mailbox is a private channel. Its email conversation channels are ordinary threads. */
+export const emailMailboxes = sqliteTable('email_mailboxes', {
+  channelId: text('channel_id').primaryKey().references(() => channels.id, { onDelete: 'cascade' }),
+  domainId: text('domain_id').notNull().references(() => emailDomains.id, { onDelete: 'cascade' }),
+  localPart: text('local_part').notNull(),
+  displayName: text('display_name').notNull(),
+  enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('email_mailboxes_address_unique').on(table.domainId, table.localPart),
+  check('email_mailboxes_local_part_check', sql`${table.localPart} = lower(${table.localPart}) and length(${table.localPart}) between 1 and 64`),
+])
+
+export const emailMailboxAccess = sqliteTable('email_mailbox_access', {
+  channelId: text('channel_id').notNull().references(() => emailMailboxes.channelId, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  permission: text('permission', { enum: ['read', 'send', 'manage'] }).notNull().default('read'),
+  ...isoTimestamps(),
+}, table => [
+  primaryKey({ columns: [table.channelId, table.userId] }),
+  index('email_mailbox_access_user_idx').on(table.userId),
+  check('email_mailbox_access_permission_check', sql`${table.permission} in ('read', 'send', 'manage')`),
+])
+
+export const emailThreads = sqliteTable('email_threads', {
+  channelId: text('channel_id').primaryKey().references(() => channels.id, { onDelete: 'cascade' }),
+  mailboxChannelId: text('mailbox_channel_id').notNull().references(() => emailMailboxes.channelId, { onDelete: 'cascade' }),
+  subject: text('subject').notNull(),
+  status: text('status', { enum: ['inbox', 'archive', 'spam', 'trash'] }).notNull().default('inbox'),
+  participantsJson: text('participants_json').notNull().default('[]'),
+  lastMessageAt: text('last_message_at').notNull(),
+  ...isoTimestamps(),
+}, table => [
+  index('email_threads_mailbox_status_latest_idx').on(table.mailboxChannelId, table.status, table.lastMessageAt),
+  check('email_threads_status_check', sql`${table.status} in ('inbox', 'archive', 'spam', 'trash')`),
+])
+
+/** Protocol metadata extending a normal Discoflare message. Internal notes have no row here. */
+export const emailMessages = sqliteTable('email_messages', {
+  messageId: text('message_id').primaryKey().references(() => messages.id, { onDelete: 'cascade' }),
+  threadChannelId: text('thread_channel_id').notNull().references(() => emailThreads.channelId, { onDelete: 'cascade' }),
+  direction: text('direction', { enum: ['inbound', 'outbound'] }).notNull(),
+  fromAddress: text('from_address').notNull(),
+  fromName: text('from_name'),
+  toJson: text('to_json').notNull().default('[]'),
+  ccJson: text('cc_json').notNull().default('[]'),
+  bccJson: text('bcc_json').notNull().default('[]'),
+  rfcMessageId: text('rfc_message_id'),
+  inReplyTo: text('in_reply_to'),
+  referencesJson: text('references_json').notNull().default('[]'),
+  deliveryStatus: text('delivery_status', { enum: ['received', 'pending', 'sent', 'failed'] }).notNull().default('received'),
+  rawR2Key: text('raw_r2_key'),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  uniqueIndex('email_messages_rfc_message_id_unique').on(table.rfcMessageId).where(sql`${table.rfcMessageId} is not null`),
+  index('email_messages_thread_created_idx').on(table.threadChannelId, table.createdAt),
+  check('email_messages_direction_check', sql`${table.direction} in ('inbound', 'outbound')`),
+  check('email_messages_delivery_status_check', sql`${table.deliveryStatus} in ('received', 'pending', 'sent', 'failed')`),
+])
+
 export const auditLog = sqliteTable('audit_log', {
   id: text('id').primaryKey(),
   actorId: text('actor_id').notNull().references(() => users.id),
@@ -521,6 +616,8 @@ export const schema = {
   authVerifications,
   authSettings,
   authProviderCredentials,
+  onboardingRevisions,
+  onboardingAcceptances,
   users,
   agents,
   agentTurns,
@@ -539,6 +636,11 @@ export const schema = {
   messageMentions,
   pushSubscriptions,
   notificationOutbox,
+  emailDomains,
+  emailMailboxes,
+  emailMailboxAccess,
+  emailThreads,
+  emailMessages,
   auditLog,
   taskBoards,
   tasks,

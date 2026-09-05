@@ -2,6 +2,7 @@ import '#nitro-internal-pollyfills'
 import { useNitroApp } from 'nitropack/runtime'
 import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'
 import type { DiscoflareEnv } from '../workers/env'
+import { receiveWorkspaceEmail } from '../workers/mail-ingress'
 
 export { ChannelDurableObject } from '../workers/channel-do'
 export { WorkspaceDurableObject } from '../workers/workspace-do'
@@ -53,5 +54,8 @@ export default {
       headers: request.headers,
       body,
     } as Parameters<typeof nitroApp.localFetch>[1])
+  },
+  async email(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
+    await receiveWorkspaceEmail(message, env)
   },
 }

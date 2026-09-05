@@ -2,10 +2,12 @@
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { AuthLoginMethod, PublicAuthConfig } from '~~/shared/types'
+import { DEFAULT_APP_NAME } from '~~/shared/app-branding'
 
 definePageMeta({ layout: 'auth', middleware: ['guest'] })
 
 const session = useSessionStore()
+const appName = computed(() => session.health?.appName || DEFAULT_APP_NAME)
 const route = useRoute()
 const toast = useToast()
 const busy = ref(false)
@@ -31,6 +33,7 @@ onMounted(async () => {
   }
   if (session.health && session.health.users === 0) await navigateTo('/setup')
   if (route.query.verified === '1') toast.add({ title: 'Email verified. You can sign in.', color: 'success' })
+  if (route.query.reset === '1') toast.add({ title: 'Password reset. You can sign in.', color: 'success' })
 })
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
@@ -38,6 +41,10 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
   error.value = null
   try {
     await session.login(event.data.email, event.data.password, api)
+    if (session.user?.onboardingRequired) {
+      await navigateTo({ path: '/signup/accept', query: { next: safeNextPath() } })
+      return
+    }
     await navigateTo(safeNextPath())
   }
   catch (err) {
@@ -71,6 +78,7 @@ async function signInWith(provider: Exclude<AuthLoginMethod, 'email'>) {
         callbackURL,
         errorCallbackURL,
         inviteCode: inviteCode.value ?? undefined,
+        mode: 'login',
       },
     })
     if (!res.url) throw new Error('Sign-in did not return a redirect')
@@ -99,13 +107,18 @@ const signupPath = computed(() => inviteCode.value
   ? `/signup?invite=${encodeURIComponent(inviteCode.value)}`
   : '/signup')
 
-const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEnabled
-  && (authConfig.value.signupEnabled || inviteCode.value)))
+const canCreateAccount = computed(() => Boolean(
+  (authConfig.value?.signupEnabled || inviteCode.value)
+  && (authConfig.value?.emailSignupEnabled || (!native && socialProviders.value.length)),
+))
 </script>
 
 <template>
   <div>
-    <h1 class="text-xl font-medium tracking-tight text-highlighted">Sign in</h1>
+    <h1 class="text-2xl font-semibold tracking-tight text-highlighted">Sign in</h1>
+    <p class="mt-1.5 text-sm text-muted">
+      Welcome back. Sign in to continue to {{ appName }}.
+    </p>
 
     <ULink
       v-if="native && serverOrigin"
@@ -128,7 +141,7 @@ const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEna
       <UButton
         v-for="provider in socialProviders"
         :key="provider.id"
-        class="mt-3 first:mt-8"
+        class="mt-3 first:mt-7"
         size="lg"
         color="neutral"
         variant="outline"
@@ -142,7 +155,7 @@ const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEna
       <USeparator label="or" class="my-6" />
     </template>
 
-    <UForm v-if="authConfig?.methods.email" :schema="schema" :state="state" :class="socialProviders.length ? 'space-y-4' : 'mt-6 space-y-4'" @submit="onSubmit">
+    <UForm v-if="authConfig?.methods.email" :schema="schema" :state="state" :class="socialProviders.length ? 'space-y-4' : 'mt-7 space-y-4'" @submit="onSubmit">
       <UFormField name="email" label="Email">
         <UInput
           v-model="state.email"
@@ -154,6 +167,9 @@ const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEna
         />
       </UFormField>
       <UFormField name="password" label="Password">
+        <template v-if="authConfig?.passwordResetEnabled" #hint>
+          <ULink to="/forgot-password" class="text-sm font-medium text-default">Forgot password?</ULink>
+        </template>
         <UInput
           v-model="state.password"
           type="password"
@@ -165,14 +181,16 @@ const canCreateAccount = computed(() => Boolean(authConfig.value?.emailSignupEna
       <UButton type="submit" size="lg" label="Sign in" block :loading="busy" class="mt-2" />
     </UForm>
 
-    <p v-if="canCreateAccount" class="mt-8 text-sm text-muted">
-      New here?
-      <ULink :to="signupPath" class="text-default font-medium">Create account</ULink>
-    </p>
+    <div v-if="canCreateAccount || session.health?.users === 0" class="mt-8 space-y-2 border-t border-default pt-5 text-sm text-muted">
+      <p v-if="canCreateAccount">
+        New here?
+        <ULink :to="signupPath" class="text-default font-medium">Create account</ULink>
+      </p>
 
-    <p v-if="session.health?.users === 0" class="mt-8 text-sm text-muted">
-      First machine?
-      <ULink to="/setup" class="text-default font-medium">Run setup</ULink>
-    </p>
+      <p v-if="session.health?.users === 0">
+        First machine?
+        <ULink to="/setup" class="text-default font-medium">Run setup</ULink>
+      </p>
+    </div>
   </div>
 </template>

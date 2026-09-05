@@ -8,7 +8,7 @@ import { hasPermission, MemberPermissions, Permission, permissionBitmask, Permis
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'huddles' | 'authentication' | 'audit'
+type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'huddles' | 'email' | 'authentication' | 'onboarding' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
 const { serverUrl } = useApi()
@@ -78,7 +78,9 @@ const workspaceNav = computed(() => [
   ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles' }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents' }] : []),
   ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Huddles' }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email' }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication' }] : []),
+  ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding' }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log' }] : []),
 ])
 const userNav = computed(() => [
@@ -846,8 +848,16 @@ function navClass(id: Section) {
       <SettingsRealtimeKitSettings :workspace-id="workspaceId" />
     </template>
 
+    <template v-else-if="section === 'email'">
+      <SettingsEmailSettings :workspace-id="workspaceId" />
+    </template>
+
     <template v-else-if="section === 'authentication'">
       <SettingsAuthSettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'onboarding'">
+      <SettingsOnboardingSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else>

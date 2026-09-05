@@ -8,7 +8,7 @@ Browser (Nuxt)
         │
         ▼
 Nuxt/Nitro Worker
-  Better Auth, admission policy, REST, R2, RealtimeKit tokens
+  Better Auth, admission policy, REST, email ingress, R2, RealtimeKit tokens
   ├─ D1          catalog + message history
   ├─ R2          FILES
   ├─ KV          TICKETS
@@ -40,9 +40,24 @@ RealtimeKit
 10. Agents are real Members in the shared author/access model, but never authentication identities. `users.kind` distinguishes humans from agents; only humans have Better Auth identities and sessions.
 11. One top-level `DiscoflareAgent` coordinator is named `agent:<agentId>`. Each Channel or Thread gets a `DiscoflareThink` sub-agent with its own SQLite transcript; each Task Run gets a separate Think sub-agent. Conversation memory and concurrent task reasoning cannot leak across those facets.
 12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
-12. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
-13. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
-14. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
+13. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
+14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Email and social signup record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
+15. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
+16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
+17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts, R2 owns raw MIME and attachment bytes, Email Routing invokes the same Worker, and `MAIL_EMAIL` sends new mail and replies. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
+18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, and Worker bindings persist after OAuth expires; the installed Worker does not retain the token. Daily mailbox and access changes are D1-only because one catch-all route rejects addresses that do not map to an enabled Mailbox.
+
+## Email flow
+
+```text
+Internet email → Cloudflare Email Routing catch-all → Worker email handler
+  → reject unknown address
+  → raw MIME + attachments in R2
+  → Mailbox Channel root Message + Email Conversation Thread in D1
+
+New email/reply → mailbox send permission → MAIL_EMAIL binding → Internet
+Internal note   → ordinary Message in the same Thread → workspace only
+```
 
 ## Agent task flow
 

@@ -120,6 +120,13 @@ onMounted(load)
           <USwitch v-model="email.enabled" aria-label="Enable email and password" />
         </div>
         <UAlert v-if="!auth.email.binding" color="warning" variant="subtle" title="Cloudflare Email binding is not connected" />
+        <UAlert
+          v-if="email.enabled && !auth.passwordResetEnabled"
+          color="warning"
+          variant="subtle"
+          title="Password reset is unavailable"
+          description="Connect the Email binding and configure a sender address to enable reset emails."
+        />
         <div class="grid gap-4 sm:grid-cols-2">
           <UFormField label="Sender address">
             <UInput v-model="email.sender" type="email" class="w-full" :disabled="auth.email.senderManagedByDeployment" placeholder="login@example.com" />

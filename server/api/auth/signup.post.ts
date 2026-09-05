@@ -1,18 +1,21 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import { authUsers, invites } from '../../../drizzle/schema'
-import { ensureDomainUser, publicUser, visibleAuthEmail } from '../../utils/auth'
+import { ensureDomainUser, sessionUser, visibleAuthEmail } from '../../utils/auth'
 import { emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from '../../utils/auth-config'
 import { authFromEvent, resolveAuthBaseURL } from '../../utils/better-auth'
 import { cf, fail } from '../../utils/cf'
 import { ensureMigrated, getDb } from '../../utils/db'
 import { parseBody } from '../../utils/validate'
+import { recordOnboardingAcceptance, requireCurrentOnboardingAcceptance } from '../../utils/onboarding'
 
 const bodySchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.string().email().max(200),
   password: z.string().min(8).max(200),
   inviteCode: z.string().trim().max(100).optional(),
+  accepted: z.boolean().default(false),
+  onboardingRevisionId: z.string().max(100).nullable().optional(),
 })
 
 export default defineEventHandler(async (event) => {
@@ -36,6 +39,7 @@ export default defineEventHandler(async (event) => {
   if (runtime.registrationMode === 'invite_only' && !validInvite) {
     fail(403, 'invite_required', 'A valid invite is required')
   }
+  const onboarding = await requireCurrentOnboardingAcceptance(env, body.onboardingRevisionId, body.accepted)
   const ip = getHeader(event, 'cf-connecting-ip') || getHeader(event, 'x-forwarded-for') || 'local'
   let allowed = true
   try {
@@ -68,10 +72,12 @@ export default defineEventHandler(async (event) => {
   }
   for (const cookie of response.headers.getSetCookie?.() ?? []) appendResponseHeader(event, 'set-cookie', cookie)
 
+  const signedUp = await response.json() as { user: { id: string; email: string; name: string; image?: string | null } }
+  const persistedIdentity = (await getDb(env.DB).select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, signedUp.user.id)).limit(1))[0]
+  if (persistedIdentity) await recordOnboardingAcceptance(env, signedUp.user.id, onboarding.revisionId)
   const verificationRequired = emailVerificationRequired(runtime)
   if (verificationRequired) return { ok: true, verificationRequired }
 
-  const signedUp = await response.json() as { user: { id: string; email: string; name: string; image?: string | null } }
   await getDb(env.DB)
     .update(authUsers)
     .set({ emailVerified: true, updatedAt: new Date() })
@@ -80,6 +86,6 @@ export default defineEventHandler(async (event) => {
   return {
     ok: true,
     verificationRequired,
-    user: { ...publicUser(row), email: visibleAuthEmail(signedUp.user.email) },
+    user: await sessionUser(event, row, visibleAuthEmail(signedUp.user.email)),
   }
 })

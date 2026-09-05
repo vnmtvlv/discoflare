@@ -38,12 +38,15 @@ Discoflare gives a team one private, real-time workspace without an origin serve
 - Start voice huddles with Cloudflare RealtimeKit.
 - Keep members in chat by default while Owner, Admin, or explicitly delegated custom roles manage invites, roles, workspace settings, and audit history.
 - Control invite-only or open registration and enable email, GitHub, X, and Telegram login methods.
+- Publish versioned Terms, Privacy, and workspace Rules with the built-in rich-text editor; new accounts must accept the current version.
+- Offer password reset when email login, an `EMAIL` binding, and a verified sender are configured.
 - Let workspace administrators create AI agents as participants, give them custom avatars, and use vision-capable Workers AI models to inspect image attachments.
 - Manage realtime boards with ordered tasks, labels, dependencies, checklists, attachments, durable run history, cancellation, and recovery.
+- Receive and send domain email in shared Mailboxes, read conversations as chat Threads, add Internal Notes, and assign read, send, or manage access to humans and Agents.
 
 ## How it works
 
-One Nuxt Worker serves the app and API. D1 stores shared workspace, chat, agent profile, board, task, and run records. R2 stores attachments and agent-computer checkpoints. KV holds short-lived WebSocket tickets. Durable Objects coordinate live channels, presence, notification delivery, rate limits, and isolated Think memory for each Agent conversation and Task Run. Cloudflare Workflows orchestrate task runs; Cloudflare Sandbox containers execute commands; Workers AI performs inference. RealtimeKit carries huddle media and remains optional.
+One Nuxt Worker serves the app and API and receives Cloudflare-routed email. D1 stores shared workspace, chat, mail, agent profile, board, task, and run records. R2 stores attachments, raw email, and agent-computer checkpoints. KV holds short-lived WebSocket tickets. Durable Objects coordinate live channels, presence, notification delivery, rate limits, and isolated Think memory for each Agent conversation and Task Run. Cloudflare Workflows orchestrate task runs; Cloudflare Sandbox containers execute commands; Workers AI performs inference. RealtimeKit carries huddle media and remains optional.
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
@@ -56,7 +59,9 @@ Huddle media ────────────────► RealtimeKit
 
 ## Deploy
 
-Click **Deploy to Cloudflare** above, keep the Worker name as `discoflare`, and enter `AUTH_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `ADMIN_NAME`. Cloudflare builds one Worker and one Sandbox image, then provisions the declared D1 database, R2 bucket, KV namespace, Durable Objects, Workflows, Container application, and Workers AI binding. No model API key is required for the default Workers AI model.
+Use the installer at `discoflare.com/deploy` for the complete path: connect Cloudflare, choose an account and domain, choose the Discoflare subdomain and first mailbox, and enter the first owner. The temporary OAuth grant provisions the Worker, storage, custom hostname, Email Routing, Email Sending, and the workspace mailbox; the deployed Worker does not retain the Cloudflare API token.
+
+The **Deploy to Cloudflare** button above remains a source-build fallback. It provisions the resources declared in `wrangler.jsonc`, but cannot choose or configure the mail domain because that flow has no installer OAuth session. No model API key is required for the default Workers AI model.
 
 Agents require a Workers Paid account with Containers enabled. The Worker becomes reachable before the first container image has finished provisioning, so chat may be ready several minutes before the first agent task can start. That is still one deploy and one Cloudflare account, but not an atomic instant rollout.
 
