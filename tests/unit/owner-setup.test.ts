@@ -8,11 +8,11 @@ describe('owner setup', () => {
     expect(readOwnerSetupEnv({
       ADMIN_EMAIL: ' Owner@Example.com ',
       ADMIN_SETUP_TOKEN: 'x'.repeat(32),
-      APP_NAME: 'Fox',
+      APP_NAME: 'Example Workspace',
     })).toEqual({
       email: 'owner@example.com',
       token: 'x'.repeat(32),
-      workspaceName: 'Fox',
+      workspaceName: 'Example Workspace',
     })
   })
 
@@ -24,6 +24,6 @@ describe('owner setup', () => {
   })
 
   it('does not expose the full owner email in public health', () => {
-    expect(maskedOwnerEmail('ij69@pm.me')).toBe('i***@pm.me')
+    expect(maskedOwnerEmail('owner@example.com')).toBe('o****@example.com')
   })
 })

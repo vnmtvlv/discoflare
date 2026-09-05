@@ -18,7 +18,7 @@ describe('public auth config', () => {
 
     expect(authEmailBinding({ MAIL_EMAIL: mailEmail } as never)).toBe(mailEmail)
     expect(authEmailBinding({ EMAIL: legacyEmail, MAIL_EMAIL: mailEmail } as never)).toBe(legacyEmail)
-    expect(installedMailboxSender({ MAIL_DEFAULT_LOCAL_PART: 'Inbox', MAIL_DOMAIN: 'Fox.Discoflare.com' } as never)).toBe('inbox@fox.discoflare.com')
+    expect(installedMailboxSender({ MAIL_DEFAULT_LOCAL_PART: 'Inbox', MAIL_DOMAIN: 'Chat.Example.com' } as never)).toBe('inbox@chat.example.com')
   })
 
   it('requires both credentials and the owner switch for social login', () => {

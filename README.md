@@ -166,10 +166,9 @@ pnpm db:seed
 | --- | --- | --- |
 | Local app | `pnpm dev` | Run Nuxt with local bindings for everyday development. |
 | Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets and Durable Object hibernation. Agent Sandbox development also needs Docker and a Cloudflare login. |
-| Remote backend | `pnpm dev:remote` | Work on the local frontend against a deployed server. Set `DISCOFLARE_DEV_PROXY_ORIGIN` in `.env`. |
-| Pilot sandbox | `pnpm dev:sandbox` | Run current code against the disposable pilot environment using `.env.sandbox`. This mutates real sandbox resources. |
+| Remote backend | `pnpm dev:remote` | Local frontend against a deployed server. Configure `.env`, pass `--env-file .env.personal`, or pass its URL. |
 
-See the [sandbox development guide](docs/sandbox-development.md) before using the pilot environment.
+See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.
 
 ### Native clients
 
