@@ -1,6 +1,10 @@
 import { readFile } from 'node:fs/promises'
 
-const nativeClient = process.env.DISCOFLARE_CLIENT_MODE === 'native'
+const requestedClientMode = process.env.DISCOFLARE_CLIENT_MODE
+const clientMode = requestedClientMode === 'native' || requestedClientMode === 'extension'
+  ? requestedClientMode
+  : 'web'
+const bundledClient = clientMode !== 'web'
 const devProxyOrigin = process.env.DISCOFLARE_DEV_PROXY_ORIGIN
   ? new URL(process.env.DISCOFLARE_DEV_PROXY_ORIGIN).origin
   : null
@@ -16,7 +20,7 @@ const rawSqlPlugin = {
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-02',
-  ssr: !nativeClient && !remoteFrontend,
+  ssr: !bundledClient && !remoteFrontend,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
   modules: ['@nuxt/ui', '@pinia/nuxt', '@vueuse/nuxt', '@nuxt/eslint'],
@@ -28,7 +32,7 @@ export default defineNuxtConfig({
     serverBundle: {
       collections: ['ph'],
     },
-    ...(nativeClient
+    ...(bundledClient
       ? {
           clientBundle: {
             scan: true,
@@ -38,11 +42,11 @@ export default defineNuxtConfig({
   },
   runtimeConfig: {
     public: {
-      clientMode: nativeClient ? 'native' : 'web',
+      clientMode,
       devRemoteOrigin: remoteFrontend && devProxyOrigin ? devProxyOrigin : '',
     },
   },
-  nitro: nativeClient ? {
+  nitro: bundledClient ? {
     preset: 'static',
     rollupConfig: {
       plugins: [rawSqlPlugin],
@@ -92,6 +96,11 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: ['@cloudflare/realtimekit'],
+    },
+  },
+  router: {
+    options: {
+      hashMode: clientMode === 'extension',
     },
   },
   app: {

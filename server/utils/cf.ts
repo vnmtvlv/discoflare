@@ -34,10 +34,10 @@ export function fail(status: number, code: string, message: string): never {
 export function originOk(event: H3Event): boolean {
   const method = event.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true
-  // Native clients cannot share the server's browser origin. The custom header
+  // Bundled clients cannot share the server's browser origin. The custom header
   // makes the request non-simple, so ordinary cross-origin web pages cannot use
   // this path without first passing CORS preflight.
-  if (getHeader(event, 'x-discoflare-client') === 'native') return true
+  if (['native', 'extension'].includes(getHeader(event, 'x-discoflare-client') ?? '')) return true
   const origin = getHeader(event, 'origin')
   if (!origin) return true
   const host = getHeader(event, 'host')

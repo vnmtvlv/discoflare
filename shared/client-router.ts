@@ -1,4 +1,4 @@
-export type ClientMode = 'web' | 'native'
+export type ClientMode = 'web' | 'native' | 'extension'
 
 export type ClientServer = {
   origin: string
@@ -22,6 +22,11 @@ export function createLiveFetch(
   current: () => typeof globalThis.fetch = () => globalThis.fetch,
 ): typeof globalThis.fetch {
   return (input, init) => current()(input, init)
+}
+
+export function clientAppEntryUrl(currentUrl: string): string {
+  const url = new URL(currentUrl)
+  return url.protocol === 'chrome-extension:' ? new URL('/index.html', url).toString() : '/'
 }
 
 export function normalizeServerOrigin(input: string): string {

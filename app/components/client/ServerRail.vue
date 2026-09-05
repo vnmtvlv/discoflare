@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { activateClientServer } from '~~/shared/client-router'
+import { activateClientServer, clientAppEntryUrl } from '~~/shared/client-router'
 
 const route = useRoute()
 const { servers, activeOrigin, select } = useClientServers()
@@ -20,7 +20,7 @@ function activate(origin: string) {
     origin,
     activeOrigin: activeOrigin.value,
     select,
-    reload: () => window.location.assign('/'),
+    reload: () => window.location.assign(clientAppEntryUrl(window.location.href)),
   })
 }
 </script>

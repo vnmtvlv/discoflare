@@ -1,12 +1,13 @@
 {
   "name": "discoflare",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
-    "generate:native": "node scripts/generate-native.mjs",
+    "generate:native": "node scripts/generate-native.mjs native",
+    "generate:extension": "node scripts/generate-native.mjs extension",
     "dev": "nuxt dev",
     "dev:remote": "node scripts/dev-remote.mjs",
     "dev:full": "pnpm db:migrate:local && pnpm build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",

@@ -1,4 +1,4 @@
-import type { ClientServer } from '~~/shared/client-router'
+import type { ClientMode, ClientServer } from '~~/shared/client-router'
 import { normalizeServerOrigin } from '~~/shared/client-router'
 
 const STORAGE_KEY = 'discoflare.client-servers.v1'
@@ -10,7 +10,11 @@ type StoredServers = {
 
 export function useClientServers() {
   const config = useRuntimeConfig()
-  const native = config.public.clientMode === 'native'
+  const clientMode = config.public.clientMode as ClientMode
+  // Kept as `native` for existing callers: it means a bundled client that
+  // selects a remote server, including the Chrome extension shell.
+  const native = clientMode !== 'web'
+  const extension = clientMode === 'extension'
   const servers = useState<ClientServer[]>('client-servers', () => [])
   const activeOrigin = useState<string | null>('client-server-origin', () => null)
   const initialized = useState('client-servers-initialized', () => false)
@@ -70,5 +74,5 @@ export function useClientServers() {
     persist()
   }
 
-  return { native, servers, activeOrigin, initialize, add, select, remove }
+  return { clientMode, native, extension, servers, activeOrigin, initialize, add, select, remove }
 }

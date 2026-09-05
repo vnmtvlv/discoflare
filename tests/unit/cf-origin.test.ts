@@ -22,6 +22,17 @@ describe('request origin checks', () => {
     } as never)).toBe(true)
   })
 
+  it('accepts extension requests carrying the non-simple client header', () => {
+    expect(originOk({
+      method: 'POST',
+      headers: {
+        host: 'sandbox.discoflare.com',
+        origin: 'chrome-extension://abcdefghijklmnop',
+        'x-discoflare-client': 'extension',
+      },
+    } as never)).toBe(true)
+  })
+
   it('continues to reject mismatched browser origins', () => {
     expect(originOk({
       method: 'POST',

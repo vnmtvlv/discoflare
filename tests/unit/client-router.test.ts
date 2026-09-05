@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   activateClientServer,
+  clientAppEntryUrl,
   createLiveFetch,
   normalizeServerOrigin,
   resolveServerUrl,
@@ -74,5 +75,11 @@ describe('client router', () => {
     currentFetch = nativeFetch
 
     expect(await (await liveFetch('https://sandbox.discoflare.com/api/setup/health')).text()).toBe('native')
+  })
+
+  it('reloads Chrome extensions through their packaged entry document', () => {
+    expect(clientAppEntryUrl('chrome-extension://abcdefghijklmnop/index.html#/channels'))
+      .toBe('chrome-extension://abcdefghijklmnop/index.html')
+    expect(clientAppEntryUrl('capacitor://localhost/channels')).toBe('/')
   })
 })

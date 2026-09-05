@@ -2,7 +2,7 @@
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 import type { SetupHealth } from '~~/shared/types'
-import { normalizeServerOrigin } from '~~/shared/client-router'
+import { clientAppEntryUrl, normalizeServerOrigin } from '~~/shared/client-router'
 
 definePageMeta({ layout: 'default' })
 
@@ -13,7 +13,7 @@ const error = ref<string | null>(null)
 const schema = z.object({ server: z.string().trim().min(1, 'Enter a server URL') })
 type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ server: 'https://sandbox.discoflare.com' })
-const deployUrl = 'https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare'
+const deployUrl = 'https://discoflare.com/deploy'
 
 if (!native) await navigateTo('/')
 
@@ -22,12 +22,14 @@ async function connect(event: FormSubmitEvent<Schema>) {
   error.value = null
   try {
     const origin = normalizeServerOrigin(event.data.server)
+    const granted = await window.__DISCOFLARE_EXTENSION__?.requestServerAccess(origin)
+    if (granted === false) throw new Error('Allow access to this server to connect it')
     const health = await $fetch<SetupHealth>(`${origin}/api/setup/health`, {
       credentials: 'include',
       timeout: 10_000,
     })
     add({ origin, name: health.appName || new URL(origin).hostname })
-    window.location.assign('/')
+    window.location.assign(clientAppEntryUrl(window.location.href))
   }
   catch (err) {
     error.value = errorMessage(err)
@@ -39,14 +41,14 @@ async function connect(event: FormSubmitEvent<Schema>) {
 
 function activate(origin: string) {
   select(origin)
-  window.location.assign('/')
+  window.location.assign(clientAppEntryUrl(window.location.href))
 }
 
 function forget(origin: string) {
   const wasActive = origin === activeOrigin.value
   remove(origin)
   toast.add({ title: 'Server removed' })
-  if (wasActive && activeOrigin.value) window.location.assign('/')
+  if (wasActive && activeOrigin.value) window.location.assign(clientAppEntryUrl(window.location.href))
 }
 </script>
 
@@ -86,7 +88,7 @@ function forget(origin: string) {
         target="_blank"
         rel="noopener noreferrer"
         icon="i-ph-cloud-arrow-up"
-        label="Deploy new server"
+        label="Create new workspace"
         size="lg"
         block
         class="mt-8"
@@ -94,8 +96,8 @@ function forget(origin: string) {
 
       <USeparator label="or connect existing" class="my-6" />
 
-      <UForm :schema="schema" :state="state" class="flex items-start gap-2" @submit="connect">
-        <UFormField name="server" class="min-w-0 flex-1">
+      <UForm :schema="schema" :state="state" class="flex flex-col gap-2 sm:flex-row sm:items-start" @submit="connect">
+        <UFormField name="server" class="w-full min-w-0 flex-1">
           <UInput
             v-model="state.server"
             type="url"
@@ -107,7 +109,7 @@ function forget(origin: string) {
             class="w-full"
           />
         </UFormField>
-        <UButton type="submit" label="Connect" size="lg" :loading="busy" />
+        <UButton type="submit" label="Connect" size="lg" :loading="busy" class="w-full justify-center sm:w-auto" />
       </UForm>
       <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mt-3" />
     </div>

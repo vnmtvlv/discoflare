@@ -28,7 +28,7 @@ The release PR must:
 1. Pass lint, type checking, tests, and the production build.
 2. Exercise representative browser and runtime paths in the sandbox.
 3. Set the release version in `package.json`.
-4. Update the default `DISCOFLARE_VERSION` in `docker-compose.yml`.
+4. Build the Cloudflare installer artifacts and inspect the release manifest.
 5. Update deployment documentation for new requirements or migrations.
 6. Prepare the user-facing release notes.
 
@@ -46,20 +46,14 @@ After the release PR is merged:
 2. Create the immutable Git tag `v<version>` from that commit.
 3. Create a GitHub Release attached to that tag.
 4. Review the title and Markdown description, then publish the release.
-5. Wait for the container publishing workflow to finish.
-6. Verify the public GHCR manifest and test a pull of the versioned image.
+5. Wait for the Cloudflare installer release workflow to finish.
+6. Verify that the Worker bundle, asset payload, and installer manifest are attached to the release and identify the expected version.
 
 Publishing the GitHub Release triggers
-`.github/workflows/publish-container.yml`. It builds `linux/amd64` and
-`linux/arm64` images and publishes:
-
-```text
-ghcr.io/vnmtvlv/discoflare:<version>
-ghcr.io/vnmtvlv/discoflare:latest
-```
-
-`latest` moves only for a non-prerelease release. Production deployments
-should pin the exact version rather than depend on `latest`.
+`.github/workflows/publish-installer-release.yml`. It builds the Nuxt Worker,
+packages the static assets and D1 migrations, and attaches the versioned
+installer artifacts to the GitHub Release. The guided installer consumes the
+pinned manifest rather than an unversioned branch.
 
 Do not move an existing release tag or overwrite a broken version. Fix the
 problem and publish the next patch release.
@@ -82,15 +76,11 @@ known limitations.
 
 ## Deployment
 
-Docker image:
-
-ghcr.io/vnmtvlv/discoflare:0.0.2
-
-Mention new variables, migrations, backup requirements, or manual actions.
+Mention installer compatibility, new Cloudflare bindings or permissions,
+migrations, and any manual actions required by GitHub/Workers Builds users.
 
 ## Known limitations
 
-- Docker deployments support one replica.
 - Live huddles require RealtimeKit and internet connectivity.
 
 **Full changelog:** v0.0.1...v0.0.2

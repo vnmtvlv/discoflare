@@ -112,7 +112,6 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 - Agent Sandbox development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
 - `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
-- Docker Compose — one local Wrangler/Miniflare process owns the chat Worker and simulated bindings, persisted together in one volume. It is a single-node topology and must not be replicated. It does not provide the Cloudflare-only agent execution plane.
 
 ## Threads and reads
 
