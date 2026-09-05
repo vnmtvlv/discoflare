@@ -42,9 +42,20 @@ export const useUiStore = defineStore('ui', () => {
   const rightPanelWidth = import.meta.client
     ? useLocalStorage('df:right-panel-width', 240)
     : ref(240)
+  const navCollapsed = import.meta.client
+    ? useLocalStorage<Record<string, boolean>>('df:nav-collapsed', {})
+    : ref<Record<string, boolean>>({})
   const lastChannel = import.meta.client
     ? useLocalStorage<LastChannel | null>('df:last', null)
     : ref<LastChannel | null>(null)
+
+  function isCollapsed(key: string) {
+    return Boolean(navCollapsed.value[key])
+  }
+
+  function setCollapsed(key: string, value: boolean) {
+    navCollapsed.value = { ...navCollapsed.value, [key]: value }
+  }
 
   function remember(workspaceId: string, channelId: string) {
     if (!workspaceId || workspaceId === 'undefined' || !channelId || channelId === 'undefined') return
@@ -110,6 +121,9 @@ export const useUiStore = defineStore('ui', () => {
     memberTab,
     channelPaneWidth,
     rightPanelWidth,
+    navCollapsed,
+    isCollapsed,
+    setCollapsed,
     remember,
     last,
     composerState,

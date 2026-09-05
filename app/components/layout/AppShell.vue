@@ -25,7 +25,7 @@ watch(() => route.fullPath, () => {
         :class="isMobile ? 'absolute inset-y-0 start-0 z-30 w-60 shadow-xl' : 'relative'"
         :style="!isMobile ? { width: `${ui.channelPaneWidth}px` } : undefined"
       >
-        <LayoutChannelNav :workspace-id="workspaceId" />
+        <LayoutNavShell :workspace-id="workspaceId" />
         <LayoutResizeHandle
           v-if="!isMobile"
           v-model="ui.channelPaneWidth"

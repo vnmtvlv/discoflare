@@ -2,23 +2,35 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { MailboxDTO, MailMessageDTO, MailThreadDTO, MailThreadStatus } from '~~/shared/types'
 import { formatDateTime } from '~~/shared/format'
+import { isMailFolder, mailPath } from '~~/shared/paths'
 
 definePageMeta({ middleware: ['auth'] })
 
 const { workspaceId } = useWorkspace()
 const { api, serverUrl } = useApi()
+const route = useRoute()
 const qc = useQueryClient()
 const toast = useToast()
-const activeMailboxId = ref<string | null>(null)
-const activeThreadId = ref<string | null>(null)
-const folder = ref<MailThreadStatus>('inbox')
+const nav = useNavActions()
+
+/** Mailbox, folder and open thread all live in the URL so the sidebar can link to them. */
+const activeMailboxId = computed(() => String(route.params.mailbox || '') || null)
+const folder = computed<MailThreadStatus>(() => {
+  const value = String(route.params.folder || 'inbox')
+  return isMailFolder(value) ? value : 'inbox'
+})
+const activeThreadId = computed(() => String(route.query.thread || '') || null)
+
 const composerMode = ref<'reply' | 'note'>('reply')
 const draft = ref('')
 const sending = ref(false)
-const composeOpen = ref(false)
 const composeTo = ref('')
 const composeSubject = ref('')
 const composeBody = ref('')
+
+function openThread(threadId: string | null) {
+  void navigateTo({ query: threadId ? { thread: threadId } : {} })
+}
 
 const mailboxesQ = useQuery({
   queryKey: ['mailboxes'],
@@ -44,17 +56,16 @@ const threadQ = useQuery({
 const thread = computed(() => threadQ.data.value?.thread ?? null)
 const messages = computed(() => threadQ.data.value?.messages ?? [])
 
-watch(mailboxes, (items) => {
-  if (!activeMailboxId.value || !items.some(item => item.channelId === activeMailboxId.value)) {
-    activeMailboxId.value = items[0]?.channelId ?? null
-  }
+/** A mailbox that disappeared (access revoked, renamed) shouldn't leave a dead URL. */
+watch([mailboxes, activeMailboxId], ([items, id]) => {
+  if (!items.length || !id) return
+  if (!items.some(item => item.channelId === id)) void navigateTo(mailPath(items[0]!.channelId), { replace: true })
 }, { immediate: true })
 
-watch([threads, activeMailboxId, folder], ([items]) => {
-  if (!activeThreadId.value || !items.some(item => item.channelId === activeThreadId.value)) {
-    activeThreadId.value = items[0]?.channelId ?? null
-  }
-}, { immediate: true })
+watch([threads, activeThreadId], ([items, id]) => {
+  if (!id || !items.length) return
+  if (!items.some(item => item.channelId === id)) openThread(null)
+})
 
 watch(activeThreadId, () => {
   draft.value = ''
@@ -86,7 +97,7 @@ async function move(status: MailThreadStatus) {
   try {
     await api(`/api/mail/threads/${activeThreadId.value}`, { method: 'PATCH', body: { status } })
     await qc.invalidateQueries({ queryKey: ['mail-threads', activeMailboxId.value] })
-    activeThreadId.value = null
+    openThread(null)
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
 }
@@ -101,17 +112,18 @@ async function compose() {
       method: 'POST',
       body: { to, subject: composeSubject.value.trim(), content: composeBody.value.trim() },
     })
-    composeOpen.value = false
+    nav.composeOpen.value = false
     composeTo.value = ''
     composeSubject.value = ''
     composeBody.value = ''
-    folder.value = 'inbox'
     await qc.invalidateQueries({ queryKey: ['mail-threads', activeMailboxId.value] })
-    activeThreadId.value = result.threadId
+    await navigateTo(mailPath(activeMailboxId.value, 'inbox', result.threadId))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
   finally { sending.value = false }
 }
+
+const folderLabel = computed(() => folder.value.charAt(0).toUpperCase() + folder.value.slice(1))
 
 function messageSender(message: MailMessageDTO) {
   if (!message.email) return message.author.displayName
@@ -119,70 +131,19 @@ function messageSender(message: MailMessageDTO) {
   return message.email.fromName || message.email.fromAddress
 }
 
-function setMailbox(id: string) {
-  activeMailboxId.value = id
-  activeThreadId.value = null
-}
-
-const folders: Array<{ value: MailThreadStatus; label: string; icon: string }> = [
-  { value: 'inbox', label: 'Inbox', icon: 'i-ph-tray' },
-  { value: 'archive', label: 'Archive', icon: 'i-ph-archive' },
-  { value: 'spam', label: 'Spam', icon: 'i-ph-warning' },
-  { value: 'trash', label: 'Trash', icon: 'i-ph-trash' },
-]
 </script>
 
 <template>
   <LayoutAppShell :workspace-id="workspaceId || undefined">
-    <div class="grid h-full min-h-0 min-w-0 grid-cols-1 md:grid-cols-[210px_320px_minmax(0,1fr)]">
-      <aside class="hidden min-h-0 border-e border-default bg-muted/40 p-3 md:block">
-        <div class="mb-5 flex items-center gap-2 px-2">
-          <UIcon name="i-ph-envelope-simple" class="size-5 text-primary" />
-          <h1 class="font-semibold text-highlighted">Mail</h1>
-        </div>
-        <p class="mb-1 px-2 text-xs font-semibold text-muted">Mailboxes</p>
-        <nav class="space-y-1">
-          <button
-            v-for="mailbox in mailboxes"
-            :key="mailbox.channelId"
-            type="button"
-            class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-start text-sm"
-            :class="mailbox.channelId === activeMailboxId ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated'"
-            @click="setMailbox(mailbox.channelId)"
-          >
-            <span class="min-w-0 flex-1 truncate">{{ mailbox.address }}</span>
-            <UBadge v-if="mailbox.unreadCount" :label="String(mailbox.unreadCount)" size="sm" />
-          </button>
-        </nav>
-        <USeparator class="my-4" />
-        <nav class="space-y-1">
-          <UButton
-            v-for="item in folders"
-            :key="item.value"
-            :label="item.label"
-            :icon="item.icon"
-            color="neutral"
-            :variant="folder === item.value ? 'soft' : 'ghost'"
-            block
-            class="justify-start"
-            @click="folder = item.value"
-          />
-        </nav>
-      </aside>
-
+    <div class="grid h-full min-h-0 min-w-0 grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)]">
       <section class="min-h-0 overflow-y-auto border-e border-default" :class="activeThreadId ? 'hidden md:block' : 'block'">
         <div class="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-default bg-default/90 px-3 backdrop-blur">
           <UButton icon="i-ph-list" color="neutral" variant="ghost" square aria-label="Open navigation" @click="useUiStore().mobilePane = 'channels'" />
-          <USelect
-            v-if="mailboxes.length"
-            :model-value="activeMailboxId ?? undefined"
-            :items="mailboxes.map(item => ({ label: item.address, value: item.channelId }))"
-            value-key="value"
-            class="min-w-0 flex-1 md:hidden"
-            @update:model-value="setMailbox(String($event))"
-          />
-          <span class="hidden truncate font-medium text-highlighted md:block">{{ activeMailbox?.address || 'Mail' }}</span>
-          <UButton v-if="canSend" label="Compose" trailing-icon="i-ph-pencil-simple" size="sm" @click="composeOpen = true" />
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-sm font-medium text-highlighted">{{ folderLabel }}</p>
+            <p class="truncate text-[11px] text-muted">{{ activeMailbox?.address || 'Mail' }}</p>
+          </div>
+          <UButton v-if="canSend" label="Compose" trailing-icon="i-ph-pencil-simple" size="sm" @click="nav.composeOpen.value = true" />
         </div>
         <USkeleton v-if="threadsQ.isPending.value" class="m-4 h-24" />
         <UAlert v-else-if="!mailboxes.length" class="m-4" color="neutral" title="No mailbox assigned" />
@@ -193,7 +154,7 @@ const folders: Array<{ value: MailThreadStatus; label: string; icon: string }> =
           type="button"
           class="block w-full border-b border-default px-4 py-3 text-start hover:bg-elevated/60"
           :class="item.channelId === activeThreadId ? 'bg-accented' : ''"
-          @click="activeThreadId = item.channelId"
+          @click="openThread(item.channelId)"
         >
           <div class="flex items-baseline gap-2">
             <span class="min-w-0 flex-1 truncate text-sm" :class="item.unread ? 'font-semibold text-highlighted' : 'text-default'">{{ item.participants.join(', ') || 'Unknown sender' }}</span>
@@ -207,7 +168,7 @@ const folders: Array<{ value: MailThreadStatus; label: string; icon: string }> =
       <section class="flex min-h-0 min-w-0 flex-col" :class="activeThreadId ? 'flex' : 'hidden md:flex'">
         <template v-if="thread">
           <header class="flex min-h-12 items-center gap-2 border-b border-default px-3">
-            <UButton icon="i-ph-arrow-left" color="neutral" variant="ghost" square class="md:hidden" aria-label="Back to mail" @click="activeThreadId = null" />
+            <UButton icon="i-ph-arrow-left" color="neutral" variant="ghost" square class="md:hidden" aria-label="Back to mail" @click="openThread(null)" />
             <div class="min-w-0 flex-1">
               <h2 class="truncate text-sm font-semibold text-highlighted">{{ thread.subject }}</h2>
               <p class="truncate text-xs text-muted">{{ thread.participants.join(', ') }}</p>
@@ -264,7 +225,7 @@ const folders: Array<{ value: MailThreadStatus; label: string; icon: string }> =
       </section>
     </div>
 
-    <UModal v-model:open="composeOpen" title="New email">
+    <UModal v-model:open="nav.composeOpen.value" title="New email">
       <template #body>
         <div class="space-y-4">
           <UFormField label="To" hint="Separate addresses with commas"><UInput v-model="composeTo" type="text" autofocus class="w-full" /></UFormField>
@@ -273,7 +234,7 @@ const folders: Array<{ value: MailThreadStatus; label: string; icon: string }> =
         </div>
       </template>
       <template #footer>
-        <UButton label="Cancel" color="neutral" variant="ghost" @click="composeOpen = false" />
+        <UButton label="Cancel" color="neutral" variant="ghost" @click="nav.composeOpen.value = false" />
         <UButton label="Send email" trailing-icon="i-ph-paper-plane-tilt" :loading="sending" :disabled="!composeTo.trim() || !composeSubject.trim() || !composeBody.trim()" @click="compose" />
       </template>
     </UModal>

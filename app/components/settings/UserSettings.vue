@@ -2,9 +2,9 @@
 import * as z from 'zod'
 import type { FormSubmitEvent } from '@nuxt/ui'
 
-type Section = 'account' | 'profile' | 'privacy' | 'appearance' | 'notifications' | 'voice' | 'chat'
-
 const open = defineModel<boolean>('open', { default: false })
+/** Exposed so `/settings?section=…` can deep-link, and so the section survives reopening. */
+const section = defineModel<string>('section', { default: 'account' })
 
 const session = useSessionStore()
 const { api } = useApi()
@@ -13,8 +13,8 @@ const prefs = usePrefsStore()
 const push = usePushNotifications()
 const toast = useToast()
 const colorMode = useColorMode()
-const section = ref<Section>('account')
 const revealEmail = ref(false)
+const confirmLogout = ref(false)
 const savingName = ref(false)
 const accountProviders = ref<string[]>([])
 const hasPassword = computed(() => accountProviders.value.includes('credential'))
@@ -25,6 +25,15 @@ const state = reactive<Partial<Schema>>({ displayName: session.user?.displayName
 
 const password = reactive({ current: '', next: '', confirm: '' })
 const savingPassword = ref(false)
+const passwordError = computed(() => {
+  if (password.next && password.next.length < 8) return 'Use at least 8 characters.'
+  if (password.confirm && password.next !== password.confirm) return 'The two new passwords do not match.'
+  return ''
+})
+const canSavePassword = computed(() => Boolean(
+  password.current && password.next.length >= 8 && password.next === password.confirm,
+))
+const nameChanged = computed(() => (state.displayName || '') !== (session.user?.displayName || ''))
 
 const inputId = ref('')
 const outputId = ref('')
@@ -34,7 +43,6 @@ const micBusy = ref(false)
 
 watch(open, async (v) => {
   if (v) {
-    section.value = 'account'
     state.displayName = session.user?.displayName || ''
     password.current = ''
     password.next = ''
@@ -50,18 +58,32 @@ watch(open, async (v) => {
   }
 })
 
-const userGroups = [
-  { id: 'account' as const, label: 'My Account' },
-  { id: 'profile' as const, label: 'Profile' },
-  { id: 'privacy' as const, label: 'Privacy & Safety' },
+const groups = [
+  {
+    label: 'User Settings',
+    items: [
+      { id: 'account', label: 'My Account', icon: 'i-ph-user-circle', keywords: ['password', 'email', 'security', 'login'] },
+      { id: 'profile', label: 'Profile', icon: 'i-ph-identification-card', keywords: ['display name', 'avatar', 'nickname'] },
+      { id: 'privacy', label: 'Privacy & Safety', icon: 'i-ph-shield-check', keywords: ['online status', 'activity', 'presence'] },
+    ],
+  },
+  {
+    label: 'App Settings',
+    items: [
+      { id: 'appearance', label: 'Appearance', icon: 'i-ph-paint-brush', keywords: ['theme', 'dark mode', 'light mode', 'compact'] },
+      { id: 'notifications', label: 'Notifications', icon: 'i-ph-bell', keywords: ['push', 'sounds', 'alerts', 'mentions'] },
+      { id: 'voice', label: 'Voice & Video', icon: 'i-ph-microphone', keywords: ['mic', 'huddle', 'audio', 'camera', 'devices'] },
+      { id: 'chat', label: 'Chat', icon: 'i-ph-chat-circle-text', keywords: ['markdown', 'shortcuts', 'send message'] },
+    ],
+  },
 ]
 
-const appGroups = [
-  { id: 'appearance' as const, label: 'Appearance' },
-  { id: 'notifications' as const, label: 'Notifications' },
-  { id: 'voice' as const, label: 'Voice & Video' },
-  { id: 'chat' as const, label: 'Chat' },
-]
+/** A bad or stale ?section= falls back to the first item rather than rendering nothing. */
+watch([open, () => section.value], ([isOpen]) => {
+  if (!isOpen) return
+  const known = groups.flatMap(group => group.items).some(item => item.id === section.value)
+  if (!known) section.value = 'account'
+}, { immediate: true })
 
 const initial = computed(() => (session.user?.displayName || '?').slice(0, 1).toUpperCase())
 const email = computed(() => session.user?.email || '')
@@ -182,54 +204,19 @@ async function logout() {
   open.value = false
   await navigateTo('/login')
 }
-
-function navClass(id: Section) {
-  return section.value === id
-    ? 'bg-accented text-highlighted'
-    : 'text-muted hover:bg-elevated hover:text-default'
-}
 </script>
 
 <template>
-  <SettingsOverlay v-model:open="open">
-    <template #nav>
-      <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">User Settings</p>
-      <nav class="space-y-0.5">
-        <UButton
-          v-for="item in userGroups"
-          :key="item.id"
-          :label="item.label"
-          color="neutral"
-          :variant="section === item.id ? 'soft' : 'ghost'"
-          block
-          class="justify-start"
-          :class="navClass(item.id)"
-          @click="section = item.id"
-        />
-      </nav>
-      <USeparator class="my-3" />
-      <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">App Settings</p>
-      <nav class="space-y-0.5">
-        <UButton
-          v-for="item in appGroups"
-          :key="item.id"
-          :label="item.label"
-          color="neutral"
-          :variant="section === item.id ? 'soft' : 'ghost'"
-          block
-          class="justify-start"
-          :class="navClass(item.id)"
-          @click="section = item.id"
-        />
-      </nav>
-      <USeparator class="my-3" />
+  <SettingsOverlay v-model:open="open" v-model:section="section" :groups="groups" :title="session.user?.displayName || 'Account'">
+    <template #footer>
       <UButton
         label="Log Out"
+        icon="i-ph-sign-out"
         color="error"
         variant="ghost"
         block
         class="justify-start"
-        @click="logout"
+        @click="confirmLogout = true"
       />
     </template>
 
@@ -276,13 +263,21 @@ function navClass(id: Section) {
         <UFormField label="Current password">
           <UInput v-model="password.current" type="password" class="w-full" autocomplete="current-password" />
         </UFormField>
-        <UFormField label="New password">
+        <UFormField label="New password" hint="At least 8 characters">
           <UInput v-model="password.next" type="password" class="w-full" autocomplete="new-password" />
         </UFormField>
-        <UFormField label="Confirm new password">
+        <UFormField
+          label="Confirm new password"
+          :error="passwordError || undefined"
+        >
           <UInput v-model="password.confirm" type="password" class="w-full" autocomplete="new-password" />
         </UFormField>
-        <UButton label="Change Password" :loading="savingPassword" @click="onPassword" />
+        <UButton
+          label="Change Password"
+          :loading="savingPassword"
+          :disabled="!canSavePassword"
+          @click="onPassword"
+        />
       </div>
     </template>
 
@@ -294,7 +289,7 @@ function navClass(id: Section) {
             <UInput v-model="state.displayName" class="w-full" />
           </UFormField>
           <p class="text-sm text-muted">This is how you appear in channels, DMs, and huddles.</p>
-          <UButton type="submit" label="Save Changes" :loading="savingName" />
+          <UButton type="submit" label="Save Changes" :loading="savingName" :disabled="!nameChanged || !state.displayName?.trim()" />
         </UForm>
         <div>
           <p class="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">Preview</p>
@@ -413,14 +408,8 @@ function navClass(id: Section) {
 
     <template v-else>
       <h1 class="text-xl font-semibold text-highlighted">Chat</h1>
+      <p class="mt-1 text-sm text-muted">How messages behave when you write them.</p>
       <div class="mt-8 divide-y divide-default">
-        <div class="flex items-start justify-between gap-6 py-4">
-          <div>
-            <p class="font-medium text-highlighted">Compact mode</p>
-            <p class="text-sm text-muted mt-1">Same control as Appearance. Tighter spacing in the transcript.</p>
-          </div>
-          <USwitch v-model="prefs.compact" />
-        </div>
         <div class="py-4">
           <p class="font-medium text-highlighted">Send Message</p>
           <p class="text-sm text-muted mt-1">Enter to send. Shift+Enter for a new line. Arrow up edits your last message.</p>
@@ -431,5 +420,12 @@ function navClass(id: Section) {
         </div>
       </div>
     </template>
+
+    <UModal v-model:open="confirmLogout" title="Log out?" description="You will need to sign in again on this device.">
+      <template #footer>
+        <UButton label="Cancel" color="neutral" variant="ghost" @click="confirmLogout = false" />
+        <UButton label="Log Out" color="error" @click="logout" />
+      </template>
+    </UModal>
   </SettingsOverlay>
 </template>

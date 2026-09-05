@@ -8,7 +8,6 @@ import { hasPermission, MemberPermissions, Permission, permissionBitmask, Permis
 import { formatDateTime } from '~~/shared/format'
 import { useClipboard } from '@vueuse/core'
 
-type Section = 'overview' | 'channels' | 'roles' | 'agents' | 'members' | 'invites' | 'huddles' | 'email' | 'authentication' | 'onboarding' | 'audit'
 
 const props = defineProps<{ workspaceId: string }>()
 const { serverUrl } = useApi()
@@ -17,7 +16,8 @@ const open = defineModel<boolean>('open', { default: false })
 const toast = useToast()
 const qc = useQueryClient()
 const { copy } = useClipboard()
-const section = ref<Section>('overview')
+/** Exposed so `/w/:id/settings?section=…` can deep-link, and so the section survives reopening. */
+const section = defineModel<string>('section', { default: 'overview' })
 
 const schema = z.object({ name: z.string().min(1).max(80) })
 type Schema = z.output<typeof schema>
@@ -73,21 +73,26 @@ const isOwner = computed(() => mine.value?.role.key === 'owner')
 watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = n }, { immediate: true })
 
 const workspaceNav = computed(() => [
-  ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview' }] : []),
-  ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels' }] : []),
-  ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles' }] : []),
-  ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents' }] : []),
-  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Huddles' }] : []),
-  ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email' }] : []),
-  ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication' }] : []),
-  ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding' }] : []),
-  ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log' }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview', icon: 'i-ph-house', keywords: ['name', 'icon', 'rename', 'delete workspace'] }] : []),
+  ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels', icon: 'i-ph-hash', keywords: ['categories', 'private', 'voice'] }] : []),
+  ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles', icon: 'i-ph-shield', keywords: ['permissions', 'admin', 'access'] }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents', icon: 'i-ph-robot', keywords: ['bots', 'automation', 'tasks'] }] : []),
+  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Huddles', icon: 'i-ph-speaker-high', keywords: ['voice', 'video', 'realtimekit', 'calls'] }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email', icon: 'i-ph-envelope-simple', keywords: ['mail', 'mailbox', 'inbox', 'domain'] }] : []),
+  ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication', icon: 'i-ph-key', keywords: ['login', 'signup', 'oauth', 'github', 'sso', 'registration'] }] : []),
+  ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),
+  ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log', icon: 'i-ph-list-magnifying-glass', keywords: ['history', 'activity', 'log'] }] : []),
 ])
 const userNav = computed(() => [
-  ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members' }] : []),
-  ...(can(Permission.invite) ? [{ id: 'invites' as const, label: 'Invites' }] : []),
+  ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members', icon: 'i-ph-users', keywords: ['people', 'kick', 'assign role'] }] : []),
+  ...(can(Permission.invite) ? [{ id: 'invites' as const, label: 'Invites', icon: 'i-ph-user-plus', keywords: ['invite link', 'join', 'share'] }] : []),
 ])
 const availableNav = computed(() => [...workspaceNav.value, ...userNav.value])
+const groups = computed(() => [
+  { label: 'Workspace', items: workspaceNav.value },
+  ...(userNav.value.length ? [{ label: 'User Management', items: userNav.value }] : []),
+])
+
 
 watch([open, availableNav], ([isOpen, items]) => {
   if (isOpen && !items.some(item => item.id === section.value)) {
@@ -508,49 +513,10 @@ function roleLabel(name: string) {
   return name
 }
 
-function navClass(id: Section) {
-  return section.value === id
-    ? 'bg-accented text-highlighted'
-    : 'text-muted hover:bg-elevated hover:text-default'
-}
 </script>
 
 <template>
-  <SettingsOverlay v-model:open="open">
-    <template #nav>
-      <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted truncate">{{ workspaceName }}</p>
-      <nav class="space-y-0.5">
-        <UButton
-          v-for="item in workspaceNav"
-          :key="item.id"
-          :label="item.label"
-          color="neutral"
-          :variant="section === item.id ? 'soft' : 'ghost'"
-          block
-          class="justify-start"
-          :class="navClass(item.id)"
-          @click="section = item.id"
-        />
-      </nav>
-      <template v-if="userNav.length">
-        <USeparator class="my-3" />
-        <p class="px-2.5 mb-1 text-[11px] font-bold uppercase tracking-wide text-muted">User Management</p>
-        <nav class="space-y-0.5">
-          <UButton
-            v-for="item in userNav"
-            :key="item.id"
-            :label="item.label"
-            color="neutral"
-            :variant="section === item.id ? 'soft' : 'ghost'"
-            block
-            class="justify-start"
-            :class="navClass(item.id)"
-            @click="section = item.id"
-          />
-        </nav>
-      </template>
-    </template>
-
+  <SettingsOverlay v-model:open="open" v-model:section="section" :groups="groups" :title="workspaceName">
     <template v-if="section === 'overview'">
       <h1 class="text-xl font-semibold text-highlighted">Workspace Overview</h1>
       <div class="mt-8 flex items-start gap-6">

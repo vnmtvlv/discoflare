@@ -9,6 +9,7 @@ import type {
   TaskPriority,
   TaskStatus,
 } from '~~/shared/types'
+import { boardPath } from '~~/shared/paths'
 
 definePageMeta({ middleware: ['auth', 'manage-tasks'] })
 
@@ -17,8 +18,17 @@ const { api } = useApi()
 const qc = useQueryClient()
 const toast = useToast()
 
-const showArchived = ref(false)
-const selectedBoardId = ref<string | null>(null)
+/** Board and the archived view live in the URL so the sidebar can link to them. */
+const route = useRoute()
+const nav = useNavActions()
+const showArchived = computed({
+  get: () => route.query.archived === '1',
+  set: value => void navigateTo(boardPath(null, value)),
+})
+const selectedBoardId = computed({
+  get: () => String(route.query.board || '') || null,
+  set: value => void navigateTo(boardPath(value, showArchived.value)),
+})
 const selectedTaskId = ref<string | null>(null)
 const showBoardForm = ref(false)
 const showTaskForm = ref(false)
@@ -68,13 +78,20 @@ const agents = computed(() => agentsQ.data.value?.agents ?? [])
 const channels = computed(() => (channelsQ.data.value?.channels ?? []).filter(channel => channel.type === 'text' && channel.visibility === 'workspace'))
 const selectedTask = computed(() => taskQ.data.value?.task ?? null)
 
-watch(boards, (value) => {
-  if (!selectedBoardId.value || !value.some(board => board.id === selectedBoardId.value)) selectedBoardId.value = value[0]?.id ?? null
+/** A board id that no longer resolves (deleted, archived away) falls back to the first one. */
+watch([boards, selectedBoardId], ([value, id]) => {
+  if (!id || !value.length) return
+  if (!value.some(board => board.id === id)) selectedBoardId.value = value[0]?.id ?? null
 }, { immediate: true })
 
 watch(showArchived, () => {
-  selectedBoardId.value = null
   selectedTaskId.value = null
+})
+
+watch(() => nav.createBoardOpen.value, (open) => {
+  if (!open) return
+  nav.createBoardOpen.value = false
+  openCreateBoard()
 })
 
 const columns: Array<{ status: TaskStatus; label: string }> = [
@@ -258,7 +275,7 @@ function deleteBoard() {
   if (!board) return
   askConfirm(`Delete ${board.name} and every task?`, async () => {
     const ok = await mutate(() => api(`/api/boards/${board.id}`, { method: 'DELETE' }), 'Board deleted')
-    if (ok) selectedBoardId.value = null
+    if (ok) selectedBoardId.value = boards.value.find(board => board.id !== activeBoard.value?.id)?.id ?? null
   })
 }
 
@@ -427,16 +444,12 @@ const boardMenu = computed(() => [[
     <main class="flex-1 min-w-0 min-h-0 flex flex-col">
       <header class="h-12 px-4 flex items-center gap-2 shrink-0 shadow-[0_1px_0_var(--ui-border)]">
         <UIcon name="i-ph-kanban" class="size-5" />
-        <span class="font-semibold">Tasks</span>
+        <span class="truncate font-semibold">{{ activeBoard?.name || 'Tasks' }}</span>
+        <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
         <div class="ml-auto flex items-center gap-1">
-          <UButton
-            color="neutral"
-            variant="ghost"
-            :icon="showArchived ? 'i-ph-kanban' : 'i-ph-archive'"
-            :label="showArchived ? 'Boards' : 'Archived'"
-            @click="showArchived = !showArchived"
-          />
-          <UButton v-if="!showArchived" color="neutral" variant="ghost" icon="i-ph-plus" label="Board" @click="openCreateBoard" />
+          <UDropdownMenu v-if="activeBoard" :items="boardMenu">
+            <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Board actions" />
+          </UDropdownMenu>
           <UButton v-if="!showArchived" icon="i-ph-plus" label="Task" :disabled="!activeBoard" @click="openCreateTask" />
         </div>
       </header>
@@ -444,21 +457,6 @@ const boardMenu = computed(() => [[
       <div v-if="boardsQ.isPending.value" class="p-6"><USkeleton class="h-64" /></div>
       <UAlert v-else-if="boardsQ.error.value" color="error" title="Could not load task boards." class="m-6" />
       <div v-else class="flex-1 min-h-0 overflow-auto p-4">
-        <div v-if="boards.length" class="flex items-center gap-1 mb-4">
-          <UButton
-            v-for="board in boards"
-            :key="board.id"
-            size="sm"
-            color="neutral"
-            :variant="activeBoard?.id === board.id ? 'soft' : 'ghost'"
-            :label="board.name"
-            @click="selectedBoardId = board.id"
-          />
-          <UDropdownMenu v-if="activeBoard" :items="boardMenu">
-            <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Board actions" />
-          </UDropdownMenu>
-        </div>
-
         <div v-if="!activeBoard" class="h-full flex items-center justify-center">
           <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first board" @click="openCreateBoard" />
           <span v-else class="text-sm text-muted">Nothing archived</span>
