@@ -25,10 +25,16 @@ fix/a-bug              ─┘                         │
 ## Pull request checks
 
 `.github/workflows/ci.yml` runs on every PR targeting `dev` or `main`, and on
-pushes to both branches. It installs the lockfile dependencies with Node.js 22
+pushes to both branches. It installs the lockfile dependencies with Node.js 24
 and pnpm 10.30.3, then runs four independent checks: `lint`, `typecheck`, `test`,
 and `build`. Failed checks do not cancel the other checks; a newer update to
 the same PR or branch cancels its superseded run.
+
+Node.js 24 is required for these checks because the backup tests use
+`node:sqlite` to read text containing NUL bytes; Node.js 22 truncates those
+values when returning them to JavaScript. CI uses Vitest's default text
+reporter because the GitHub annotations reporter crashes the runner while
+reporting the large Unicode diff from that failing test.
 
 After the first CI run, configure the GitHub ruleset targeting `dev` and `main`
 to require those four checks from GitHub Actions. Require PRs and resolved
