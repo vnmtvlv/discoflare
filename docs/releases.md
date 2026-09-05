@@ -1,8 +1,7 @@
 # Release process
 
-`main` represents released, production-ready Discoflare code. Development may
-accumulate on a long-lived `dev` branch once that branch is introduced. Until
-then, use short-lived feature and fix branches and keep `main` releasable.
+`main` represents production-ready Discoflare code. Development accumulates on
+the long-lived `dev` branch through short-lived feature and fix branches.
 
 ## Branch flow
 
@@ -20,6 +19,31 @@ fix/a-bug              ─┘                         │
   not be the first review of one large batch.
 - Merge `main` back into `dev` after release-only commits or production
   hotfixes so the branches do not diverge.
+- Squash feature and fix PRs into `dev`. Use merge commits between `dev` and
+  `main` to preserve their shared history.
+
+## Pull request checks
+
+`.github/workflows/ci.yml` runs on every PR targeting `dev` or `main`, and on
+pushes to both branches. It installs the lockfile dependencies with Node.js 24
+and pnpm 10.30.3, then runs four independent checks: `lint`, `typecheck`, `test`,
+and `build`. Failed checks do not cancel the other checks; a newer update to
+the same PR or branch cancels its superseded run.
+
+Node.js 24 is required for these checks because the backup tests use
+`node:sqlite` to read text containing NUL bytes; Node.js 22 truncates those
+values when returning them to JavaScript. CI uses Vitest's default text
+reporter because the GitHub annotations reporter crashes the runner while
+reporting the large Unicode diff from that failing test.
+
+After the first CI run, configure the GitHub ruleset targeting `dev` and `main`
+to require those four checks from GitHub Actions. Require PRs and resolved
+review conversations, block force pushes and deletion, and keep required
+approvals at zero while the maintainer is the only reviewer. Do not require
+linear history because release PRs use merge commits.
+
+CI builds the Worker without deploying or applying remote migrations. Sandbox
+browser checks and release artifact verification remain separate release gates.
 
 ## Preparing a release
 
