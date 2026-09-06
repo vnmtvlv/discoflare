@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
+import { version as packageVersion } from '../../package.json'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { Permission } from '../../shared/permissions'
 import type { DiscoflareEnv } from '../../workers/env'
@@ -24,7 +25,7 @@ const prioritySchema = z.enum(['low', 'normal', 'high', 'urgent'])
 const statusSchema = z.enum(['backlog', 'ready', 'review', 'done', 'failed'])
 
 export function createDiscoflareMcpServer({ env, principal, schedule }: McpServerContext): McpServer {
-  const server = new McpServer({ name: 'Discoflare', version: '0.2.3' })
+  const server = new McpServer({ name: 'Discoflare', version: packageVersion })
 
   server.registerTool('list_task_boards', {
     description: 'List task boards with their tasks, labels, dependencies, checklist counts, and latest run status.',
