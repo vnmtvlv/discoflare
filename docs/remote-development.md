@@ -1,9 +1,9 @@
 # Remote development
 
-Use one command, `pnpm dev:remote`, to run the local Nuxt frontend against any
-Discoflare installation. Personal hostnames and deployment resource identifiers
-belong in ignored local configuration, never in package scripts, tests, or
-committed examples.
+Use one command, `pnpm dev:remote`, to run the local Nuxt frontend against a
+Discoflare installation that uses Discoflare accounts. Personal hostnames and
+deployment resource identifiers belong in ignored local configuration, never
+in package scripts, tests, or committed examples.
 
 ## Select the backend
 
@@ -48,6 +48,11 @@ Cloudflare credentials or copy of the backend's `AUTH_SECRET` are needed for the
 frontend connection. Sign in separately on localhost; browser sessions are
 origin-scoped. Writes affect the selected installation.
 
+Cloudflare Access installations are not supported by this proxy mode. The
+Access session cookie belongs to the deployed hostname and is not sent with
+localhost API requests. Use an isolated Discoflare-accounts installation for
+remote frontend development until an explicit Access development bridge exists.
+
 ## Backend development
 
 Use a personal Cloudflare installation with its own Worker, D1, R2, KV, Durable
@@ -55,7 +60,7 @@ Objects, Workflows, and agent containers. Deploy the current feature branch to
 that installation when testing backend changes, then exercise it through the
 local frontend. Keep its deployment config and credentials outside Git.
 
-The shared integration installation should follow `dev`; personal installations
+The shared integration installation should follow `main`; personal installations
 can run feature branches before their PRs are merged. Use separate resources so
 schema changes and experiments do not affect the shared installation.
 
