@@ -2,19 +2,19 @@
 
 ## Discoflare installer
 
-The OAuth installer at `discoflare.com/deploy` deploys a complete workspace to the operator's Cloudflare account. A fresh install uses the account's `workers.dev` hostname and Cloudflare Access email codes by default. A custom domain and workspace mail are independent optional choices; an active zone is required only when either is enabled. Installation then:
+The OAuth installer at `discoflare.com/deploy` deploys a complete workspace to the operator's Cloudflare account. A fresh install uses the account's `workers.dev` hostname and Discoflare-owned accounts by default. A custom domain, workspace mail, and Cloudflare Access are independent optional choices; an active zone is required only when a custom domain or workspace mail is enabled. Installation then:
 
 1. reserves or reuses the account's Workers subdomain and deploys the single Discoflare Worker;
-2. by default creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy for the owner plus any additional addresses entered during deployment;
-3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so it cannot bypass Access;
+2. by default creates a private single-use Owner Setup Claim for choosing the first password, or, when explicitly selected, creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy;
+3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so the installation has one public origin;
 4. optionally enables Cloudflare Email Routing and Email Sending, after refusing to replace foreign MX or catch-all configuration; and
-5. creates the Owner and workspace atomically when the intended Owner first arrives with a verified Access identity.
+5. creates the Owner and workspace atomically from the private setup claim, or when the intended Owner first arrives with a verified Access identity.
 
 The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
 
 The Cloudflare OAuth client registered for `discoflare.com` must allow Access Read/Write in addition to its Worker and storage permissions. Zone, DNS, Email Routing, and Email Sending permissions remain necessary for the optional domain and mail paths. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
 
-Select **Discoflare accounts** instead of Cloudflare Access when the workspace must own passwords or social login. That compatibility path returns the private Owner Setup Claim and retains the invite-only/open-registration controls. Authentication mode cannot be switched automatically on an existing installation.
+Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 
 Enabling Email Routing makes Cloudflare the MX provider for the selected email subdomain. The app subdomain is mirrored by default but can be changed independently. The installer deliberately stops instead of replacing existing non-Cloudflare MX records.
 
@@ -129,13 +129,13 @@ The callback origin must be the deployed workspace URL. `discoflare.com` is the 
 
 ### Verification and password-reset email
 
-Email login works for an existing verified account without email delivery. New email signup requires all of the following:
+Email delivery is not required to create the Owner or to create an account from a private invite link. The invite itself is the admission credential; verification and password reset remain unavailable until auth-email delivery is configured. To verify new addresses and enable password reset:
 
 1. Onboard the sender domain in Cloudflare Email Service.
 2. Add a Worker send binding named `EMAIL`, or use the guided installer's existing `MAIL_EMAIL` binding.
 3. Set a sender in the Authentication UI or with `EMAIL_FROM`. Guided mail-enabled installations default to their initial workspace mailbox address.
 4. Configure and enable Turnstile.
-5. Select **Open signup**, or send the person an Invite.
+5. Keep **Invite only** or select **Open signup**, according to the workspace admission policy.
 
 After an email binding exists, signup policy, sender, provider credentials, and enabled methods can be changed in the app without a source rebuild or redeploy. If credentials are instead stored as Worker secrets, updating them creates a new Worker version by design.
 

@@ -170,8 +170,10 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
     telegram: config.enabled.telegram && credentialReady(config, 'telegram'),
   }
   const turnstileReady = config.enabled.turnstile && credentialReady(config, 'turnstile')
+  // A private invite is already the admission credential in invite-only mode.
+  // Email delivery remains optional there and is only needed for verification
+  // and password recovery.
   const emailSignupEnabled = methods.email
-    && (config.registrationMode === 'open' || config.email.verificationReady)
   return {
     mode: 'builtin',
     registrationMode: config.registrationMode,
