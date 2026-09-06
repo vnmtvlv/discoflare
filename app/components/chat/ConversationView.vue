@@ -290,15 +290,15 @@ defineShortcuts({
           <UTooltip v-if="isDm" text="Add friends to DM">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-ph-user-plus" aria-label="Add people" @click="addOpen = !addOpen" />
           </UTooltip>
-          <UTooltip text="Right panel">
+          <UTooltip :text="ui.rightPanelOpen ? 'Close right panel' : 'Open right panel'">
             <UButton
-              icon="i-ph-sidebar-simple"
+              :icon="ui.rightPanelOpen ? 'i-ph-sidebar-simple-fill' : 'i-ph-sidebar-simple'"
               color="neutral"
               :variant="ui.rightPanelOpen ? 'soft' : 'ghost'"
               size="sm"
               square
               class="hidden md:inline-flex"
-              aria-label="Toggle right panel"
+              :aria-label="ui.rightPanelOpen ? 'Close right panel' : 'Open right panel'"
               :aria-pressed="ui.rightPanelOpen"
               @click="ui.rightPanelOpen = !ui.rightPanelOpen"
             />

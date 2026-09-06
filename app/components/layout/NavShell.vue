@@ -256,6 +256,7 @@ watch(nav.inviteOpen, (open) => {
       >
         <UAvatar v-if="workspaceIconUrl" size="sm" :src="workspaceIconUrl" :alt="workspaceName" class="rounded-md" />
         <BrandLogo v-else size="lg" :alt="workspaceName" class="rounded-md" />
+        <span class="min-w-0 flex-1 truncate text-start text-sm font-semibold text-highlighted">{{ workspaceName }}</span>
         <UIcon name="i-ph-caret-down" class="size-4 shrink-0 text-muted" />
       </button>
     </UDropdownMenu>

@@ -41,3 +41,11 @@ describe('composer state', () => {
     })
   })
 })
+
+describe('layout defaults', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('starts the right panel at a comfortable width', () => {
+    expect(useUiStore().rightPanelWidth).toBe(280)
+  })
+})

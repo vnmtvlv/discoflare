@@ -40,8 +40,8 @@ export const useUiStore = defineStore('ui', () => {
     ? useLocalStorage('df:channel-pane-width', 240)
     : ref(240)
   const rightPanelWidth = import.meta.client
-    ? useLocalStorage('df:right-panel-width', 240)
-    : ref(240)
+    ? useLocalStorage('df:right-panel-width', 280)
+    : ref(280)
   const navCollapsed = import.meta.client
     ? useLocalStorage<Record<string, boolean>>('df:nav-collapsed', {})
     : ref<Record<string, boolean>>({})
