@@ -1,6 +1,7 @@
 import { createMcpHandler } from 'agents/mcp/server'
 import { DatabaseSync, type SQLInputValue } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { version as packageVersion } from '../../package.json'
 import { ALL_PERMISSIONS } from '../../shared/permissions'
 import { INIT_SQL } from '../../server/utils/db'
 import { createDiscoflareMcpServer } from '../../server/utils/mcp-server'
@@ -73,6 +74,21 @@ async function call(handler: ReturnType<typeof createHandler>, message: Record<s
 }
 
 describe('Discoflare MCP server', () => {
+  it('reports the package version during MCP initialization', async () => {
+    const { payload } = await call(createHandler(), {
+      jsonrpc: '2.0',
+      id: 0,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2025-06-18',
+        capabilities: {},
+        clientInfo: { name: 'test', version: '1.0.0' },
+      },
+    })
+
+    expect(payload.result.serverInfo).toEqual({ name: 'Discoflare', version: packageVersion })
+  })
+
   it('publishes focused Tasks and Documents tools over Streamable HTTP', async () => {
     const { response, payload } = await call(createHandler(), { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} })
 
