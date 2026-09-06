@@ -13,6 +13,7 @@ const route = useRoute()
 const qc = useQueryClient()
 const toast = useToast()
 const ui = useUiStore()
+const session = useSessionStore()
 const huddle = useHuddleStore()
 const nav = useNavActions()
 const { copy } = useClipboard()
@@ -145,7 +146,7 @@ const canOpenWorkspaceSettings = computed(() => [
 ].some(flag => can(flag)))
 
 const serverItems = computed<DropdownMenuItem[][]>(() => {
-  const invite: DropdownMenuItem[] = can(Permission.invite)
+  const invite: DropdownMenuItem[] = can(Permission.invite) && session.health?.authMode !== 'access'
     ? [{ label: 'Invite People', icon: 'i-ph-user-plus', color: 'primary', onSelect: () => { nav.inviteOpen.value = true } }]
     : []
   const manage: DropdownMenuItem[] = []

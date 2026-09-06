@@ -200,8 +200,12 @@ async function loadDevices() {
 
 async function logout() {
   await push.disable().catch(() => undefined)
-  await session.logout(api)
+  const redirect = await session.logout(api)
   open.value = false
+  if (redirect) {
+    window.location.assign(redirect)
+    return
+  }
   await navigateTo('/login')
 }
 </script>

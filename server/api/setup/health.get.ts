@@ -6,6 +6,7 @@ import type { SetupHealth } from '../../../shared/types'
 import { readAppBranding } from '../../../shared/app-branding'
 import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
 import { version as packageVersion } from '../../../package.json'
+import { authMode } from '../../utils/cloudflare-access'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -16,6 +17,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
   catch {
     return {
       version: packageVersion,
+      authMode: 'builtin',
       ok: false,
       ready: false,
       users: 0,
@@ -77,6 +79,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
 
   return {
     version: env.DISCOFLARE_VERSION?.trim() || packageVersion,
+    authMode: authMode(env),
     ok: bindings.db && migrated,
     ready,
     users,

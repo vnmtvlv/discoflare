@@ -15,6 +15,7 @@ const { serverUrl } = useApi()
 const open = defineModel<boolean>('open', { default: false })
 
 const toast = useToast()
+const session = useSessionStore()
 const qc = useQueryClient()
 const { copy } = useClipboard()
 /** Exposed so `/w/:id/settings?section=…` can deep-link, and so the section survives reopening. */
@@ -101,7 +102,7 @@ const workspaceNav = computed(() => [
 ])
 const userNav = computed(() => [
   ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members', icon: 'i-ph-users', keywords: ['people', 'kick', 'assign role'] }] : []),
-  ...(can(Permission.invite) ? [{ id: 'invites' as const, label: 'Invites', icon: 'i-ph-user-plus', keywords: ['invite link', 'join', 'share'] }] : []),
+  ...(can(Permission.invite) && session.health?.authMode !== 'access' ? [{ id: 'invites' as const, label: 'Invites', icon: 'i-ph-user-plus', keywords: ['invite link', 'join', 'share'] }] : []),
 ])
 const availableNav = computed(() => groups.value.flatMap(group => group.items))
 const groups = computed(() => [

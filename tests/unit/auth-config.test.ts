@@ -3,6 +3,7 @@ import { authEmailBinding, emailVerificationRequired, installedMailboxSender, pu
 
 function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig {
   return {
+    mode: 'builtin',
     registrationMode: 'invite_only',
     enabled: { email: true, github: false, twitter: false, telegram: false, turnstile: false },
     credentials: {},
@@ -29,6 +30,18 @@ describe('public auth config', () => {
     expect(publicAuthConfig(config).methods.github).toBe(true)
     config.enabled.github = false
     expect(publicAuthConfig(config).methods.github).toBe(false)
+  })
+
+  it('hides Discoflare login methods when Cloudflare Access owns the perimeter', () => {
+    expect(publicAuthConfig(runtime({ mode: 'access', registrationMode: 'invite_only' }))).toEqual({
+      mode: 'access',
+      registrationMode: 'open',
+      signupEnabled: false,
+      emailSignupEnabled: false,
+      passwordResetEnabled: false,
+      methods: { email: false, github: false, twitter: false, telegram: false },
+      turnstile: { enabled: false, siteKey: null },
+    })
   })
 
   it('exposes direct email signup for open registration without optional infrastructure', () => {

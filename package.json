@@ -32,6 +32,15 @@
       "AUTH_SECRET": {
         "description": "Generate a random 32+ character value. This signs login sessions."
       },
+      "AUTH_MODE": {
+        "description": "Authentication perimeter: builtin (default) or access."
+      },
+      "CF_ACCESS_ISS": {
+        "description": "Cloudflare Access team issuer, such as https://team.cloudflareaccess.com."
+      },
+      "CF_ACCESS_AUD": {
+        "description": "Cloudflare Access application audience tag."
+      },
       "APP_NAME": {
         "description": "Name shown beside the Discoflare logo and in the page title."
       },
@@ -134,6 +143,7 @@
     "bignumber.js": "^11.1.5",
     "dayjs": "^1.11.23",
     "drizzle-orm": "^0.45.2",
+    "jose": "6.2.10",
     "nanoid": "^6.0.1",
     "nuxt": "^4.5.2",
     "pinia": "^4.0.3",
