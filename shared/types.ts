@@ -302,10 +302,12 @@ export type SessionUser = PublicUser & {
 }
 
 export type RegistrationMode = 'open' | 'invite_only'
+export type AuthMode = 'builtin' | 'access'
 export type AuthLoginMethod = 'email' | 'github' | 'twitter' | 'telegram'
 export type AuthCredentialProvider = Exclude<AuthLoginMethod, 'email'> | 'turnstile'
 
 export type PublicAuthConfig = {
+  mode: AuthMode
   registrationMode: RegistrationMode
   signupEnabled: boolean
   emailSignupEnabled: boolean
@@ -553,6 +555,7 @@ export type InvitePreviewDTO = {
 
 export type SetupHealth = {
   version: string
+  authMode: AuthMode
   ok: boolean
   ready: boolean
   users: number

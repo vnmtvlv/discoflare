@@ -96,6 +96,14 @@ onMounted(load)
   <div>
     <h1 class="text-xl font-semibold text-highlighted">Authentication</h1>
     <USkeleton v-if="loading" class="mt-6 h-64 w-full" />
+    <UAlert
+      v-else-if="auth?.mode === 'access'"
+      class="mt-6"
+      color="neutral"
+      variant="subtle"
+      title="Managed by Cloudflare Access"
+      description="Cloudflare sends the sign-in code and controls which email addresses may reach this workspace. Change the Access application policy in your Cloudflare account."
+    />
     <template v-else-if="auth">
       <UFormField label="Registration" class="mt-6 max-w-sm">
         <USelect

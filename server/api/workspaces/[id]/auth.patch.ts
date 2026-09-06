@@ -41,6 +41,7 @@ export default defineEventHandler(async (event): Promise<{ auth: AuthSettingsAdm
   const { env } = cf(event)
   const db = getDb(env.DB)
   const current = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
+  if (current.mode === 'access') fail(400, 'managed_by_access', 'Authentication is managed by Cloudflare Access')
   const storedRows = await db.select().from(authProviderCredentials)
 
   const ready: Record<AuthCredentialProvider, boolean> = {

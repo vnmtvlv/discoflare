@@ -2,18 +2,19 @@
 
 ## Discoflare installer
 
-The OAuth installer at `discoflare.com/deploy` is the complete Cloudflare path for workspace mail. The operator selects an account, an active zone such as `example.com`, the app label such as `chat`, an email subdomain, the first mailbox local part such as `inbox`, and the intended owner email. Installation then:
+The OAuth installer at `discoflare.com/deploy` deploys a complete workspace to the operator's Cloudflare account. A fresh install uses the account's `workers.dev` hostname and Cloudflare Access email codes by default. A custom domain and workspace mail are independent optional choices; an active zone is required only when either is enabled. Installation then:
 
-1. refuses to replace a custom hostname attached to another Worker, non-Cloudflare MX records, or another enabled catch-all email route;
-2. enables Cloudflare Email Routing and Email Sending for the selected email subdomain;
-3. deploys Discoflare with a `MAIL_EMAIL` send binding, mail-domain variables, the intended owner email, and a random private owner-setup claim;
-4. attaches `chat.example.com` to the Worker and routes catch-all email for the configured mail domain to it;
-5. opens a private setup link on `chat.example.com`, where the intended owner creates their name and password; and
-6. creates the owner, workspace, and first mailbox in one bootstrap transaction before marking the workspace ready.
+1. reserves or reuses the account's Workers subdomain and deploys the single Discoflare Worker;
+2. by default creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy for the owner plus any additional addresses entered during deployment;
+3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so it cannot bypass Access;
+4. optionally enables Cloudflare Email Routing and Email Sending, after refusing to replace foreign MX or catch-all configuration; and
+5. creates the Owner and workspace atomically when the intended Owner first arrives with a verified Access identity.
 
 The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
 
-The Cloudflare OAuth client registered for `discoflare.com` must allow Zone Read, Zone Settings Read/Write, DNS Read/Write, Email Routing Rules Read/Write, and Email Sending Read/Write permissions requested by the installer. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
+The Cloudflare OAuth client registered for `discoflare.com` must allow Access Read/Write in addition to its Worker and storage permissions. Zone, DNS, Email Routing, and Email Sending permissions remain necessary for the optional domain and mail paths. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
+
+Select **Discoflare accounts** instead of Cloudflare Access when the workspace must own passwords or social login. That compatibility path returns the private Owner Setup Claim and retains the invite-only/open-registration controls. Authentication mode cannot be switched automatically on an existing installation.
 
 Enabling Email Routing makes Cloudflare the MX provider for the selected email subdomain. The app subdomain is mirrored by default but can be changed independently. The installer deliberately stops instead of replacing existing non-Cloudflare MX records.
 
@@ -62,7 +63,7 @@ The S3 Endpoint, Region, Bucket, Prefix, Access Key ID, and Secret Access Key ar
 
 Only the workspace Owner can start deletion from **Workspace Settings → Danger Zone**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
 
-The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer disables only the catch-all email rule when it still targets that Worker, removes the exact Email Sending subdomain, detaches the custom Worker domain, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, KV, Workflow, and Container resources. It never follows or deletes the independently configured S3 backup destination. Zone-wide Email Routing settings and unrelated DNS or email rules are left alone.
+The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes the Access applications recorded on that installation, disables only the catch-all email rule when it still targets that Worker, removes the exact Email Sending subdomain, detaches the custom Worker domain, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, KV, Workflow, and Container resources. It never follows or deletes the independently configured S3 backup destination. Zone-wide Email Routing settings and unrelated DNS or email rules are left alone.
 
 Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Danger Zone links to the Cloudflare dashboard for manual cleanup.
 
