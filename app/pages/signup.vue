@@ -73,7 +73,7 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
     else {
       session.user = result.user ?? null
       if (!session.user) await session.refresh(api)
-      await navigateTo('/')
+      await navigateTo(inviteCode.value ? `/invite/${encodeURIComponent(inviteCode.value)}` : '/')
     }
   }
   catch (err) {

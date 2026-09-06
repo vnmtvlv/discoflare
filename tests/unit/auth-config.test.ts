@@ -55,7 +55,7 @@ describe('public auth config', () => {
     expect(emailVerificationRequired(config)).toBe(false)
   })
 
-  it('requires working email delivery for invite-only email signup', () => {
+  it('keeps invite-only email signup available without optional email delivery', () => {
     const config = runtime({
       registrationMode: 'invite_only',
       enabled: { email: true, github: false, twitter: false, telegram: false, turnstile: true },
@@ -67,8 +67,11 @@ describe('public auth config', () => {
     expect(publicAuthConfig(config).passwordResetEnabled).toBe(true)
     config.email.binding = false
     config.email.verificationReady = false
-    expect(publicAuthConfig(config)).toMatchObject({ signupEnabled: false, emailSignupEnabled: false })
-    expect(publicAuthConfig(config).passwordResetEnabled).toBe(false)
+    expect(publicAuthConfig(config)).toMatchObject({
+      signupEnabled: false,
+      emailSignupEnabled: true,
+      passwordResetEnabled: false,
+    })
     expect(emailVerificationRequired(config)).toBe(false)
   })
 })

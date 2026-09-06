@@ -86,11 +86,11 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 ### Managed server creation
 
 1. Open the [Discoflare installer](https://discoflare.com/deploy) and connect Cloudflare.
-2. Enter the intended Owner email and optionally allow more Access emails.
+2. Enter the intended Owner email and choose Discoflare accounts or the advanced Cloudflare Access mode.
 3. Keep the generated `workers.dev` URL or add a custom domain; independently choose whether to provision workspace mail.
-4. Open the workspace. By default Cloudflare Access sends a one-time code and the first verified Owner visit creates the workspace. The alternative Discoflare-account mode returns a private setup link for creating a password.
+4. Open the private setup link and create the first Owner password. If Cloudflare Access was explicitly selected, open the workspace and use the one-time code sent by Cloudflare instead.
 
-The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. In the default Access mode Cloudflare enforces the email allow policy before requests reach Discoflare. In builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created.
+The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
 
 ### Manual deployment
 
@@ -109,7 +109,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 ### Optional services
 
-- **Login and signup protection** — Guided installs use Cloudflare Access email codes by default. The alternative builtin mode lets the Owner configure OAuth and Turnstile after signing in, without redeploying.
+- **Login and signup protection** — Guided installs use Discoflare-owned accounts by default. The Owner can invite members immediately and configure auth email, OAuth, and Turnstile later without redeploying. Cloudflare Access remains an advanced installation option.
 - **Verification and password-reset email** — Configure a Cloudflare Email Service binding and verified sender domain. See the [email setup guide](docs/deployment.md#verification-and-password-reset-email).
 - **Huddles** — Connect RealtimeKit in **Workspace Settings → Huddles**. Deployment secrets remain available as an override. Text chat works without it, and the app explains when credentials are missing.
 - **Web Push** — Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push requires HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.

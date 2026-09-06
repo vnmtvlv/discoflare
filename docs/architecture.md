@@ -7,7 +7,7 @@ Browser (Nuxt)
   WS    /ws/workspace/:workspaceId
         │
         ▼
-Cloudflare Access (optional outer perimeter; default for guided installs)
+Cloudflare Access (optional advanced outer perimeter)
         │ verified identity JWT
         ▼
 Nuxt/Nitro Worker
