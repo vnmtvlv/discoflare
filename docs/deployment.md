@@ -49,6 +49,12 @@ To complete first-owner setup after the manual GitHub deployment:
 5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that the Sandbox is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
+### MCP access
+
+The Owner can open **Workspace Settings → MCP**, copy the installation URL ending in `/mcp`, and create a named access token for Codex or another MCP client. The endpoint uses stateless Streamable HTTP. Clients authenticate each request with `Authorization: Bearer <token>`.
+
+Copy the token when it is created because its raw value is never stored or shown again. D1 retains only a SHA-256 digest and the token's fixed Task and Document scopes. The Worker also checks that the issuing Member is still active and still has the necessary current Role Grant for each tool. Revoke unused or exposed tokens from the same settings section; revocation is immediate and token creation and revocation appear in the Audit Log.
+
 ### Manual workspace backups
 
 The owner can open **Workspace Settings → Backups** and create a streaming TAR archive in either of two places: download it to the current device, or upload it manually to a configured S3-compatible bucket. The Worker exports D1 as ordered SQL fragments and streams every object from its bound R2 bucket into the archive with a metadata sidecar that preserves the original R2 key, HTTP metadata, custom metadata, ETag, size, and upload timestamp.

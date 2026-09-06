@@ -29,6 +29,9 @@ importers:
       '@iconify-json/ph':
         specifier: ^1.2.2
         version: 1.2.2
+      '@modelcontextprotocol/server':
+        specifier: 2.0.0
+        version: 2.0.0
       '@noble/hashes':
         specifier: ^2.4.0
         version: 2.4.0

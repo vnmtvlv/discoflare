@@ -81,6 +81,10 @@ _Avoid_: Generic Item, Task unless it has Task execution semantics
 A human-managed rich-text knowledge item in the Data app. Documents are versioned workspace state stored in the installation D1.
 _Avoid_: Attachment, Message, external document provider
 
+**MCP Access Token**:
+A revocable credential created by the workspace Owner for an MCP client. It authorizes the built-in `/mcp` endpoint as the issuing Member, is constrained by explicit MCP scopes and the Member's current Role Grants, and is shown only once because D1 retains only its digest.
+_Avoid_: Browser session, Cloudflare API token, permanent integration secret, direct D1 access
+
 **Canvas**:
 A human-managed spatial surface in the Data app containing positioned Canvas Items and Connections. The Canvas, its Items, and its Connections are durable workspace state in the installation D1.
 _Avoid_: Whiteboard service, image file, using a Durable Object as the source of truth

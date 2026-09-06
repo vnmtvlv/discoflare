@@ -32,6 +32,7 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE `channel_role_overrides`')
     expect(INIT_SQL).toContain('CREATE TABLE `realtimekit_settings`')
     expect(INIT_SQL).toContain('CREATE TABLE `backup_destinations`')
+    expect(INIT_SQL).toContain('CREATE TABLE `mcp_access_tokens`')
     expect(INIT_SQL).toContain('CREATE TABLE `documents`')
     expect(INIT_SQL).toContain('CREATE TABLE `canvases`')
     expect(INIT_SQL).toContain('CREATE TABLE `canvas_nodes`')

@@ -1,9 +1,8 @@
 import { z } from 'zod'
-import { newId, nowIso } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
-import { cf, fail } from '../../../utils/cf'
+import { cf } from '../../../utils/cf'
+import { createDocument } from '../../../utils/document-service'
 import { requireMember } from '../../../utils/guards'
-import { writeAudit } from '../../../utils/messages'
 import { parseBody } from '../../../utils/validate'
 
 const bodySchema = z.object({ title: z.string().trim().min(1).max(160) })
@@ -13,16 +12,5 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, workspaceId, Permission.manageDatabases)
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  if (await env.DB.prepare('SELECT id FROM documents WHERE lower(title) = lower(?) LIMIT 1').bind(body.title).first()) {
-    fail(409, 'duplicate_name', 'A document with this title already exists')
-  }
-  const position = await env.DB.prepare('SELECT COALESCE(MAX(position), 0) + 1024 as value FROM documents').first<{ value: number }>()
-  const id = newId()
-  const now = nowIso()
-  await env.DB.prepare(
-    `INSERT INTO documents (id, title, content, position, version, created_by, created_at, updated_at)
-     VALUES (?, ?, '', ?, 1, ?, ?, ?)`,
-  ).bind(id, body.title, position?.value ?? 1024, actor.user.id, now, now).run()
-  await writeAudit(env, { workspaceId, actorId: actor.user.id, action: 'document.create', targetType: 'document', targetId: id, meta: { title: body.title } })
-  return { document: { id, title: body.title, content: '', position: position?.value ?? 1024, version: 1, createdBy: actor.user.id, createdAt: now, updatedAt: now } }
+  return { document: await createDocument(env, workspaceId, actor.user.id, body) }
 })
