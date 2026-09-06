@@ -7,8 +7,11 @@ Browser (Nuxt)
   WS    /ws/workspace/:workspaceId
         │
         ▼
+Cloudflare Access (optional outer perimeter; default for guided installs)
+        │ verified identity JWT
+        ▼
 Nuxt/Nitro Worker
-  Better Auth, admission policy, REST, email ingress, R2, RealtimeKit tokens
+  Access JWT or Better Auth, admission policy, REST, email ingress, R2, RealtimeKit tokens
   ├─ D1          catalog + message history + Data resources
   ├─ R2          FILES
   ├─ KV          TICKETS
@@ -35,19 +38,19 @@ RealtimeKit
 4. One Channel DO named `channel:<channelId>` and one Workspace DO named `workspace:main`. Typing is scoped to a Channel DO.
 5. Huddle media never transits the Channel DO.
 6. Single Worker. Durable Object classes are exported from `server/cloudflare-entry.ts`.
-7. Better Auth owns identities and linked accounts. `users.status` owns workspace admission. Open registration materializes an active Member; invite-only registration materializes a pending User.
+7. Authentication has one deployment-selected mode. In `access` mode Cloudflare Access owns login and its email allow policy; the Worker verifies the Access JWT and maps it to an internal human identity. In `builtin` mode Better Auth owns identities and linked accounts. `users.status` and Roles remain the workspace authorization boundary in both modes.
 8. A login method is effective only when both its owner-controlled switch and credentials/capability are present. Deployment credentials override encrypted D1 credentials and are never editable through the app.
 9. Web Push subscriptions and its delivery outbox live in D1. Message and huddle writes enqueue notification rows in the same D1 batch; `NotificationDO` uses alarms to deliver and retry without another Worker or process.
-10. Agents are real Members in the shared author/access model, but never authentication identities. `users.kind` distinguishes humans from agents; only humans have Better Auth identities and sessions.
+10. Agents are real Members in the shared author/access model, but never authentication identities. `users.kind` distinguishes humans from agents; only humans map to either verified Access identities or Better Auth identities and sessions.
 11. One top-level `DiscoflareAgent` coordinator is named `agent:<agentId>`. Each Channel or Thread gets a `DiscoflareThink` sub-agent with its own SQLite transcript; each Task Run gets a separate Think sub-agent. Conversation memory and concurrent task reasoning cannot leak across those facets.
 12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
 13. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
-14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Email and social signup record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
+14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Access, email, and social admissions record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
 15. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
 16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
 17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts, R2 owns raw MIME and attachment bytes, Email Routing invokes the same Worker, and `MAIL_EMAIL` sends new mail and replies. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
 18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, and Worker bindings persist after OAuth expires; the installed Worker does not retain the token. Daily mailbox and access changes are D1-only because one catch-all route rejects addresses that do not map to an enabled Mailbox.
-19. A fresh installation is not ready until its deployment-selected Owner completes the private Owner Setup Claim on the workspace origin. The claim is random and single-use by state: normal signup is rejected before the `main` Workspace exists, and every setup attempt is rejected after the Owner and Workspace are created atomically.
+19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. The Data navigation index returns only lightweight resource metadata, and each Document or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 
 ## Email flow
@@ -112,7 +115,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 - `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
 - Agent Sandbox development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
-- `pnpm dev:sandbox` — temporary remote preview connected to the real pilot resources. It can mutate sandbox data; see [Sandbox development](sandbox-development.md).
+- `pnpm dev:remote` — local frontend with HTTP requests proxied to a selected deployment and WebSockets connected directly to it. Personal targets live in ignored env files; see [Remote development](remote-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 - The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.
 

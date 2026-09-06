@@ -17,6 +17,16 @@ One workspace for humans and agents.
 
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
+## Repositories
+
+Discoflare is developed across three independent repositories so each product surface can keep its own deployment and release lifecycle:
+
+- **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the core Nuxt application, API, and Cloudflare runtime.
+- **[discoflare.com](https://github.com/vnmtvlv/discoflare-com)** — The public website and guided Cloudflare installer.
+- **`discoflare-clients`** — The separately maintained iOS, macOS, and browser extension shells built from this repository's generated frontend.
+
+This repository remains the source of truth for the product runtime and shared frontend. `sandbox.discoflare.com` is a deployment of this repository, not a separate application.
+
 ## What you can do
 
 ### Built-in apps
@@ -76,11 +86,11 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 ### Managed server creation
 
 1. Open the [Discoflare installer](https://discoflare.com/deploy) and connect Cloudflare.
-2. Choose an account, domain, and Discoflare and email subdomains, then enter the intended Owner email.
-3. Let the installer provision the Worker, storage, custom hostname, Email Routing, Email Sending, and workspace Mailbox.
-4. Follow the private, one-time setup link on your new workspace domain to set the Owner's name and password.
+2. Enter the intended Owner email and optionally allow more Access emails.
+3. Keep the generated `workers.dev` URL or add a custom domain; independently choose whether to provision workspace mail.
+4. Open the workspace. By default Cloudflare Access sends a one-time code and the first verified Owner visit creates the workspace. The alternative Discoflare-account mode returns a private setup link for creating a password.
 
-The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. The random setup claim is carried in the URL fragment, so it is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. Normal signup stays blocked until setup is complete.
+The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. In the default Access mode Cloudflare enforces the email allow policy before requests reach Discoflare. In builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created.
 
 ### Manual deployment
 
@@ -99,7 +109,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 ### Optional services
 
-- **Login and signup protection** — The Owner can configure OAuth and Turnstile after signing in, without redeploying.
+- **Login and signup protection** — Guided installs use Cloudflare Access email codes by default. The alternative builtin mode lets the Owner configure OAuth and Turnstile after signing in, without redeploying.
 - **Verification and password-reset email** — Configure a Cloudflare Email Service binding and verified sender domain. See the [email setup guide](docs/deployment.md#verification-and-password-reset-email).
 - **Huddles** — Connect RealtimeKit in **Workspace Settings → Huddles**. Deployment secrets remain available as an override. Text chat works without it, and the app explains when credentials are missing.
 - **Web Push** — Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push requires HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
@@ -124,7 +134,7 @@ The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deploy
 
 For managed installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the installation through a temporary Cloudflare OAuth session.
 
-A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, Workflow, Container application, custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
+A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, Workflow, Container application, owned Access applications, optional custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
 
 Manual deployments show Cloudflare cleanup guidance because Discoflare cannot prove that their bound resources are not shared.
 
@@ -156,10 +166,9 @@ pnpm db:seed
 | --- | --- | --- |
 | Local app | `pnpm dev` | Run Nuxt with local bindings for everyday development. |
 | Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets and Durable Object hibernation. Agent Sandbox development also needs Docker and a Cloudflare login. |
-| Remote backend | `pnpm dev:remote` | Work on the local frontend against a deployed server. Set `DISCOFLARE_DEV_PROXY_ORIGIN` in `.env`. |
-| Pilot sandbox | `pnpm dev:sandbox` | Run current code against the disposable pilot environment using `.env.sandbox`. This mutates real sandbox resources. |
+| Remote backend | `pnpm dev:remote` | Local frontend against a deployed server. Configure `.env`, pass `--env-file .env.personal`, or pass its URL. |
 
-See the [sandbox development guide](docs/sandbox-development.md) before using the pilot environment.
+See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.
 
 ### Native clients
 

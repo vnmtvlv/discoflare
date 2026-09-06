@@ -1,10 +1,11 @@
 import { eq } from 'drizzle-orm'
 import { authProviderCredentials, authSettings } from '../../drizzle/schema'
-import type { AuthCredentialProvider, AuthLoginMethod, AuthSettingsAdminDTO, PublicAuthConfig, RegistrationMode } from '../../shared/types'
+import type { AuthCredentialProvider, AuthLoginMethod, AuthMode, AuthSettingsAdminDTO, PublicAuthConfig, RegistrationMode } from '../../shared/types'
 import { nowIso } from '../../shared/ids'
 import type { DiscoflareEnv } from '../../workers/env'
 import { decryptAuthSecret } from './auth-secrets'
 import { getDb } from './db'
+import { authMode } from './cloudflare-access'
 
 export const AUTH_PROVIDERS = ['github', 'twitter', 'telegram', 'turnstile'] as const satisfies readonly AuthCredentialProvider[]
 export const LOGIN_METHODS = ['email', 'github', 'twitter', 'telegram'] as const satisfies readonly AuthLoginMethod[]
@@ -18,6 +19,7 @@ type Credential = {
 }
 
 export type AuthRuntimeConfig = {
+  mode: AuthMode
   registrationMode: RegistrationMode
   enabled: Record<AuthLoginMethod | 'turnstile', boolean>
   credentials: Partial<Record<AuthCredentialProvider, Credential>>
@@ -135,6 +137,7 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
   const binding = Boolean(authEmailBinding(env))
 
   return {
+    mode: authMode(env),
     registrationMode: settings.registrationMode,
     enabled,
     credentials,
@@ -149,6 +152,17 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
 }
 
 export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
+  if (config.mode === 'access') {
+    return {
+      mode: 'access',
+      registrationMode: 'open',
+      signupEnabled: false,
+      emailSignupEnabled: false,
+      passwordResetEnabled: false,
+      methods: { email: false, github: false, twitter: false, telegram: false },
+      turnstile: { enabled: false, siteKey: null },
+    }
+  }
   const methods = {
     email: config.enabled.email,
     github: config.enabled.github && credentialReady(config, 'github'),
@@ -159,6 +173,7 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
   const emailSignupEnabled = methods.email
     && (config.registrationMode === 'open' || config.email.verificationReady)
   return {
+    mode: 'builtin',
     registrationMode: config.registrationMode,
     signupEnabled: config.registrationMode === 'open' && (emailSignupEnabled || methods.github || methods.twitter || methods.telegram),
     emailSignupEnabled,

@@ -9,10 +9,8 @@
     "generate:native": "node scripts/generate-native.mjs native",
     "generate:extension": "node scripts/generate-native.mjs extension",
     "dev": "nuxt dev",
-    "dev:remote": "node scripts/dev-remote.mjs",
-    "dev:fox": "node --env-file=.env.fox scripts/dev-remote.mjs",
+    "dev:remote": "node scripts/dev-remote.mjs --",
     "dev:full": "pnpm db:migrate:local && pnpm build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
-    "dev:sandbox": "node scripts/dev-sandbox.mjs",
     "preview": "nuxt build && wrangler dev",
     "deploy": "pnpm build && pnpm deploy:built",
     "deploy:built": "pnpm db:migrate && wrangler deploy",
@@ -33,6 +31,15 @@
     "bindings": {
       "AUTH_SECRET": {
         "description": "Generate a random 32+ character value. This signs login sessions."
+      },
+      "AUTH_MODE": {
+        "description": "Authentication perimeter: builtin (default) or access."
+      },
+      "CF_ACCESS_ISS": {
+        "description": "Cloudflare Access team issuer, such as https://team.cloudflareaccess.com."
+      },
+      "CF_ACCESS_AUD": {
+        "description": "Cloudflare Access application audience tag."
       },
       "APP_NAME": {
         "description": "Name shown beside the Discoflare logo and in the page title."
@@ -136,6 +143,7 @@
     "bignumber.js": "^11.1.5",
     "dayjs": "^1.11.23",
     "drizzle-orm": "^0.45.2",
+    "jose": "6.2.10",
     "nanoid": "^6.0.1",
     "nuxt": "^4.5.2",
     "pinia": "^4.0.3",

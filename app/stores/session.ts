@@ -38,8 +38,9 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   async function logout(fetcher: SessionFetcher = asSessionFetcher($fetch)) {
-    await fetcher('/api/auth/logout', { method: 'POST' })
+    const response = await fetcher('/api/auth/logout', { method: 'POST' }) as { redirect?: string | null } | undefined
     user.value = null
+    return response?.redirect || null
   }
 
   return { user, health, ready, refresh, login, logout }

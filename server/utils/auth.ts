@@ -1,11 +1,13 @@
 import { bytesToHex, randomBytes } from '@noble/hashes/utils.js'
 import type { H3Event } from 'h3'
 import { eq } from 'drizzle-orm'
-import { roles, users } from '../../drizzle/schema'
+import { authUsers, roles, users, workspace } from '../../drizzle/schema'
 import type { PublicUser, SessionUser } from '../../shared/types'
 import { nowIso } from '../../shared/ids'
 import { authFromEvent } from './better-auth'
 import { loadAuthRuntimeConfig } from './auth-config'
+import { authMode, cloudflareAccessIdentity, type CloudflareAccessIdentity } from './cloudflare-access'
+import { provisionWorkspace } from './bootstrap'
 import { cf, fail } from './cf'
 import { getDb } from './db'
 import { writeAudit } from './messages'
@@ -38,7 +40,7 @@ export async function ensureDomainUser(event: H3Event, identity: AuthIdentity) {
     await recordOnboardingAcceptance(env, identity.id, socialRevisionId)
   }
   const accepted = await hasAcceptedCurrentOnboarding(env, identity.id, onboarding)
-  const memberRole = runtime.registrationMode === 'open' && accepted
+  const memberRole = (runtime.mode === 'access' || runtime.registrationMode === 'open') && accepted
     ? (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
     : null
   const created = nowIso()
@@ -62,7 +64,7 @@ export async function ensureDomainUser(event: H3Event, identity: AuthIdentity) {
       action: 'member.join',
       targetType: 'user',
       targetId: identity.id,
-      meta: { admission: 'open' },
+      meta: { admission: runtime.mode === 'access' ? 'access' : 'open' },
     })
     waitUntil(signalMembersChanged(env, 'main'))
   }
@@ -95,7 +97,7 @@ export async function sessionUser(
 export async function activateOpenMember(event: H3Event, userId: string) {
   const { env, waitUntil } = cf(event)
   const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
-  if (runtime.registrationMode !== 'open') return
+  if (runtime.mode !== 'access' && runtime.registrationMode !== 'open') return
   if (!(await hasAcceptedCurrentOnboarding(env, userId))) return
   const db = getDb(env.DB)
   const row = (await db.select().from(users).where(eq(users.id, userId)).limit(1))[0]
@@ -115,7 +117,7 @@ export async function activateOpenMember(event: H3Event, userId: string) {
     action: 'member.join',
     targetType: 'user',
     targetId: userId,
-    meta: { admission: 'open', onboarding: true },
+    meta: { admission: runtime.mode === 'access' ? 'access' : 'open', onboarding: true },
   })
   waitUntil(signalMembersChanged(env, 'main'))
 }
@@ -123,6 +125,14 @@ export async function activateOpenMember(event: H3Event, userId: string) {
 export async function currentUser(event: H3Event): Promise<SessionUser | null> {
   const { env } = cf(event)
   const db = getDb(env.DB)
+  if (authMode(env) === 'access') {
+    const accessIdentity = await cloudflareAccessIdentity(event)
+    if (!accessIdentity) return null
+    const identity = await ensureAccessIdentity(event, accessIdentity)
+    const row = (await db.select().from(users).where(eq(users.id, identity.id)).limit(1))[0]
+      || await ensureDomainUser(event, identity)
+    return sessionUser(event, row, identity.email)
+  }
   const auth = await authFromEvent(event)
   const sess = await auth.api.getSession({ headers: event.headers })
   if (sess?.user?.id) {
@@ -132,6 +142,45 @@ export async function currentUser(event: H3Event): Promise<SessionUser | null> {
     return sessionUser(event, createdRow, visibleAuthEmail(sess.user.email))
   }
   return null
+}
+
+async function ensureAccessIdentity(event: H3Event, identity: CloudflareAccessIdentity): Promise<AuthIdentity> {
+  const { env } = cf(event)
+  const db = getDb(env.DB)
+  const existingWorkspace = (await db.select({ id: workspace.id }).from(workspace).limit(1))[0]
+  if (!existingWorkspace) {
+    const ownerEmail = env.ADMIN_EMAIL?.trim().toLowerCase()
+    if (!ownerEmail || identity.email !== ownerEmail) fail(403, 'forbidden', 'The workspace owner must sign in first')
+    try {
+      await provisionWorkspace(event, {
+        userId: identity.id,
+        email: identity.email,
+        handle: (identity.email.split('@')[0] || 'owner').slice(0, 32),
+        displayName: identity.name,
+        workspaceName: (env.ADMIN_WORKSPACE?.trim() || env.APP_NAME?.trim() || 'Discoflare').slice(0, 80),
+      })
+    }
+    catch (error) {
+      const raced = (await db.select({ id: workspace.id }).from(workspace).limit(1))[0]
+      if (!raced) throw error
+    }
+    return identity
+  }
+
+  const byEmail = (await db.select().from(authUsers).where(eq(authUsers.email, identity.email)).limit(1))[0]
+  if (byEmail) return { ...identity, id: byEmail.id }
+  const created = new Date()
+  await db.insert(authUsers).values({
+    id: identity.id,
+    name: identity.name,
+    email: identity.email,
+    emailVerified: true,
+    image: null,
+    createdAt: created,
+    updatedAt: created,
+  }).onConflictDoNothing()
+  const stored = (await db.select().from(authUsers).where(eq(authUsers.email, identity.email)).limit(1))[0]
+  return { ...identity, id: stored?.id || identity.id }
 }
 
 export async function requireUser(event: H3Event): Promise<SessionUser> {

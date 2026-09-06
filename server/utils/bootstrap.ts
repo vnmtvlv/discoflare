@@ -9,8 +9,9 @@ import type { DiscoflareEnv } from '../../workers/env'
 import { ensureWorkspaceMailFromEnv } from './workspace-mail'
 
 export type AdminSeed = {
+  userId?: string
   email: string
-  password: string
+  password?: string
   handle: string
   displayName: string
   workspaceName: string
@@ -30,7 +31,7 @@ export function readAdminEnv(env: Pick<DiscoflareEnv, 'ADMIN_EMAIL' | 'ADMIN_PAS
 export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const { env } = cf(event)
   const db = getDb(env.DB)
-  const userId = newId()
+  const userId = seed.userId || newId()
   const accountId = newId()
   const workspaceId = WORKSPACE_ID
   const ownerRoleId = newId()
@@ -43,28 +44,18 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const auditId = newId()
   const created = nowIso()
   const authCreated = new Date(created)
-  const passwordHash = await hashPassword(seed.password)
+  const passwordHash = seed.password ? await hashPassword(seed.password) : null
 
-  await db.batch([
-    db.insert(authUsers).values({
-      id: userId,
-      name: seed.displayName,
-      email: seed.email,
-      emailVerified: true,
-      image: null,
-      createdAt: authCreated,
-      updatedAt: authCreated,
-    }),
-    db.insert(authAccounts).values({
-      id: accountId,
-      issuer: 'local:credential',
-      accountId: userId,
-      providerId: 'credential',
-      userId,
-      password: passwordHash,
-      createdAt: authCreated,
-      updatedAt: authCreated,
-    }),
+  const authUserStatement = db.insert(authUsers).values({
+    id: userId,
+    name: seed.displayName,
+    email: seed.email,
+    emailVerified: true,
+    image: null,
+    createdAt: authCreated,
+    updatedAt: authCreated,
+  })
+  const statements = [
     db.insert(roles).values([
       { id: ownerRoleId, key: 'owner', name: 'owner', permissionsBitmask: ALL_PERMISSIONS, position: 0, isSystem: true, createdAt: created, updatedAt: created },
       { id: adminRoleId, key: 'admin', name: 'admin', permissionsBitmask: ALL_PERMISSIONS, position: 1, isSystem: true, createdAt: created, updatedAt: created },
@@ -111,7 +102,23 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
       metaJson: JSON.stringify({ name: seed.workspaceName }),
       createdAt: created,
     }),
-  ])
+  ]
+  if (passwordHash) {
+    const accountStatement = db.insert(authAccounts).values({
+      id: accountId,
+      issuer: 'local:credential',
+      accountId: userId,
+      providerId: 'credential',
+      userId,
+      password: passwordHash,
+      createdAt: authCreated,
+      updatedAt: authCreated,
+    })
+    await db.batch([authUserStatement, accountStatement, ...statements] as unknown as Parameters<typeof db.batch>[0])
+  }
+  else {
+    await db.batch([authUserStatement, ...statements] as unknown as Parameters<typeof db.batch>[0])
+  }
 
   return { userId, workspaceId, channelId: generalId }
 }
