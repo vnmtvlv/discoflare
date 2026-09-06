@@ -220,6 +220,23 @@ export const workspace = sqliteTable('workspace', {
   check('workspace_singleton_check', sql`${table.id} = 'main'`),
 ])
 
+/** Revocable MCP credentials. Only their SHA-256 digests are retained. */
+export const mcpAccessTokens = sqliteTable('mcp_access_tokens', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  tokenHash: text('token_hash').notNull(),
+  tokenPrefix: text('token_prefix').notNull(),
+  scopesJson: text('scopes_json').notNull(),
+  createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  lastUsedAt: text('last_used_at'),
+  revokedAt: text('revoked_at'),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('mcp_access_tokens_hash_unique').on(table.tokenHash),
+  index('mcp_access_tokens_created_by_idx').on(table.createdBy),
+  index('mcp_access_tokens_active_idx').on(table.revokedAt, table.createdAt),
+])
+
 /** Owner-controlled anonymous project heartbeat. No workspace data is included. */
 export const telemetrySettings = sqliteTable('telemetry_settings', {
   id: text('id').primaryKey().default('main'),
@@ -801,6 +818,7 @@ export const schema = {
   agents,
   agentTurns,
   workspace,
+  mcpAccessTokens,
   roles,
   channelCategories,
   channels,

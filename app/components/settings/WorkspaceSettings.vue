@@ -89,6 +89,7 @@ const workspaceNav = computed(() => [
   ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email', icon: 'i-ph-envelope-simple', keywords: ['mail', 'mailbox', 'inbox', 'domain'] }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication', icon: 'i-ph-key', keywords: ['login', 'signup', 'oauth', 'github', 'sso', 'registration'] }] : []),
   ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),
+  ...(isOwner.value ? [{ id: 'mcp' as const, label: 'MCP', icon: 'i-ph-plugs-connected', keywords: ['agent', 'access token', 'api', 'codex'] }] : []),
   ...(isOwner.value ? [{ id: 'backups' as const, label: 'Backups', icon: 'i-ph-archive', keywords: ['backup', 'download', 'export', 'restore', 'd1', 'r2'] }] : []),
   ...(isOwner.value ? [{
     id: 'updates' as const,
@@ -842,6 +843,10 @@ function roleLabel(name: string) {
 
     <template v-else-if="section === 'onboarding'">
       <SettingsOnboardingSettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'mcp'">
+      <SettingsMcpSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else-if="section === 'updates'">
