@@ -2,7 +2,7 @@ import { DurableObject } from 'cloudflare:workers'
 import { z } from 'zod'
 import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
 import { extractMentionIds } from '../shared/mentions'
-import { isDmType, isVoiceType } from '../shared/dm'
+import { canAccessAgentConversation, isDmType, isVoiceType } from '../shared/dm'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '../shared/permissions'
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
@@ -682,12 +682,12 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
 
     const membership = await this.env.DB.prepare(
-      `SELECT r.permissions_bitmask as perms, r.id as roleId, w.owner_id as ownerId
+      `SELECT u.kind, r.permissions_bitmask as perms, r.id as roleId, w.owner_id as ownerId
        FROM users u
        JOIN roles r ON r.id = u.role_id
        JOIN workspace w ON w.id = 'main'
        WHERE u.id = ? AND u.status = 'active'`,
-    ).bind(userId).first<{ perms: number; roleId: string; ownerId: string }>()
+    ).bind(userId).first<{ kind: 'human' | 'agent'; perms: number; roleId: string; ownerId: string }>()
     if (!membership) return null
     const canManageAgents = membership.ownerId === userId || hasPermission(membership.perms, Permission.manageWorkspace)
 
@@ -708,7 +708,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
           const agent = await this.env.DB.prepare(
             `SELECT 1 FROM users WHERE id IN (${placeholders}) AND kind = 'agent' LIMIT 1`,
           ).bind(...ids).first()
-          if (agent) return null
+          if (!canAccessAgentConversation(membership.kind, canManageAgents, Boolean(agent))) return null
         }
         const still = await this.env.DB.prepare(
           `SELECT id FROM users WHERE id IN (${placeholders}) AND status = 'active'`,

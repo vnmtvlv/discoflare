@@ -21,3 +21,12 @@ export function isVoiceType(type: string): boolean {
 export function isDmType(type: string): boolean {
   return type === 'dm'
 }
+
+/** Agent DMs are visible to workspace managers and to the participating Agent itself. */
+export function canAccessAgentConversation(
+  userKind: 'human' | 'agent',
+  canManageAgents: boolean,
+  hasAgentParticipant: boolean,
+): boolean {
+  return !hasAgentParticipant || canManageAgents || userKind === 'agent'
+}
