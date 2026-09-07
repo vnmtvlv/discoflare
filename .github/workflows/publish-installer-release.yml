@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 jobs:
   installer:
@@ -27,6 +28,29 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Agent Computer image
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          owner="${REPOSITORY_OWNER,,}"
+          image="ghcr.io/${owner}/discoflare-computer:${version}"
+          docker build --file Dockerfile.computer --tag "$image" .
+          docker push "$image"
+
+      - name: Make Agent Computer image public
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method PATCH /user/packages/container/discoflare-computer/visibility -f visibility=public
 
       - name: Build release artifacts
         env:

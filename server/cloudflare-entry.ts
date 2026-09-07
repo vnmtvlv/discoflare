@@ -2,7 +2,7 @@ import '#nitro-internal-pollyfills'
 import { useNitroApp } from 'nitropack/runtime'
 import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'
 import type { DiscoflareEnv } from '../workers/env'
-import { receiveWorkspaceEmail } from '../workers/mail-ingress'
+import { receivePrimaryMailSend, routeWorkspaceEmail } from '../workers/primary-mail-router'
 import { receiveMailGatewayRequest } from '../workers/mail-gateway-ingress'
 import { sendTelemetryHeartbeat } from './utils/telemetry'
 
@@ -11,8 +11,8 @@ export { WorkspaceDurableObject } from '../workers/workspace-do'
 export { RateLimitDurableObject } from '../workers/rate-limit-do'
 export { NotificationDurableObject } from '../workers/notification-do'
 export { DiscoflareAgent, DiscoflareThink } from '../workers/discoflare-agent'
+export { WorkspaceProxy } from '../workers/agent-computer'
 export { AgentTaskWorkflow } from '../workers/agent-task-workflow'
-export { Sandbox } from '@cloudflare/sandbox'
 
 const nitroApp = useNitroApp()
 
@@ -20,6 +20,7 @@ export default {
   async fetch(request: Request, env: DiscoflareEnv, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
     if (url.pathname === '/.discoflare/mail/inbound') return receiveMailGatewayRequest(request, env)
+    if (url.pathname === '/.discoflare/mail/send') return receivePrimaryMailSend(request, env)
     if (request.headers.get('Upgrade') === 'websocket') {
       const channel = url.pathname.match(/^\/ws\/channel\/([^/]+)/)
       if (channel?.[1]) {
@@ -59,7 +60,7 @@ export default {
     } as Parameters<typeof nitroApp.localFetch>[1])
   },
   async email(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
-    await receiveWorkspaceEmail(message, env)
+    await routeWorkspaceEmail(message, env)
   },
   async scheduled(_controller: ScheduledController, env: DiscoflareEnv, context: ExecutionContext): Promise<void> {
     context.waitUntil(sendTelemetryHeartbeat(env).catch(error => console.warn('Anonymous telemetry heartbeat failed', error)))

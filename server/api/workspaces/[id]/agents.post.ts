@@ -29,7 +29,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
   const id = newId()
   const now = nowIso()
   const identityNow = new Date()
-  const sandboxId = `agent-${id}`.toLowerCase()
+  const computerId = `agent:${id}`.toLowerCase()
   await db.batch([
     db.insert(identityKeys).values({
       id,
@@ -58,7 +58,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
       model: body.model,
       instructions: body.instructions,
       status: 'active',
-      sandboxId,
+      computerId,
       createdBy: actor.user.id,
       lastActiveAt: null,
       createdAt: now,
@@ -82,7 +82,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
       model: body.model,
       instructions: body.instructions,
       status: 'active',
-      sandboxId,
+      computerId,
       lastActiveAt: null,
       createdAt: now,
       updatedAt: now,

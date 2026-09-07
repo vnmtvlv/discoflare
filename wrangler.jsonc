@@ -22,7 +22,7 @@
     { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-sandbox-agent-tasks", "class_name": "AgentTaskWorkflow" }
   ],
   "containers": [
-    { "class_name": "Sandbox", "image": "./Dockerfile.sandbox", "instance_type": "lite", "max_instances": 10 }
+    { "class_name": "DiscoflareAgent", "image": "./Dockerfile.computer", "instance_type": "lite", "max_instances": 10 }
   ],
   "d1_databases": [
     {
@@ -51,8 +51,7 @@
       { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" },
       { "name": "NOTIFICATION_DO", "class_name": "NotificationDurableObject" },
       { "name": "AGENT_DO", "class_name": "DiscoflareAgent" },
-      { "name": "AGENT_THINK", "class_name": "DiscoflareThink" },
-      { "name": "AGENT_SANDBOX", "class_name": "Sandbox" }
+      { "name": "AGENT_THINK", "class_name": "DiscoflareThink" }
     ]
   },
   "migrations": [
@@ -70,7 +69,7 @@
     },
     {
       "tag": "v3",
-      "new_sqlite_classes": ["DiscoflareAgent", "Sandbox"]
+      "new_sqlite_classes": ["DiscoflareAgent"]
     },
     {
       "tag": "v4",

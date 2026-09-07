@@ -90,7 +90,7 @@ const manifest = {
   releasedAt: new Date().toISOString(),
   compatibilityDate: '2026-09-02',
   compatibilityFlags: ['nodejs_compat'],
-  capabilities: ['cloudflare-access-auth', 'zone-mail-gateway-v1'],
+  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'agent-computer-v1'],
   worker: {
     url: `${releaseBaseUrl}/${workerName}`,
     sha256: digest('sha256', worker),
@@ -102,8 +102,8 @@ const manifest = {
     size: assetsPayload.byteLength,
   },
   container: {
-    image: 'docker.io/cloudflare/sandbox:0.12.9',
-    className: 'Sandbox',
+    image: process.env.DISCOFLARE_CONTAINER_IMAGE || `ghcr.io/vnmtvlv/discoflare-computer:${version}`,
+    className: 'DiscoflareAgent',
     instanceType: 'lite',
     maxInstances: 10,
   },
@@ -113,7 +113,6 @@ const manifest = {
     { binding: 'RATE_LIMIT_DO', className: 'RateLimitDurableObject', migration: 'v1' },
     { binding: 'NOTIFICATION_DO', className: 'NotificationDurableObject', migration: 'v2' },
     { binding: 'AGENT_DO', className: 'DiscoflareAgent', migration: 'v3' },
-    { binding: 'AGENT_SANDBOX', className: 'Sandbox', migration: 'v3' },
     { binding: 'AGENT_THINK', className: 'DiscoflareThink', migration: 'v4' },
   ],
   workflow: {

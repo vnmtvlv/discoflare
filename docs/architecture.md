@@ -19,11 +19,10 @@ Nuxt/Nitro Worker
   ├─ WorkspaceDO presence
   ├─ NotificationDO D1 outbox delivery + retries
   ├─ RateLimitDO per ip:/user:
-  ├─ AgentDO      one coordinator + isolated Think facets
+  ├─ AgentDO      one coordinator + durable Computer + isolated Think facets
   ├─ Workflows    durable Task Runs
   ├─ Workers AI   default model inference
-  └─ Sandbox      one stable computer identity per Agent
-                    └─ /workspace checkpoint → R2
+  └─ Container    replaceable Linux execution backend for Agent Computers
 
 RealtimeKit
   huddle audio/video  ◄── participant token from Worker
@@ -46,10 +45,10 @@ RealtimeKit
 12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
 13. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
 14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Access, email, and social admissions record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
-15. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
+15. One Agent has one stable Computer owned by its `DiscoflareAgent` Durable Object. `@cloudflare/computer` keeps the filesystem in the Agent DO's SQLite storage, so reads and writes do not require a running container. A Container is a replaceable Linux execution backend and is never the source of durable Agent identity or files.
 16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
-17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts and mailbox registry, while R2 owns raw MIME and attachment bytes. A managed zone mail gateway dispatches incoming mail to the workspace by recipient domain and brokers outbound delivery without granting one workspace authority to send as another. The workspace accepts or rejects the full mailbox address against D1. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
-18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, the zone mail gateway, and Worker bindings persist after OAuth expires; neither the installed workspace nor the gateway retains the token. One gateway owns the zone catch-all and keeps only the domain-to-workspace routing table plus per-workspace credentials. Daily mailbox and access changes remain D1-only. Several mail-enabled workspaces may share a zone when each has a unique mail subdomain.
+17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts and mailbox registry, while R2 owns raw MIME and attachment bytes. The primary workspace Worker owns the zone catch-all and Email Sending binding; the base release routes its own domain locally without another Worker. The workspace accepts or rejects the full mailbox address against D1. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
+18. The first managed installation in an account is marked Primary. The installer OAuth token or CLI API token is provisioning authority and is never stored in the workspace. Custom-domain attachment, Email Routing, DNS, and Worker bindings persist after that credential is gone. A future multi-workspace mail registry may add private Service Bindings to the same Primary Worker; it must not create a separate routing Worker.
 19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. The Data navigation index returns only lightweight resource metadata, and each Document or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 21. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. Every request resolves the issuing Member's active status and current Role Grants, then each tool checks its fixed token scope and product permission. MCP calls reuse the same Task and Document domain operations and Audit Log as the browser API; no raw SQL or general browser-session bypass is exposed.
@@ -57,12 +56,12 @@ RealtimeKit
 ## Email flow
 
 ```text
-Internet email → Cloudflare Email Routing catch-all → zone mail gateway → workspace email handler
+Internet email → Cloudflare Email Routing catch-all → primary workspace Worker → local email handler
   → reject unknown address
   → raw MIME + attachments in R2
   → Mailbox Channel root Message + Email Conversation Thread in D1
 
-New email/reply → mailbox send permission → zone mail gateway → Email Sending → Internet
+New email/reply → mailbox send permission → primary workspace Worker → Email Sending → Internet
 Internal note   → ordinary Message in the same Thread → workspace only
 ```
 
@@ -76,15 +75,15 @@ Human creates Task in D1
   → Think facet creates Workflow with run id
   → Workflow marks Task Run running in D1
   → Think runs the model through Workers AI
-  → tools execute in the Agent's Sandbox
-  → Sandbox /workspace checkpoints to R2
+  → tools read and write the Agent DO's durable Computer filesystem
+  → command tools synchronize that filesystem with the Container backend and execute
   → Workflow records review/done/failed in D1 and clears the active-run claim
   → optional result Message is authored by the Agent
 ```
 
 Only a Workflow can enter or leave `running`. Cancellation terminates the Workflow and restores the pre-run Task status; reconciliation repairs Task and Task Run state from the Workflow status after an interrupted request. Task mutations and live progress fan out through the Workspace DO.
 
-The separation is intentional: D1 answers “what does the workspace believe?”, the Agent DO answers “what does this agent remember and coordinate?”, Workflow answers “where is this execution?”, Sandbox answers “where does code run?”, and R2 answers “which large bytes must survive?”.
+The separation is intentional: D1 answers “what does the workspace believe?”, the Agent DO and Computer answer “what does this agent remember and keep?”, Workflow answers “where is this execution?”, Container answers “where does Linux code run?”, and R2 answers “which large workspace attachments must survive?”.
 
 ## Agent chat flow
 
@@ -115,7 +114,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 
 - `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
-- Agent Sandbox development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
+- Agent Computer execution development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
 - `pnpm dev:remote` — local frontend with HTTP requests proxied to a selected deployment and WebSockets connected directly to it. Personal targets live in ignored env files; see [Remote development](remote-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 - The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.

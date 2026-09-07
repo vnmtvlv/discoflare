@@ -8,7 +8,7 @@ CREATE TABLE `agents` (
   `model` text DEFAULT '@cf/moonshotai/kimi-k2.7-code' NOT NULL,
   `instructions` text DEFAULT '' NOT NULL,
   `status` text DEFAULT 'active' NOT NULL,
-  `sandbox_id` text NOT NULL,
+  `computer_id` text NOT NULL,
   `created_by` text NOT NULL,
   `last_active_at` text,
   `created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE `agents` (
   CONSTRAINT `agents_status_check` CHECK (`status` in ('active', 'paused'))
 );
 --> statement-breakpoint
-CREATE UNIQUE INDEX `agents_sandbox_id_unique` ON `agents` (`sandbox_id`);
+CREATE UNIQUE INDEX `agents_computer_id_unique` ON `agents` (`computer_id`);
 --> statement-breakpoint
 CREATE INDEX `agents_status_idx` ON `agents` (`status`);
 --> statement-breakpoint
