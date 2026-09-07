@@ -47,11 +47,6 @@ jobs:
           docker build --file Dockerfile.computer --tag "$image" .
           docker push "$image"
 
-      - name: Make Agent Computer image public
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh api --method PATCH /user/packages/container/discoflare-computer/visibility -f visibility=public
-
       - name: Build release artifacts
         env:
           DISCOFLARE_RELEASE_VERSION: ${{ github.event.release.tag_name }}
