@@ -8,6 +8,16 @@ type MailboxRow = {
   address: string
 }
 
+export type WorkspaceEmailEnvelope = {
+  from: string
+  to: string
+  raw: ReadableStream<Uint8Array>
+}
+
+export type WorkspaceEmailIngressResult =
+  | { accepted: true }
+  | { accepted: false, reason: string }
+
 function addressList(values: Address[] | undefined): Array<{ name: string; address: string }> {
   return (values || []).flatMap((value) => {
     if ('group' in value && value.group) return value.group.map(item => ({ name: item.name || '', address: item.address.toLowerCase() }))
@@ -32,7 +42,7 @@ function plainBody(text: string | undefined, html: string | undefined): string {
   return `${body.slice(0, 200_000)}\n\n[Message truncated by Discoflare]`
 }
 
-export async function receiveWorkspaceEmail(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
+export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env: DiscoflareEnv): Promise<WorkspaceEmailIngressResult> {
   const recipient = message.to.trim().toLowerCase()
   const mailbox = await env.DB.prepare(
     `SELECT mb.channel_id as channelId, lower(mb.local_part || '@' || d.domain) as address
@@ -40,15 +50,14 @@ export async function receiveWorkspaceEmail(message: ForwardableEmailMessage, en
      WHERE mb.enabled = 1 AND lower(mb.local_part || '@' || d.domain) = ?`,
   ).bind(recipient).first<MailboxRow>()
   if (!mailbox) {
-    message.setReject('Unknown Discoflare mailbox')
-    return
+    return { accepted: false, reason: 'Unknown Discoflare mailbox' }
   }
 
   const raw = await new Response(message.raw).arrayBuffer()
   const parsed = await PostalMime.parse(raw)
   if (parsed.messageId) {
     const duplicate = await env.DB.prepare('SELECT message_id FROM email_messages WHERE rfc_message_id = ?').bind(parsed.messageId).first()
-    if (duplicate) return
+    if (duplicate) return { accepted: true }
   }
 
   const from = addressList(parsed.from ? [parsed.from] : [])[0] || { name: '', address: message.from.toLowerCase() }
@@ -156,4 +165,10 @@ export async function receiveWorkspaceEmail(message: ForwardableEmailMessage, en
     ).bind(attachment.id, messageId, messageChannelId, MAIL_EXTERNAL_USER_ID, attachment.key, attachment.filename, attachment.contentType, attachment.size, created)),
   )
   await env.DB.batch(statements)
+  return { accepted: true }
+}
+
+export async function receiveWorkspaceEmail(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
+  const result = await ingestWorkspaceEmail(message, env)
+  if (!result.accepted) message.setReject(result.reason)
 }

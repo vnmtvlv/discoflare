@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { authEmailBinding, emailVerificationRequired, installedMailboxSender, publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
+import { emailVerificationRequired, installedMailboxSender, publicAuthConfig, type AuthRuntimeConfig } from '../../server/utils/auth-config'
+import { authEmailAvailable } from '../../workers/mail-transport'
 
 function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig {
   return {
@@ -17,8 +18,9 @@ describe('public auth config', () => {
     const mailEmail = { send: () => Promise.resolve() } as unknown as SendEmail
     const legacyEmail = { send: () => Promise.resolve() } as unknown as SendEmail
 
-    expect(authEmailBinding({ MAIL_EMAIL: mailEmail } as never)).toBe(mailEmail)
-    expect(authEmailBinding({ EMAIL: legacyEmail, MAIL_EMAIL: mailEmail } as never)).toBe(legacyEmail)
+    expect(authEmailAvailable({ MAIL_EMAIL: mailEmail } as never)).toBe(true)
+    expect(authEmailAvailable({ EMAIL: legacyEmail, MAIL_EMAIL: mailEmail } as never)).toBe(true)
+    expect(authEmailAvailable({ MAIL_GATEWAY: { fetch: () => Promise.resolve(new Response()) }, MAIL_GATEWAY_TOKEN: 'token' } as never)).toBe(true)
     expect(installedMailboxSender({ MAIL_DEFAULT_LOCAL_PART: 'Inbox', MAIL_DOMAIN: 'Chat.Example.com' } as never)).toBe('inbox@chat.example.com')
   })
 

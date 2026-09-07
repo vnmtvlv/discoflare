@@ -27,6 +27,8 @@ export type DiscoflareEnv = {
   AI: Ai
   EMAIL?: SendEmail
   MAIL_EMAIL?: SendEmail
+  MAIL_GATEWAY?: Fetcher
+  MAIL_GATEWAY_TOKEN?: string
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
   REALTIMEKIT_APP_ID?: string

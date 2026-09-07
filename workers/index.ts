@@ -7,12 +7,14 @@ import { DiscoflareAgent, DiscoflareThink } from './discoflare-agent'
 import { AgentTaskWorkflow } from './agent-task-workflow'
 import { Sandbox } from '@cloudflare/sandbox'
 import { receiveWorkspaceEmail } from './mail-ingress'
+import { receiveMailGatewayRequest } from './mail-gateway-ingress'
 
 export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, DiscoflareThink, AgentTaskWorkflow, Sandbox }
 
 export default {
   async fetch(request: Request, env: DiscoflareEnv): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === '/.discoflare/mail/inbound') return receiveMailGatewayRequest(request, env)
     if (request.headers.get('Upgrade') === 'websocket') {
       const channel = url.pathname.match(/^\/ws\/channel\/([^/]+)/)
       if (channel?.[1]) {
