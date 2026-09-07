@@ -3,6 +3,7 @@ import { useNitroApp } from 'nitropack/runtime'
 import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'
 import type { DiscoflareEnv } from '../workers/env'
 import { receiveWorkspaceEmail } from '../workers/mail-ingress'
+import { receiveMailGatewayRequest } from '../workers/mail-gateway-ingress'
 import { sendTelemetryHeartbeat } from './utils/telemetry'
 
 export { ChannelDurableObject } from '../workers/channel-do'
@@ -18,6 +19,7 @@ const nitroApp = useNitroApp()
 export default {
   async fetch(request: Request, env: DiscoflareEnv, context: ExecutionContext): Promise<Response> {
     const url = new URL(request.url)
+    if (url.pathname === '/.discoflare/mail/inbound') return receiveMailGatewayRequest(request, env)
     if (request.headers.get('Upgrade') === 'websocket') {
       const channel = url.pathname.match(/^\/ws\/channel\/([^/]+)/)
       if (channel?.[1]) {

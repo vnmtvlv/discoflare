@@ -3,6 +3,7 @@ import { authProviderCredentials, authSettings } from '../../drizzle/schema'
 import type { AuthCredentialProvider, AuthLoginMethod, AuthMode, AuthSettingsAdminDTO, PublicAuthConfig, RegistrationMode } from '../../shared/types'
 import { nowIso } from '../../shared/ids'
 import type { DiscoflareEnv } from '../../workers/env'
+import { authEmailAvailable } from '../../workers/mail-transport'
 import { decryptAuthSecret } from './auth-secrets'
 import { getDb } from './db'
 import { authMode } from './cloudflare-access'
@@ -37,10 +38,6 @@ export function authSecret(env: DiscoflareEnv, baseURL?: string): string {
   const secret = env.AUTH_SECRET || (local ? DEV_AUTH_SECRET : '')
   if (!secret) throw new Error('AUTH_SECRET is required')
   return secret
-}
-
-export function authEmailBinding(env: DiscoflareEnv): SendEmail | undefined {
-  return env.EMAIL ?? env.MAIL_EMAIL
 }
 
 export function installedMailboxSender(env: DiscoflareEnv): string | null {
@@ -134,7 +131,7 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
     telegram: settings.telegramEnabled,
     turnstile: settings.turnstileEnabled,
   }
-  const binding = Boolean(authEmailBinding(env))
+  const binding = authEmailAvailable(env)
 
   return {
     mode: authMode(env),

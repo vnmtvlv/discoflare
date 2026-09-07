@@ -2,6 +2,7 @@ import type { MailSettingsDTO, MailboxPermission } from '../../../../shared/type
 import { Permission } from '../../../../shared/permissions'
 import { requireMember } from '../../../utils/guards'
 import { cf } from '../../../utils/cf'
+import { workspaceEmailAvailable } from '../../../../workers/mail-transport'
 
 export default defineEventHandler(async (event): Promise<{ mail: MailSettingsDTO }> => {
   const workspaceId = getRouterParam(event, 'id')!
@@ -24,7 +25,7 @@ export default defineEventHandler(async (event): Promise<{ mail: MailSettingsDTO
       configured: Boolean(domain),
       domain: domain?.domain || null,
       appHostname: domain?.appHostname || null,
-      sendingBound: Boolean(env.MAIL_EMAIL),
+      sendingBound: workspaceEmailAvailable(env),
       mailboxes: (mailboxes.results || []).map(mailbox => ({
         ...mailbox,
         enabled: Boolean(mailbox.enabled),

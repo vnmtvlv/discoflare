@@ -48,8 +48,8 @@ RealtimeKit
 14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Access, email, and social admissions record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
 15. One Agent has one stable Sandbox id. A Sandbox Container is not a permanent VM: it sleeps after inactivity and its local disk may disappear. Before use Discoflare restores the last `/workspace` archive from R2; after mutating tools it writes a new archive to R2.
 16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
-17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts, R2 owns raw MIME and attachment bytes, Email Routing invokes the same Worker, and `MAIL_EMAIL` sends new mail and replies. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
-18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, and Worker bindings persist after OAuth expires; the installed Worker does not retain the token. Daily mailbox and access changes are D1-only because one catch-all route rejects addresses that do not map to an enabled Mailbox.
+17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts and mailbox registry, while R2 owns raw MIME and attachment bytes. A managed zone mail gateway dispatches incoming mail to the workspace by recipient domain and brokers outbound delivery without granting one workspace authority to send as another. The workspace accepts or rejects the full mailbox address against D1. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
+18. The installer OAuth token is temporary provisioning authority. Cloudflare custom-domain attachment, Email Routing, DNS, the zone mail gateway, and Worker bindings persist after OAuth expires; neither the installed workspace nor the gateway retains the token. One gateway owns the zone catch-all and keeps only the domain-to-workspace routing table plus per-workspace credentials. Daily mailbox and access changes remain D1-only. Several mail-enabled workspaces may share a zone when each has a unique mail subdomain.
 19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. The Data navigation index returns only lightweight resource metadata, and each Document or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 21. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. Every request resolves the issuing Member's active status and current Role Grants, then each tool checks its fixed token scope and product permission. MCP calls reuse the same Task and Document domain operations and Audit Log as the browser API; no raw SQL or general browser-session bypass is exposed.
@@ -57,12 +57,12 @@ RealtimeKit
 ## Email flow
 
 ```text
-Internet email → Cloudflare Email Routing catch-all → Worker email handler
+Internet email → Cloudflare Email Routing catch-all → zone mail gateway → workspace email handler
   → reject unknown address
   → raw MIME + attachments in R2
   → Mailbox Channel root Message + Email Conversation Thread in D1
 
-New email/reply → mailbox send permission → MAIL_EMAIL binding → Internet
+New email/reply → mailbox send permission → zone mail gateway → Email Sending → Internet
 Internal note   → ordinary Message in the same Thread → workspace only
 ```
 

@@ -3,6 +3,7 @@ import { newId, nowIso } from '../../../../../shared/ids'
 import { requireMailboxPermission } from '../../../../utils/workspace-mail'
 import { cf, fail } from '../../../../utils/cf'
 import { parseBody } from '../../../../utils/validate'
+import { sendWorkspaceEmail, workspaceEmailAvailable } from '../../../../../workers/mail-transport'
 
 const schema = z.object({ content: z.string().trim().min(1).max(100_000) })
 
@@ -20,7 +21,7 @@ export default defineEventHandler(async (event) => {
   if (access.channel.type !== 'thread') fail(404, 'not_found', 'Email conversation not found')
   const body = parseBody(schema, await readBody(event))
   const { env } = cf(event)
-  if (!env.MAIL_EMAIL) fail(503, 'mail_unavailable', 'Workspace email sending is not bound')
+  if (!workspaceEmailAvailable(env)) fail(503, 'mail_unavailable', 'Workspace email sending is not bound')
   const thread = await env.DB.prepare(
     `SELECT t.subject, t.participants_json as participantsJson,
        lower(mb.local_part || '@' || d.domain) as mailboxAddress, mb.display_name as displayName
@@ -52,7 +53,7 @@ export default defineEventHandler(async (event) => {
     env.DB.prepare('UPDATE email_threads SET last_message_at = ?, updated_at = ? WHERE channel_id = ?').bind(created, created, id),
   ])
   try {
-    const result = await env.MAIL_EMAIL.send({
+    const result = await sendWorkspaceEmail(env, {
       from: { email: thread.mailboxAddress, name: thread.displayName },
       to: recipients,
       subject,

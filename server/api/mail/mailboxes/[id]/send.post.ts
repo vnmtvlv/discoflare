@@ -3,6 +3,7 @@ import { newId, nowIso } from '../../../../../shared/ids'
 import { requireMailboxPermission } from '../../../../utils/workspace-mail'
 import { cf, fail } from '../../../../utils/cf'
 import { parseBody } from '../../../../utils/validate'
+import { sendWorkspaceEmail, workspaceEmailAvailable } from '../../../../../workers/mail-transport'
 
 const schema = z.object({
   to: z.array(z.string().trim().email().max(254)).min(1).max(50),
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
   if (access.channel.type !== 'text') fail(404, 'not_found', 'Mailbox not found')
   const body = parseBody(schema, await readBody(event))
   const { env } = cf(event)
-  if (!env.MAIL_EMAIL) fail(503, 'mail_unavailable', 'Workspace email sending is not bound')
+  if (!workspaceEmailAvailable(env)) fail(503, 'mail_unavailable', 'Workspace email sending is not bound')
   const mailbox = await env.DB.prepare(
     `SELECT lower(mb.local_part || '@' || d.domain) as address, mb.display_name as displayName
      FROM email_mailboxes mb JOIN email_domains d ON d.id = mb.domain_id WHERE mb.channel_id = ?`,
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event) => {
     ).bind(messageId, threadId, mailbox.address, mailbox.displayName, JSON.stringify(recipients), created),
   ])
   try {
-    const result = await env.MAIL_EMAIL.send({
+    const result = await sendWorkspaceEmail(env, {
       from: { email: mailbox.address, name: mailbox.displayName },
       to: recipients,
       subject: body.subject,

@@ -16,6 +16,7 @@ import { tool, type ToolSet, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { newId, nowIso } from '../shared/ids'
 import type { DiscoflareEnv } from './env'
+import { sendWorkspaceEmail, workspaceEmailAvailable } from './mail-transport'
 import { ensureAgentReplyTarget } from './agent-replies'
 import type { AgentReactionEmoji } from './agent-reactions'
 import { deleteAgentTurn, fanoutAgentTurns, patchAgentTurn, putAgentTurn } from './agent-turns'
@@ -715,7 +716,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
 
   private async sendMailReply(threadId: string, content: string) {
     const access = await this.mailThreadAccess(threadId, 'send')
-    if (!this.env.MAIL_EMAIL) throw new Error('Workspace email sending is not bound')
+    if (!workspaceEmailAvailable(this.env)) throw new Error('Workspace email sending is not bound')
     const recipients = [...new Set(this.stringArray(access.participantsJson).filter(value => value.toLowerCase() !== access.mailboxAddress))]
     if (!recipients.length) throw new Error('This conversation has no external recipient')
     const previous = await this.env.DB.prepare(
@@ -739,7 +740,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     ])
     const subject = /^re:/iu.test(access.subject) ? access.subject : `Re: ${access.subject}`
     try {
-      const result = await this.env.MAIL_EMAIL.send({
+      const result = await sendWorkspaceEmail(this.env, {
         from: { email: access.mailboxAddress, name: access.displayName },
         to: recipients,
         subject,
@@ -761,7 +762,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
 
   private async sendNewMail(mailboxId: string, to: string[], subject: string, content: string) {
     const mailbox = await this.mailboxAccess(mailboxId, 'send')
-    if (!this.env.MAIL_EMAIL) throw new Error('Workspace email sending is not bound')
+    if (!workspaceEmailAvailable(this.env)) throw new Error('Workspace email sending is not bound')
     const recipients = [...new Set(to.map(value => value.trim().toLowerCase()).filter(value => value !== mailbox.mailboxAddress))]
     if (!recipients.length) throw new Error('Enter at least one external recipient')
     const posted = await this.postMessage(mailboxId, content)
@@ -784,7 +785,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
       ).bind(posted.id, threadId, mailbox.mailboxAddress, mailbox.displayName, JSON.stringify(recipients), created),
     ])
     try {
-      const result = await this.env.MAIL_EMAIL.send({
+      const result = await sendWorkspaceEmail(this.env, {
         from: { email: mailbox.mailboxAddress, name: mailbox.displayName },
         to: recipients,
         subject,
