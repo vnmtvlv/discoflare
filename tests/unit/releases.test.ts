@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { compareStableVersions, newerStableReleases, stableSemver, type PublishedRelease } from '../../shared/releases'
+import { discoflareReleases } from '../../server/utils/releases'
 
 function release(tagName: string): PublishedRelease {
   return { tagName, name: tagName, publishedAt: '2026-09-05T00:00:00Z', url: `https://example.com/${tagName}`, notes: '' }
@@ -28,5 +29,26 @@ describe('release versions', () => {
       release('v0.2.0-rc.1'),
     ])
     expect(newer.map(item => item.tagName)).toEqual(['v0.1.3', 'v0.1.2', 'v0.1.1', 'v0.1.0'])
+  })
+})
+
+describe('GitHub release discovery', () => {
+  it('uses a short edge cache and a paged cache key', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify([
+      {
+        tag_name: 'v0.3.3',
+        name: 'Discoflare v0.3.3',
+        published_at: '2026-09-07T00:00:00Z',
+        html_url: 'https://github.com/vnmtvlv/discoflare/releases/tag/v0.3.3',
+        body: 'Current release',
+        draft: false,
+        prerelease: false,
+      },
+    ]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    await expect(discoflareReleases(fetcher)).resolves.toMatchObject([{ tagName: 'v0.3.3' }])
+    const [url, init] = fetcher.mock.calls[0]!
+    expect(String(url)).toContain('per_page=100&page=1')
+    expect((init as RequestInit & { cf: { cacheTtl: number } }).cf.cacheTtl).toBe(300)
   })
 })

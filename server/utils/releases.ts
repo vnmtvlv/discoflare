@@ -1,6 +1,7 @@
 import type { PublishedRelease } from '../../shared/releases'
 
-const releasesUrl = 'https://api.github.com/repos/vnmtvlv/discoflare/releases?per_page=100'
+const releasesUrl = 'https://api.github.com/repos/vnmtvlv/discoflare/releases?per_page=100&page=1'
+const releasesCacheTtl = 5 * 60
 
 type GitHubRelease = {
   tag_name?: string
@@ -12,8 +13,8 @@ type GitHubRelease = {
   prerelease?: boolean
 }
 
-export async function discoflareReleases(): Promise<PublishedRelease[]> {
-  const response = await fetch(releasesUrl, {
+export async function discoflareReleases(fetcher: typeof fetch = fetch): Promise<PublishedRelease[]> {
+  const response = await fetcher(releasesUrl, {
     headers: {
       Accept: 'application/vnd.github+json',
       'User-Agent': 'Discoflare update check',
@@ -21,7 +22,7 @@ export async function discoflareReleases(): Promise<PublishedRelease[]> {
     },
     cf: {
       cacheEverything: true,
-      cacheTtl: 6 * 60 * 60,
+      cacheTtl: releasesCacheTtl,
     },
   } as RequestInit & { cf: { cacheEverything: boolean, cacheTtl: number } })
   if (!response.ok) throw new Error(`GitHub releases returned ${response.status}`)
