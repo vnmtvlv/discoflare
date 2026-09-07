@@ -12,7 +12,7 @@ Add optional transcription for recorded audio Attachments without making it a re
 
 ## Software factory projects
 
-Connect the existing Agent, Task, Task Run, Workflow, and Sandbox execution plane to company software repositories and deployment targets without turning Discoflare into a GitHub clone.
+Connect the existing Agent, Task, Task Run, Workflow, and Computer execution plane to company software repositories and deployment targets without turning Discoflare into a GitHub clone.
 
 - Treat the Workspace as the company and add Projects as small configuration records that connect Tasks and Task Runs to a product.
 - Keep a Project limited to its source repository and root directory, build and verification commands, environments and deployment targets, assigned Agents and access policy, report Channel, and delivery policy.
@@ -22,7 +22,7 @@ Connect the existing Agent, Task, Task Run, Workflow, and Sandbox execution plan
 - Keep production credentials in Workers Builds or a server-side deployment adapter. An Agent may propose a release, but it must not receive a persistent account-wide Cloudflare token or autonomously deploy to production.
 - Store links and immutable evidence snapshots for commits, pull requests, checks, previews, and deployments. Do not recreate repository browsing, Issues, branch management, pull-request review, Releases, Actions, or wikis inside Discoflare.
 - Evaluate Cloudflare Artifacts as a later source adapter for Cloudflare-native Agent forks, per-run working repositories, and installations that do not use GitHub. Do not make it the first human collaboration surface or a reason to build another GitHub.
-- Add other release adapters only after the GitHub-to-Cloudflare path works end to end. For example, a Chrome extension can be built and verified in Sandbox while publishing remains an explicitly approved Chrome Web Store operation.
+- Add other release adapters only after the GitHub-to-Cloudflare path works end to end. For example, a Chrome extension can be built and verified in an Agent Computer while publishing remains an explicitly approved Chrome Web Store operation.
 
 ## Generated workspace apps
 
@@ -30,7 +30,7 @@ Treat generated applications as a later platform direction, after Chat, Tasks, M
 
 - Start with declarative views and workflows over bounded Discoflare APIs: dashboards, forms, approval queues, project views, support inboxes, and similar Workspace-specific tools.
 - Give every app a manifest that declares its routes, storage, and requested access to specific Workspace resources. Installing an app must not grant raw D1, binding, secret, or account-wide Cloudflare access.
-- Generate and test apps in an isolated Sandbox, present a working preview before installation, and retain version, rollback, and uninstall boundaries.
+- Generate and test apps in an isolated Agent Computer, present a working preview before installation, and retain version, rollback, and uninstall boundaries.
 - Require explicit human approval for external mutations and other consequential actions. An app may propose or simulate an action without receiving unrestricted authority to perform it.
 - Keep application data ownership clear. Shared Discoflare records remain in their existing systems of record; app-private metadata may use a bounded app store without silently changing core schemas.
 - Consider isolated executable Workers or facets only after the declarative model and capability boundary work. Do not adopt a multi-Worker runtime merely to match another product's architecture.

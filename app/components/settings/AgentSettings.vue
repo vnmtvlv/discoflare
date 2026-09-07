@@ -274,7 +274,7 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
 
       <dl v-if="selectedAgent" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-default pt-5 text-sm">
         <dt class="text-muted">Computer</dt>
-        <dd class="truncate font-mono text-xs">{{ selectedAgent.sandboxId }}</dd>
+        <dd class="truncate font-mono text-xs">{{ selectedAgent.computerId }}</dd>
         <dt class="text-muted">Last active</dt>
         <dd>{{ selectedAgent.lastActiveAt ? new Date(selectedAgent.lastActiveAt).toLocaleString() : 'Never' }}</dd>
       </dl>

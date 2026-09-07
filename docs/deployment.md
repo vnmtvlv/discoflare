@@ -7,7 +7,7 @@ The OAuth installer at `discoflare.com/deploy` deploys a complete workspace to t
 1. reserves or reuses the account's Workers subdomain and deploys the single Discoflare Worker;
 2. by default creates a private single-use Owner Setup Claim for choosing the first password, or, when explicitly selected, creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy;
 3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so the installation has one public origin;
-4. optionally enables Cloudflare Email Routing and Email Sending, provisions or updates one Discoflare mail gateway for the selected zone, and refuses to replace foreign MX or catch-all configuration; and
+4. optionally enables Cloudflare Email Routing and Email Sending on the Primary workspace Worker and refuses to replace foreign MX or catch-all configuration; and
 5. creates the Owner and workspace atomically from the private setup claim, or when the intended Owner first arrives with a verified Access identity.
 
 The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
@@ -18,11 +18,9 @@ Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust 
 
 Enabling Email Routing makes Cloudflare the MX provider for the selected email subdomain. The app subdomain is mirrored by default but can be changed independently. The installer deliberately stops instead of replacing existing non-Cloudflare MX records.
 
-Cloudflare exposes one catch-all rule per DNS zone. The guided installer assigns that rule to one Discoflare-managed zone mail gateway. The gateway routes each recipient domain to its workspace over a Service Binding; the workspace then accepts or rejects the complete address against its D1 mailbox registry. New Mailboxes therefore remain local D1 configuration and require neither a Cloudflare routing rule nor a redeployment.
+Cloudflare exposes one catch-all rule per DNS zone. The installer assigns it directly to the Primary Discoflare workspace Worker, which also owns the zone's outbound Email Sending binding. The workspace accepts or rejects the complete address against its D1 mailbox registry. New Mailboxes therefore remain local D1 configuration and require neither a Cloudflare routing rule nor a redeployment. The base release refuses a second mail-enabled workspace in the same account instead of creating an auxiliary gateway Worker.
 
-Several mail-enabled workspaces may share a zone when each selects a unique mail subdomain, for example `hq.discoflare.com`, `dev1.discoflare.com`, and `dev2.discoflare.com`. The gateway also owns the zone's outbound Email Sending binding. Each workspace receives only a Service Binding and a private gateway credential restricted to its registered sender domain, so it cannot send as another workspace. Neither component stores the installer OAuth token.
-
-The installer returns a conflict instead of replacing a foreign catch-all or adopting a Worker without the Discoflare gateway marker. Removing one managed workspace removes only its gateway route and Email Sending subdomain. The catch-all and gateway remain while another managed workspace in the zone still uses them; the last removal deletes the gateway and disables its catch-all.
+The installer returns a conflict instead of replacing a foreign catch-all. Removing the Primary workspace disables its owned catch-all and removes its exact Email Sending subdomain. Neither the OAuth installer nor the CLI leaves a Cloudflare provisioning credential in the deployed Worker.
 
 ## GitHub / Workers Builds
 
@@ -42,7 +40,7 @@ The button hands the public repository to Cloudflare. Everything account-specifi
 6. Attach the public hostname and manually configure any desired Email Routing, Email Sending, DNS, OAuth callbacks, and sender-domain settings.
 7. Verify `/api/setup/health`, claim the first owner at `/setup#claim=<ADMIN_SETUP_TOKEN>`, and test storage, realtime, and Agent execution from the deployed origin.
 
-The Worker can become live before the Sandbox image finishes provisioning. Allow several minutes before the first Agent Task. Agents need a Workers Paid account with Containers enabled. The default `@cf/moonshotai/kimi-k2.7-code` model uses the account's Workers AI binding, so no external model API key is required.
+The Worker can become live before the Agent Computer image finishes provisioning. Allow several minutes before the first Agent Task. The complete Discoflare release requires a Workers Paid account because every Agent has a Container-backed Computer. The default `@cf/moonshotai/kimi-k2.7-code` model uses the account's Workers AI binding, so no external model API key is required.
 
 `APP_NAME` changes the name beside the hardcoded Discoflare logo and the browser title. `APP_TITLE` changes the login headline; use `\n` to split it across two lines. `APP_SUBTITLE` changes the supporting copy below it. These are public display values, not secrets.
 
@@ -53,7 +51,7 @@ To complete first-owner setup after the manual GitHub deployment:
 3. Create the owner name and password there. The workspace becomes ready and signs the owner in.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
 5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
-6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that the Sandbox is unavailable immediately after deploy, wait for container provisioning and retry the Task.
+6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that its Computer is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
 ### MCP access
 
@@ -75,7 +73,7 @@ The S3 Endpoint, Region, Bucket, Prefix, Access Key ID, and Secret Access Key ar
 
 Only the workspace Owner can start deletion from **Workspace Settings → Danger Zone**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
 
-The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes the Access applications recorded on that installation, removes its route from the shared zone mail gateway and its exact Email Sending subdomain, detaches the custom Worker domain, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, KV, Workflow, and Container resources. If that was the final mail route, the installer also deletes the gateway and disables its catch-all. It never follows or deletes the independently configured S3 backup destination. Zone-wide Email Routing settings and unrelated DNS or email rules are left alone.
+The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes the Access applications recorded on that installation, disables its owned mail catch-all and exact Email Sending subdomain, detaches the custom Worker domain, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, KV, Workflow, and Container resources. It never follows or deletes the independently configured S3 backup destination. Unrelated DNS or email rules are left alone.
 
 Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Danger Zone links to the Cloudflare dashboard for manual cleanup.
 
@@ -144,7 +142,7 @@ The callback origin must be the deployed workspace URL. `discoflare.com` is the 
 Email delivery is not required to create the Owner or to create an account from a private invite link. The invite itself is the admission credential; verification and password reset remain unavailable until auth-email delivery is configured. To verify new addresses and enable password reset:
 
 1. Onboard the sender domain in Cloudflare Email Service.
-2. Add a Worker send binding named `EMAIL`, or use the guided installer's managed mail gateway.
+2. Add a Worker send binding named `EMAIL`, or use the guided installer's Primary workspace mail binding.
 3. Set a sender in the Authentication UI or with `EMAIL_FROM`. Guided mail-enabled installations default to their initial workspace mailbox address.
 4. Configure and enable Turnstile.
 5. Keep **Invite only** or select **Open signup**, according to the workspace admission policy.

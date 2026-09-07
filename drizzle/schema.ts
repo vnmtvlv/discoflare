@@ -181,7 +181,7 @@ export const agents = sqliteTable('agents', {
   model: text('model').notNull().default('@cf/moonshotai/kimi-k2.7-code'),
   instructions: text('instructions').notNull().default(''),
   status: text('status', { enum: ['active', 'paused'] }).notNull().default('active'),
-  sandboxId: text('sandbox_id').notNull().unique(),
+  computerId: text('computer_id').notNull().unique(),
   createdBy: text('created_by').notNull().references(() => users.id),
   lastActiveAt: text('last_active_at'),
   ...isoTimestamps(),

@@ -29,7 +29,7 @@ export function authEmailAvailable(env: DiscoflareEnv): boolean {
 
 export async function sendWorkspaceEmail(env: DiscoflareEnv, message: WorkspaceEmailMessage): Promise<{ messageId: string }> {
   if (env.MAIL_GATEWAY && env.MAIL_GATEWAY_TOKEN) {
-    const response = await env.MAIL_GATEWAY.fetch(new Request('https://discoflare-mail-gateway.internal/v1/send', {
+    const response = await env.MAIL_GATEWAY.fetch(new Request('https://discoflare-primary.internal/.discoflare/mail/send', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${env.MAIL_GATEWAY_TOKEN}`,
@@ -39,7 +39,7 @@ export async function sendWorkspaceEmail(env: DiscoflareEnv, message: WorkspaceE
     }))
     const payload = await response.json().catch(() => null) as MailGatewayResponse | null
     if (!response.ok || !payload?.messageId) {
-      throw new Error(payload?.error || `Workspace mail gateway rejected the message (${response.status})`)
+      throw new Error(payload?.error || `Primary workspace mail rejected the message (${response.status})`)
     }
     return { messageId: payload.messageId }
   }

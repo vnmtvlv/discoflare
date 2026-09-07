@@ -1,5 +1,4 @@
 /// <reference types="@cloudflare/workers-types" />
-import type { Sandbox } from '@cloudflare/sandbox'
 
 export type AgentTaskWorkflowParams = {
   taskId: string
@@ -22,13 +21,14 @@ export type DiscoflareEnv = {
   NOTIFICATION_DO: DurableObjectNamespace
   AGENT_DO: DurableObjectNamespace
   AGENT_THINK: DurableObjectNamespace
-  AGENT_SANDBOX: DurableObjectNamespace<Sandbox>
   AGENT_TASK_WORKFLOW: Workflow<AgentTaskWorkflowParams>
   AI: Ai
   EMAIL?: SendEmail
   MAIL_EMAIL?: SendEmail
   MAIL_GATEWAY?: Fetcher
   MAIL_GATEWAY_TOKEN?: string
+  DISCOFLARE_PRIMARY?: string
+  DISCOFLARE_MAIL_ROUTES?: string
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
   REALTIMEKIT_APP_ID?: string

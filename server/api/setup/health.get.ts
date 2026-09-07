@@ -25,7 +25,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       adminEnv: false,
       ownerSetup: false,
       ownerEmailHint: null,
-      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, agentSandbox: false, agentWorkflow: false, workersAi: false },
+      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, agentComputer: false, agentWorkflow: false, workersAi: false },
       realtimekit: false,
       twitterAuth: false,
       ...readAppBranding(),
@@ -41,7 +41,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     rateLimitDo: Boolean(env.RATE_LIMIT_DO),
     notificationDo: Boolean(env.NOTIFICATION_DO),
     agentDo: Boolean(env.AGENT_DO),
-    agentSandbox: Boolean(env.AGENT_SANDBOX),
+    agentComputer: Boolean(env.AGENT_DO),
     agentWorkflow: Boolean(env.AGENT_TASK_WORKFLOW),
     workersAi: Boolean(env.AI),
   }

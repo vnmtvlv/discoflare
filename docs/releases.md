@@ -40,7 +40,7 @@ GitHub Actions. Require PRs and resolved review conversations, allow only squash
 merges, block force pushes and deletion, and keep required approvals at zero
 while the maintainer is the only reviewer.
 
-CI builds the Worker without deploying or applying remote migrations. Sandbox
+CI builds the Worker without deploying or applying remote migrations. Agent Computer
 browser checks and release artifact verification remain separate release gates.
 
 ## Preparing a release
@@ -74,8 +74,8 @@ After the release PR is merged:
 
 Publishing the GitHub Release triggers
 `.github/workflows/publish-installer-release.yml`. It builds the Nuxt Worker,
-packages the static assets and D1 migrations, and attaches the versioned
-installer artifacts to the GitHub Release. The guided installer consumes the
+packages the static assets, D1 migrations, installer-core, CLI, and public Agent Computer image, and attaches the versioned
+installer artifacts to the GitHub Release. The guided installer and CLI consume the
 pinned manifest rather than an unversioned branch.
 
 Do not move an existing release tag or overwrite a broken version. Fix the

@@ -13,7 +13,7 @@ describe('workspace mail transport', () => {
   it('uses the authenticated gateway before a direct send binding', async () => {
     const direct = { send: vi.fn() }
     const fetch = vi.fn(async (request: Request) => {
-      expect(request.url).toBe('https://discoflare-mail-gateway.internal/v1/send')
+      expect(request.url).toBe('https://discoflare-primary.internal/.discoflare/mail/send')
       expect(request.headers.get('Authorization')).toBe('Bearer workspace-token')
       expect(await request.json()).toEqual(message)
       return Response.json({ messageId: 'gateway-message' })
@@ -49,7 +49,7 @@ describe('workspace mail transport', () => {
   })
 })
 
-describe('mail gateway ingress', () => {
+describe('primary mail ingress', () => {
   it('compares ingress credentials without comparing their raw values', async () => {
     await expect(secureTokenEqual('same', 'same')).resolves.toBe(true)
     await expect(secureTokenEqual('same', 'different')).resolves.toBe(false)

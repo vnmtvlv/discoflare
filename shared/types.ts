@@ -21,7 +21,7 @@ export type AgentDTO = {
   model: string
   instructions: string
   status: 'active' | 'paused'
-  sandboxId: string
+  computerId: string
   lastActiveAt: string | null
   createdAt: string
   updatedAt: string
@@ -572,7 +572,7 @@ export type SetupHealth = {
     rateLimitDo: boolean
     notificationDo: boolean
     agentDo: boolean
-    agentSandbox: boolean
+    agentComputer: boolean
     agentWorkflow: boolean
     workersAi: boolean
   }

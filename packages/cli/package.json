@@ -1,0 +1,25 @@
+{
+  "name": "@discoflare/cli",
+  "version": "0.2.5",
+  "description": "Install and update Discoflare directly from a terminal",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "discoflare": "dist/cli.js"
+  },
+  "files": ["dist/cli.js"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && esbuild src/cli.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/cli.js",
+    "pack:release": "pnpm build && pnpm pack --pack-destination ../../.installer/release"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@discoflare/installer-core": "workspace:*",
+    "@types/node": "^26.4.1",
+    "esbuild": "^0.27.4",
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

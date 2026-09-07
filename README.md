@@ -41,7 +41,7 @@ Four apps bring conversations, work, email, and knowledge into one workspace:
 ### AI agents
 
 - Add AI participants with custom profiles and avatars, powered by Workers AI.
-- Let authorized members work with Agents in chat or assign them Tasks, with a Sandbox computer for executing commands.
+- Let authorized members work with Agents in chat or assign them Tasks, with one durable Computer per Agent for files and command execution.
 - Use vision-capable models to inspect image attachments.
 
 ### Workspace controls
@@ -59,17 +59,17 @@ One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Eac
 | Layer | Cloudflare services | Responsibility |
 | --- | --- | --- |
 | App and API | Workers | Serve the frontend, handle API requests, and receive routed email. |
-| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data app content, Agents, boards, Tasks, and Task Runs. R2 stores attachments, raw email, and agent-computer checkpoints. |
+| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data app content, Agents, boards, Tasks, Task Runs, and Agent Computer files. R2 stores attachments and raw email. |
 | Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation and Task Run. KV holds short-lived WebSocket tickets. |
-| Agent execution | Workflows, Sandbox, Workers AI | Orchestrate Task Runs, execute commands in containers, and run model inference. |
+| Agent execution | Workflows, Computer, Containers, Workers AI | Orchestrate Task Runs, persist each Agent's filesystem, execute commands, and run model inference. |
 | Voice and video | RealtimeKit | Carry optional huddle media. |
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
         ──WS /ws/channel/:id──► Channel DO (messages and typing)
         ──WS /ws/workspace/:id► Workspace DO (presence)
-Task ──► Agent DO ──► Workflow ──► Workers AI
-                    └───────────► Sandbox ──checkpoint──► R2
+Task ──► Agent DO + Computer ──► Workflow ──► Workers AI
+                    └───────────► Container runtime
 Huddle media ────────────────► RealtimeKit
 ```
 
@@ -91,7 +91,7 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 3. Keep the generated `workers.dev` URL or add a custom domain; independently choose whether to provision workspace mail.
 4. Open the private setup link and create the first Owner password. If Cloudflare Access was explicitly selected, open the workspace and use the one-time code sent by Cloudflare instead.
 
-The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
+The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. The downloadable CLI uses an explicit `CLOUDFLARE_API_TOKEN` and the same open-source installer core, so installation and recovery do not depend on `discoflare.com` remaining online. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
 
 ### Manual deployment
 
@@ -172,7 +172,7 @@ pnpm db:seed
 | Mode | Command | When to use it |
 | --- | --- | --- |
 | Local app | `pnpm dev` | Run Nuxt with local bindings for everyday development. |
-| Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets and Durable Object hibernation. Agent Sandbox development also needs Docker and a Cloudflare login. |
+| Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets, Durable Object hibernation, and Agent Computers. Container development also needs Docker and a Cloudflare login. |
 | Remote backend | `pnpm dev:remote` | Local frontend against a deployed server. Configure `.env`, pass `--env-file .env.personal`, or pass its URL. |
 
 See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.

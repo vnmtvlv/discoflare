@@ -96,7 +96,7 @@ describe('D1 bootstrap schema', () => {
     sqlite.exec("INSERT INTO roles (id, key, name, permissions_bitmask) VALUES ('member-role', 'member', 'member', 112)")
     sqlite.exec("INSERT INTO identity_keys (id, name, email) VALUES ('agent-1', 'Builder', 'agent+agent-1@discoflare.invalid')")
     sqlite.exec("INSERT INTO users (id, kind, display_name, status, role_id, joined_at) VALUES ('agent-1', 'agent', 'Builder', 'active', 'member-role', '2026-09-04T00:00:00.000Z')")
-    sqlite.exec("INSERT INTO agents (user_id, sandbox_id, created_by) VALUES ('agent-1', 'agent-agent-1', 'agent-1')")
+    sqlite.exec("INSERT INTO agents (user_id, computer_id, created_by) VALUES ('agent-1', 'agent:agent-1', 'agent-1')")
     sqlite.exec("INSERT INTO task_boards (id, name, created_by) VALUES ('board-1', 'Launch', 'agent-1')")
     sqlite.exec("INSERT INTO tasks (id, board_id, title, assignee_id, created_by) VALUES ('task-1', 'board-1', 'Ship it', 'agent-1', 'agent-1')")
     sqlite.exec("INSERT INTO task_runs (id, task_id, agent_id, status, progress, created_at) VALUES ('run-1', 'task-1', 'agent-1', 'running', 'Thinking', '2026-09-04T00:00:00.000Z')")
@@ -202,7 +202,7 @@ describe('D1 bootstrap schema', () => {
     sqlite.exec(d1ExecSql(agentsAndTasksSql))
     sqlite.exec(d1ExecSql(agentTurnsSql))
     sqlite.exec(`
-      INSERT INTO agents (user_id, sandbox_id, created_by) VALUES ('agent-1', 'agent-agent-1', 'agent-1');
+      INSERT INTO agents (user_id, computer_id, created_by) VALUES ('agent-1', 'agent:agent-1', 'agent-1');
       INSERT INTO task_boards (id, name, created_by) VALUES ('board-1', 'Launch', 'agent-1');
       INSERT INTO tasks (id, board_id, title, description, status, assignee_id, created_by)
         VALUES ('task-1', 'board-1', 'Ship it', 'Carefully', 'review', 'agent-1', 'agent-1');

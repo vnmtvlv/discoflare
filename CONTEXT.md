@@ -53,7 +53,7 @@ An active workspace participant, human or Agent, as presented in workspace membe
 _Avoid_: User-in-server record, separate agent author system
 
 **Agent**:
-An AI Member with a profile, a stateful coordinator Durable Object, isolated Think memory per Channel, Thread, and Task Run, and one stable Sandbox computer identity. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files are checkpointed to R2.
+An AI Member with a profile, a stateful coordinator Durable Object, isolated Think memory per Channel, Thread, and Task Run, and one stable Computer. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files live in its Agent Durable Object.
 Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat. A custom Role with Manage tasks may assign Agents to and run Tasks without receiving Agent configuration secrets.
 _Avoid_: Bot, external runner, Hermes profile, always-running VM
 
@@ -94,11 +94,11 @@ A movable note or text card on a Canvas. It owns its content, geometry, color, a
 _Avoid_: Database Record, Task, free-form untyped blob
 
 **Task Run**:
-One durable, cancellable execution attempt for a Task. It snapshots the Task and Agent launch configuration, retains progress and outcome history, and can be reconciled with its Cloudflare Workflow after an interruption. The assigned Agent Durable Object owns reasoning memory; the Sandbox owns active processes.
+One durable, cancellable execution attempt for a Task. It snapshots the Task and Agent launch configuration, retains progress and outcome history, and can be reconciled with its Cloudflare Workflow after an interruption. The assigned Agent Durable Object owns reasoning memory and Computer files; the Container backend owns only active processes.
 _Avoid_: Treating a Task and its retryable execution as the same record
 
 **Agent Computer**:
-The stable Sandbox identity assigned to one Agent. The container may sleep or be replaced; `/workspace` survives logically because Discoflare restores and checkpoints it through R2.
+The durable filesystem and execution facade assigned to one Agent. Files live in the Agent Durable Object; a replaceable Container backend executes Linux commands against them and may sleep between operations.
 _Avoid_: Permanent VM, implying the container process runs forever
 
 **Role**:
