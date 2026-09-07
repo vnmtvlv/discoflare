@@ -1,5 +1,6 @@
 export * from './errors.js'
 export * from './cloudflare-client.js'
+export * from './container-registry.js'
 export * from './deploy.js'
 export * from './installations.js'
 export * from './installer.js'

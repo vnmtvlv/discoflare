@@ -6,6 +6,7 @@ import { durableObjectMigrations } from './migrations.js'
 import { randomBase64Url } from './random.js'
 import { ensureCloudflareAccess, ensureWorkersHostname } from './access.js'
 import { ensurePrimaryMail } from './primary-mail.js'
+import { ensureTenantContainerImage } from './container-registry.js'
 
 type WorkerUploadResult = {
   deployment_id?: string
@@ -465,8 +466,9 @@ async function deployContainer(
     throw createError({ statusCode: 409, statusMessage: `Container application ${name} belongs to another Worker` })
   }
 
+  const image = await ensureTenantContainerImage(accessToken, accountId, manifest.container.image, manifest.version)
   const configuration = {
-    image: manifest.container.image,
+    image,
     instance_type: manifest.container.instanceType,
     observability: { logs: { enabled: true } },
   }

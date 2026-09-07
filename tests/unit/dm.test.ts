@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dmTitle } from '../../shared/dm'
+import { canAccessAgentConversation, dmTitle } from '../../shared/dm'
 import { formatBytes } from '../../shared/format'
 
 describe('dmTitle', () => {
@@ -26,5 +26,19 @@ describe('dmTitle', () => {
 describe('formatBytes', () => {
   it('formats kilobytes', () => {
     expect(formatBytes(2048)).toBe('2 KB')
+  })
+})
+
+describe('canAccessAgentConversation', () => {
+  it('lets a participating Agent stream replies into its inherited DM thread', () => {
+    expect(canAccessAgentConversation('agent', false, true)).toBe(true)
+  })
+
+  it('keeps an Agent DM hidden from ordinary human members', () => {
+    expect(canAccessAgentConversation('human', false, true)).toBe(false)
+  })
+
+  it('lets workspace managers open Agent DMs', () => {
+    expect(canAccessAgentConversation('human', true, true)).toBe(true)
   })
 })
