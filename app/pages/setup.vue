@@ -10,6 +10,7 @@ const health = computed(() => session.health)
 const busy = ref(false)
 const error = ref<string | null>(null)
 const claimToken = ref('')
+const ownerEmail = ref('')
 
 const schema = z.object({
   name: z.string().trim().min(1, 'Name is required').max(80),
@@ -49,6 +50,18 @@ onMounted(async () => {
   await session.refresh(api)
   if (session.user) await navigateTo('/')
   else if (session.health?.ready) await navigateTo('/login')
+  else if (session.health?.ownerSetup && claimToken.value) {
+    try {
+      const identity = await api<{ email: string }>('/api/setup/owner/identity', {
+        method: 'POST',
+        body: { token: claimToken.value },
+      })
+      ownerEmail.value = identity.email
+    }
+    catch (cause) {
+      error.value = errorMessage(cause)
+    }
+  }
 })
 
 async function onSubmit(event: FormSubmitEvent<Schema>) {
@@ -103,17 +116,19 @@ async function onSubmit(event: FormSubmitEvent<Schema>) {
         class="mt-6"
       />
       <template v-else>
-        <p v-if="health.ownerEmailHint" class="mt-6 text-sm text-muted">Owner email: {{ health.ownerEmailHint }}</p>
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="mt-6" />
-        <UForm :schema="schema" :state="state" class="mt-7 space-y-4" @submit="onSubmit">
+        <UForm v-if="ownerEmail" :schema="schema" :state="state" autocomplete="on" class="mt-7 space-y-4" @submit="onSubmit">
+          <UFormField label="Email">
+            <UInput :model-value="ownerEmail" name="email" type="email" autocomplete="username" readonly size="lg" class="w-full" />
+          </UFormField>
           <UFormField name="name" label="Name">
-            <UInput v-model="state.name" size="lg" autocomplete="name" class="w-full" />
+            <UInput v-model="state.name" name="name" size="lg" autocomplete="name" class="w-full" />
           </UFormField>
           <UFormField name="password" label="Password">
-            <FormPasswordInput v-model="state.password" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.password" name="password" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
           <UFormField name="confirm" label="Confirm password">
-            <FormPasswordInput v-model="state.confirm" size="lg" autocomplete="new-password" class="w-full" />
+            <FormPasswordInput v-model="state.confirm" name="confirm" size="lg" autocomplete="new-password" class="w-full" />
           </UFormField>
           <UButton type="submit" size="lg" label="Create owner" block :loading="busy" />
         </UForm>
