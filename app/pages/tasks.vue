@@ -6,6 +6,7 @@ import type {
   TaskBoardDTO,
   TaskDetailDTO,
   TaskLabelDTO,
+  TaskDTO,
   TaskPriority,
   TaskStatus,
 } from '~~/shared/types'
@@ -29,7 +30,11 @@ const selectedBoardId = computed({
   get: () => String(route.query.board || '') || null,
   set: value => void navigateTo(boardPath(value, showArchived.value)),
 })
-const selectedTaskId = ref<string | null>(null)
+const selectedTaskId = computed({
+  get: () => String(route.query.task || '') || null,
+  set: value => void navigateTo({ query: { ...route.query, task: value || undefined } }),
+})
+const taskSearch = ref('')
 const showBoardForm = ref(false)
 const showTaskForm = ref(false)
 const showLabels = ref(false)
@@ -68,11 +73,17 @@ const boards = computed(() => showArchived.value
   ? allBoards.value.filter(board => Boolean(board.archivedAt) || board.tasks.some(task => Boolean(task.archivedAt)))
   : allBoards.value)
 const activeBoard = computed(() => boards.value.find(board => board.id === selectedBoardId.value) ?? boards.value[0] ?? null)
-const activeTasks = computed(() => {
+const boardTasks = computed(() => {
   const board = activeBoard.value
   if (!board) return []
   if (!showArchived.value) return board.tasks
   return board.archivedAt ? board.tasks : board.tasks.filter(task => Boolean(task.archivedAt))
+})
+const activeTasks = computed(() => {
+  const query = taskSearch.value.trim().toLocaleLowerCase().replace(/^#/u, '')
+  if (!query) return boardTasks.value
+  return boardTasks.value.filter(task => [String(task.number), task.title, task.description]
+    .some(value => value.toLocaleLowerCase().includes(query)))
 })
 const agents = computed(() => agentsQ.data.value?.agents ?? [])
 const channels = computed(() => (channelsQ.data.value?.channels ?? []).filter(channel => channel.type === 'text' && channel.visibility === 'workspace'))
@@ -162,6 +173,10 @@ watch(selectedTask, (task) => {
 
 function tasksFor(status: TaskStatus) {
   return activeTasks.value.filter(task => task.status === status)
+}
+
+function taskLabel(task: Pick<TaskDTO, 'number' | 'title'>) {
+  return `#${task.number} ${task.title}`
 }
 
 function agentName(id: string | null) {
@@ -293,8 +308,8 @@ async function createTask() {
   if (ok) showTaskForm.value = false
 }
 
-function openTask(id: string) {
-  selectedTaskId.value = id
+function openTask(task: TaskDTO) {
+  selectedTaskId.value = String(task.number)
 }
 
 async function saveTask() {
@@ -447,6 +462,7 @@ const boardMenu = computed(() => [[
         <span class="truncate font-semibold">{{ activeBoard?.name || 'Tasks' }}</span>
         <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
         <div class="ml-auto flex items-center gap-1">
+          <UInput v-model="taskSearch" icon="i-ph-magnifying-glass" placeholder="Search tasks" aria-label="Search tasks" class="w-44" />
           <UDropdownMenu v-if="activeBoard" :items="boardMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Board actions" />
           </UDropdownMenu>
@@ -482,10 +498,12 @@ const boardMenu = computed(() => [[
                 @dragend="draggedTaskId = null"
                 @dragover.prevent
                 @drop.stop="dropTask(column.status, task.id)"
-                @click="openTask(task.id)"
+                @click="openTask(task)"
               >
                 <div class="flex items-start gap-2">
-                  <div class="font-medium text-sm flex-1 min-w-0">{{ task.title }}</div>
+                  <div class="font-medium text-sm flex-1 min-w-0">
+                    <span class="mr-1 text-muted">#{{ task.number }}</span>{{ task.title }}
+                  </div>
                   <UBadge v-if="task.priority !== 'normal'" :color="priorityColor(task.priority)" variant="subtle" size="xs">{{ task.priority }}</UBadge>
                 </div>
                 <p v-if="task.description" class="text-xs text-muted line-clamp-3">{{ task.description }}</p>
@@ -555,10 +573,10 @@ const boardMenu = computed(() => [[
               <UCheckbox v-for="label in activeBoard.labels" :key="label.id" :model-value="newTask.labelIds.includes(label.id)" :label="label.name" @update:model-value="value => toggleId(newTask.labelIds, label.id, Boolean(value))" />
             </div>
           </div>
-          <div v-if="activeTasks.length" class="sm:col-span-2">
+          <div v-if="boardTasks.length" class="sm:col-span-2">
             <div class="text-sm font-medium mb-2">Dependencies</div>
             <div class="max-h-32 overflow-y-auto space-y-1">
-              <UCheckbox v-for="task in activeTasks" :key="task.id" :model-value="newTask.dependencyIds.includes(task.id)" :label="task.title" @update:model-value="value => toggleId(newTask.dependencyIds, task.id, Boolean(value))" />
+              <UCheckbox v-for="task in boardTasks" :key="task.id" :model-value="newTask.dependencyIds.includes(task.id)" :label="taskLabel(task)" @update:model-value="value => toggleId(newTask.dependencyIds, task.id, Boolean(value))" />
             </div>
           </div>
         </div>
@@ -588,7 +606,7 @@ const boardMenu = computed(() => [[
       </template>
     </UModal>
 
-    <USlideover :open="Boolean(selectedTaskId)" :title="selectedTask?.title ?? 'Task'" :ui="{ content: 'w-full max-w-2xl' }" @update:open="value => { if (!value) selectedTaskId = null }">
+    <USlideover :open="Boolean(selectedTaskId)" :title="selectedTask ? taskLabel(selectedTask) : 'Task'" :ui="{ content: 'w-full max-w-2xl' }" @update:open="value => { if (!value) selectedTaskId = null }">
       <template #body>
         <div v-if="taskQ.isPending.value" class="space-y-3"><USkeleton class="h-10" /><USkeleton class="h-64" /></div>
         <UAlert v-else-if="taskQ.error.value" color="error" title="Could not load task." />
@@ -631,7 +649,7 @@ const boardMenu = computed(() => [[
                 :key="task.id"
                 :model-value="editTask.dependencyIds.includes(task.id)"
                 :disabled="selectedTask.status === 'running'"
-                :label="task.title"
+                :label="taskLabel(task)"
                 @update:model-value="value => toggleId(editTask.dependencyIds, task.id, Boolean(value))"
               />
             </div>

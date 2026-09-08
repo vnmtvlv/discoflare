@@ -6,6 +6,7 @@ import agentTurnsSql from '../../drizzle/migrations/0008_agent_turns.sql?raw'
 import taskManagementSql from '../../drizzle/migrations/0009_task_management.sql?raw'
 import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_boundary.sql?raw'
 import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
+import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -52,6 +53,9 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE `task_dependencies`')
     expect(INIT_SQL).toContain('CREATE TABLE `task_checklist_items`')
     expect(INIT_SQL).toContain('CREATE TABLE `task_attachments`')
+    expect(INIT_SQL).toContain('CREATE TABLE `task_numbers`')
+    expect(INIT_SQL).toContain('CREATE TABLE `task_number_sequence`')
+    expect(INIT_SQL).toContain('CREATE TRIGGER `tasks_assign_number_after_insert`')
     expect(INIT_SQL).not.toContain('CREATE TABLE IF NOT EXISTS `sessions`')
     expect(INIT_SQL).not.toContain('password_hash')
     expect(INIT_SQL).not.toContain('guild_id')
@@ -110,6 +114,7 @@ describe('D1 bootstrap schema', () => {
     expect(sqlite.prepare('SELECT kind FROM users WHERE id = ?').get('agent-1')).toEqual({ kind: 'agent' })
     expect(sqlite.prepare('SELECT assignee_id FROM tasks WHERE id = ?').get('task-1')).toEqual({ assignee_id: 'agent-1' })
     expect(sqlite.prepare('SELECT priority, active_run_id FROM tasks WHERE id = ?').get('task-1')).toEqual({ priority: 'normal', active_run_id: null })
+    expect(sqlite.prepare('SELECT number FROM task_numbers WHERE task_id = ?').get('task-1')).toEqual({ number: 1001 })
     expect(sqlite.prepare('SELECT status, progress, task_status_before FROM task_runs WHERE id = ?').get('run-1')).toEqual({ status: 'running', progress: 'Thinking', task_status_before: 'ready' })
   })
 
@@ -160,6 +165,39 @@ describe('D1 bootstrap schema', () => {
 
     expect(sqlite.prepare('SELECT kind FROM users WHERE id = ?').get('human-1')).toEqual({ kind: 'human' })
     expect(sqlite.prepare('SELECT author_id FROM messages WHERE id = ?').get('message-1')).toEqual({ author_id: 'human-1' })
+    sqlite.close()
+  })
+
+  it('backfills stable task numbers and lets the database assign every later number', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      INSERT INTO tasks VALUES ('old-a', '2001 — Preserve this number', '2026-09-01T00:00:00.000Z');
+      INSERT INTO tasks VALUES ('old-b', 'No manual number', '2026-09-02T00:00:00.000Z');
+      INSERT INTO tasks VALUES ('old-c', '3000 — Duplicate prefix', '2026-09-03T00:00:00.000Z');
+      INSERT INTO tasks VALUES ('old-d', '3000 — Duplicate prefix again', '2026-09-04T00:00:00.000Z');
+    `)
+
+    sqlite.exec(d1ExecSql(taskNumbersSql))
+
+    expect(sqlite.prepare('SELECT task_id, number FROM task_numbers ORDER BY number').all()).toEqual([
+      { task_id: 'old-a', number: 2001 },
+      { task_id: 'old-b', number: 2002 },
+      { task_id: 'old-c', number: 2003 },
+      { task_id: 'old-d', number: 2004 },
+    ])
+    sqlite.exec("INSERT INTO tasks VALUES ('new-a', 'Created after migration', '2026-09-05T00:00:00.000Z')")
+    sqlite.exec("DELETE FROM tasks WHERE id = 'old-b'")
+    sqlite.exec("INSERT INTO tasks VALUES ('new-b', 'Created after a deletion', '2026-09-06T00:00:00.000Z')")
+    expect(sqlite.prepare('SELECT number FROM task_numbers WHERE task_id = ?').get('new-a')).toEqual({ number: 2005 })
+    expect(sqlite.prepare('SELECT number FROM task_numbers WHERE task_id = ?').get('new-b')).toEqual({ number: 2006 })
+    expect(sqlite.prepare('SELECT next_number FROM task_number_sequence WHERE id = 1').get()).toEqual({ next_number: 2007 })
+    expect(() => sqlite.exec("INSERT INTO task_numbers VALUES ('old-b', 2001)")).toThrow()
     sqlite.close()
   })
 

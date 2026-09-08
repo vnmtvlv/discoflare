@@ -16,10 +16,11 @@ export default defineEventHandler(async (event) => {
   const db = getDb(env.DB)
   const task = await requireTask(env, id)
   if (task.status === 'running') fail(409, 'task_running', 'Cancel the running task before deleting it')
-  const attachments = await db.select({ r2Key: taskAttachments.r2Key }).from(taskAttachments).where(eq(taskAttachments.taskId, id))
-  await db.delete(tasks).where(eq(tasks.id, id))
-  await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task.delete', targetType: 'task', targetId: id, meta: { boardId: task.boardId, title: task.title } })
+  const taskId = task.id
+  const attachments = await db.select({ r2Key: taskAttachments.r2Key }).from(taskAttachments).where(eq(taskAttachments.taskId, taskId))
+  await db.delete(tasks).where(eq(tasks.id, taskId))
+  await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task.delete', targetType: 'task', targetId: taskId, meta: { boardId: task.boardId, title: task.title } })
   if (attachments.length) waitUntil(Promise.all(attachments.map(item => env.FILES.delete(item.r2Key))))
-  waitUntil(signalTasksChanged(env, task.boardId, id))
+  waitUntil(signalTasksChanged(env, task.boardId, taskId))
   return { ok: true }
 })

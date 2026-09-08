@@ -90,12 +90,13 @@ export async function createTask(
 export async function updateTask(
   env: DiscoflareEnv,
   actorId: string,
-  id: string,
+  taskReference: string | number,
   input: UpdateTaskInput,
   schedule: Schedule,
 ): Promise<TaskDetailDTO> {
   const db = getDb(env.DB)
-  const task = await requireTask(env, id)
+  const task = await requireTask(env, taskReference)
+  const id = task.id
   if (task.status === 'running') fail(409, 'task_running', 'Cancel the running task before changing it')
   if (input.status && !canSetTaskStatus(task.status as TaskStatus, input.status)) fail(409, 'invalid_status', 'Task status can only enter running through a run')
 
