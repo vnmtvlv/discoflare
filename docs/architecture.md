@@ -15,7 +15,7 @@ Nuxt/Nitro Worker
   ├─ D1          catalog + message history + Data resources
   ├─ R2          FILES
   ├─ KV          TICKETS
-  ├─ ChannelDO   live sockets, typing, huddle flag
+  ├─ ChannelDO   live sockets, typing, huddle lifecycle and schedule alarms
   ├─ WorkspaceDO presence
   ├─ NotificationDO D1 outbox delivery + retries
   ├─ RateLimitDO per ip:/user:
@@ -35,7 +35,7 @@ RealtimeKit
    User-created Databases, Documents, and Canvases are logical resources in this same D1, not separately provisioned Cloudflare databases. Database Fields allocate from bounded typed columns on `database_items`; APIs expose Field ids and types, never physical slot names. Documents store rich text, while Canvases keep positioned Items and Connections in normalized tables. Versions provide optimistic concurrency. Durable Objects are not the source of truth for Data resources.
 3. Workspace DO owns ephemeral presence and recipient-targeted unread signals. It derives online/idle state from visible WebSocket attachments, honors each client's activity-visibility preference, and fans out only message/read identifiers to authorized user sockets; presence and unread truth remain in D1, never on `users` or DO storage.
 4. One Channel DO named `channel:<channelId>` and one Workspace DO named `workspace:main`. Typing is scoped to a Channel DO.
-5. Huddle media never transits the Channel DO.
+5. Every non-Thread chat conversation may own at most one active live session. The Channel DO owns its ephemeral lifecycle and participant-presence projection; D1 owns Scheduled Huddles. A 1:1 Direct Message presents the session as a ringing Call, while a group DM or Channel presents it as a joinable Huddle. RealtimeKit is only the audio/video/screen-share media plane: media never transits the Channel DO, and its credentials and participant tokens never reach another Discoflare installation.
 6. Single Worker. Durable Object classes are exported from `server/cloudflare-entry.ts`.
 7. Authentication has one deployment-selected mode. In `access` mode Cloudflare Access owns login and its email allow policy; the Worker verifies the Access JWT and maps it to an internal human identity. In `builtin` mode Better Auth owns identities and linked accounts. `users.status` and Roles remain the workspace authorization boundary in both modes.
 8. A login method is effective only when both its owner-controlled switch and credentials/capability are present. Deployment credentials override encrypted D1 credentials and are never editable through the app.
@@ -106,7 +106,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 ## Notifications
 
 - Workspace-channel and thread Messages notify only explicitly mentioned Members who can access the Channel. Direct Messages notify every other active participant.
-- A newly started Huddle notifies other active Members who can access its Voice Channel or Direct Message. Join, leave, and end events do not notify.
+- A newly started Huddle notifies other active Members who can access its parent Channel or Direct Message; a 1:1 Call rings the other participant. A Scheduled Huddle uses a Channel DO alarm to become ready and notify eligible participants. Join, leave, and end events do not create push notifications.
 - One outbox row targets one browser subscription. The `(event_id, subscription_id)` key makes producer retries idempotent; deterministic browser notification tags limit visible duplicates after at-least-once delivery.
 - A `404` or `410` push-service response removes the expired subscription. Transient failures use bounded retry and a D1 lease.
 - VAPID keys are deployment configuration and must remain stable. Subscription endpoints are capability URLs and must not appear in logs or APIs.

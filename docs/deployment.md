@@ -50,7 +50,7 @@ To complete first-owner setup after the manual GitHub deployment:
 2. Open `/setup#claim=<ADMIN_SETUP_TOKEN>` on the resulting Worker URL.
 3. Create the owner name and password there. The workspace becomes ready and signs the owner in.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
-5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs huddles; text chat works without it.
+5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs calls or huddles; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that its Computer is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
 ### MCP access
@@ -166,7 +166,7 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 ## Secrets
 
-The owner can configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
+The owner can configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
 
 ```
 wrangler secret put ADMIN_EMAIL

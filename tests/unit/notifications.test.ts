@@ -6,7 +6,7 @@ import {
   pushDeliveryDisposition,
   pushRetryDelayMs,
 } from '../../shared/notifications'
-import { huddleNotificationStatement, messageNotificationStatement } from '../../workers/notifications'
+import { huddleNotificationStatement, messageNotificationStatement, scheduledHuddleNotificationStatement } from '../../workers/notifications'
 import { workerPushRequestInit } from '../../workers/push'
 
 type QueryResult = Record<string, unknown> | Array<Record<string, unknown>> | null
@@ -156,5 +156,31 @@ describe('notification recipients', () => {
     expect(fake.db.statements[1]!.args).toEqual(['actor'])
     expect(statement.args.at(-1)).toBe('other')
     expect(JSON.parse(String(statement.args[3]))).toMatchObject({ tag: 'huddle:meeting', url: '/channels/voice' })
+  })
+
+  it('notifies every participant when a scheduled call becomes ready', async () => {
+    const fake = env([
+      { id: 'dm', name: 'dm', type: 'dm', visibility: 'private', parent_id: null },
+      [{ user_id: 'creator' }, { user_id: 'other' }],
+    ])
+    const statement = await scheduledHuddleNotificationStatement(fake.env, {
+      id: 'schedule',
+      channelId: 'dm',
+      title: 'Planning',
+      startsAt: '2026-09-09T10:00:00.000Z',
+      status: 'ready',
+      createdBy: { id: 'creator', kind: 'human', displayName: 'Alice', avatarR2Key: null },
+      meetingId: null,
+      createdAt: '2026-09-08T10:00:00.000Z',
+      updatedAt: '2026-09-09T10:00:00.000Z',
+    }) as unknown as FakeStatement
+
+    expect(fake.db.statements[1]!.args).toEqual(['dm'])
+    expect(statement.args.slice(-2)).toEqual(['creator', 'other'])
+    expect(JSON.parse(String(statement.args[3]))).toMatchObject({
+      title: 'Scheduled huddle is ready',
+      body: 'Planning',
+      tag: 'huddle-schedule:schedule',
+    })
   })
 })

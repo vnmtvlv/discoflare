@@ -303,6 +303,22 @@ export const channels = sqliteTable('channels', {
   `),
 ])
 
+/** Durable invitations to meet in a conversation. RealtimeKit meetings are created only when somebody joins. */
+export const scheduledHuddles = sqliteTable('scheduled_huddles', {
+  id: text('id').primaryKey(),
+  channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
+  title: text('title').notNull().default(''),
+  startsAt: text('starts_at').notNull(),
+  status: text('status', { enum: ['scheduled', 'ready', 'started', 'cancelled'] }).notNull().default('scheduled'),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  meetingId: text('meeting_id'),
+  ...isoTimestamps(),
+}, table => [
+  index('scheduled_huddles_channel_start_idx').on(table.channelId, table.startsAt),
+  index('scheduled_huddles_status_start_idx').on(table.status, table.startsAt),
+  check('scheduled_huddles_status_check', sql`${table.status} in ('scheduled', 'ready', 'started', 'cancelled')`),
+])
+
 /** Per-role send/attach/huddle exceptions for workspace channels. Threads inherit their parent. */
 export const channelRoleOverrides = sqliteTable('channel_role_overrides', {
   channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
@@ -839,6 +855,7 @@ export const schema = {
   roles,
   channelCategories,
   channels,
+  scheduledHuddles,
   channelRoleOverrides,
   channelMembers,
   messages,

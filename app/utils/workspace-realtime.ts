@@ -40,6 +40,27 @@ export function applyWorkspaceRealtimeEvent(cache: WorkspaceQueryCache, event: W
     if (event.taskId) void cache.invalidateQueries({ queryKey: ['task', event.taskId] })
     return
   }
+  if (event.t === 'huddle.changed') {
+    const update = (old: ChannelList | undefined) => old
+      ? {
+          ...old,
+          channels: old.channels.map(channel => channel.id === event.channelId
+            ? {
+                ...channel,
+                huddle: event.huddle,
+                huddleMeetingId: event.huddle.meetingId,
+              }
+            : channel),
+        }
+      : old
+    cache.setQueriesData<ChannelList>({ queryKey: ['channels'] }, update)
+    cache.setQueriesData<ChannelList>({ queryKey: ['dms'] }, update)
+    return
+  }
+  if (event.t === 'huddle.schedule') {
+    void cache.invalidateQueries({ queryKey: ['scheduled-huddles', event.channelId] })
+    return
+  }
   const readCursor = cache.getQueryData<string>(['readCursor', event.sourceChannelId])
   if (event.t === 'channel.activity') {
     if (!readCursor || readCursor < event.messageId) applyUnread(cache, event.rootChannelId, true, true)

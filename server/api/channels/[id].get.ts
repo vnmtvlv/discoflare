@@ -6,6 +6,7 @@ import { threadTitle } from '../../../shared/threads'
 import { attachments, messages } from '../../../drizzle/schema'
 import { eq } from 'drizzle-orm'
 import { getDb } from '../../utils/db'
+import type { HuddleState } from '../../../shared/types'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -25,6 +26,12 @@ export default defineEventHandler(async (event) => {
     const attachmentRows = await db.select({ filename: attachments.filename }).from(attachments).where(eq(attachments.messageId, ch.parentMessageId))
     title = threadTitle(root?.content ?? '', attachmentRows.map(row => row.filename))
   }
+  let huddle: HuddleState | null = null
+  if (ch.huddleMeetingId) {
+    const stub = asRpc<{ getHuddle: () => Promise<HuddleState> }>(env.CHANNEL_DO.getByName(`channel:${ch.id}`))
+    const current = await stub.getHuddle()
+    if (current.active) huddle = current
+  }
   return {
     channel: {
       id: ch.id,
@@ -40,7 +47,7 @@ export default defineEventHandler(async (event) => {
       parentMessageId: ch.parentMessageId,
       unread: false,
       permissions: access.perms,
-      huddle: null,
+      huddle,
       createdAt: ch.createdAt,
       title,
     },

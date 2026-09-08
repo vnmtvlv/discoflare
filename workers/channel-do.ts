@@ -1,8 +1,8 @@
 import { DurableObject } from 'cloudflare:workers'
 import { z } from 'zod'
-import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
+import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ScheduledHuddleDTO, ServerMsg } from '../shared/types'
 import { extractMentionIds } from '../shared/mentions'
-import { canAccessAgentConversation, isDmType, isVoiceType } from '../shared/dm'
+import { canAccessAgentConversation, isDmType } from '../shared/dm'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '../shared/permissions'
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
@@ -10,7 +10,8 @@ import { asRpc, type DiscoflareEnv } from './env'
 import { createMeeting, endMeeting, loadRealtimeKitConfig, realtimekitConfigured } from './realtimekit'
 import { userFromTicket } from './ticket'
 import { channelHasUnread } from './unread'
-import { huddleNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
+import { huddleNotificationStatement, messageNotificationStatement, scheduledHuddleNotificationStatement, signalNotificationOutbox } from './notifications'
+import { signalHuddleChanged, signalScheduledHuddleReady } from './huddle-events'
 import { signalChannelActivity, signalChannelRead } from './channel-activity'
 import { signalAgentsForMessage } from './agent-ingress'
 import { listAgentTurns } from './agent-turns'
@@ -64,6 +65,9 @@ const emptyHuddle = (): HuddleState => ({
   participantIds: [],
   startedBy: null,
   startedAt: null,
+  kind: 'huddle',
+  title: null,
+  scheduleId: null,
 })
 
 export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
@@ -128,29 +132,29 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
   }
 
-  override async webSocketClose(ws: WebSocket): Promise<void> {
-    const sock = ws.deserializeAttachment() as Sock | null
-    if (!sock?.userId) return
-    const huddle = await this.getHuddle()
-    if (huddle.active && huddle.participantIds.includes(sock.userId)) {
-      huddle.participantIds = huddle.participantIds.filter((id) => id !== sock.userId)
-      await this.setHuddle(huddle)
-      this.broadcast({ t: 'huddle', huddle })
-      this.broadcast({ t: 'voice', voice: huddle })
-      if (huddle.participantIds.length === 0) {
-        await this.ctx.storage.setAlarm(Date.now() + 30_000)
-      }
-    }
+  override async webSocketClose(_ws: WebSocket): Promise<void> {
+    // Chat navigation closes this socket while RealtimeKit media remains joined.
+    // Huddle presence is changed only by the join/leave APIs.
   }
 
   override async alarm(): Promise<void> {
+    const now = Date.now()
     const huddle = await this.getHuddle()
-    if (huddle.active && huddle.participantIds.length === 0) {
-      if (huddle.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
-      await this.setHuddle(emptyHuddle())
-      await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
-      this.broadcast({ t: 'huddle', huddle: emptyHuddle() })
+    const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
+    if (cleanupAt && cleanupAt <= now) {
+      await this.ctx.storage.delete('huddleCleanupAt')
+      if (huddle.active && huddle.participantIds.length === 0) {
+        if (huddle.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
+        await this.setHuddle(emptyHuddle())
+        await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
+        this.broadcast({ t: 'huddle', huddle: emptyHuddle() })
+        this.broadcast({ t: 'voice', voice: emptyHuddle() })
+        this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), emptyHuddle()))
+      }
     }
+    await this.expireHuddleParticipants(now)
+    await this.markDueSchedulesReady(now)
+    await this.refreshAlarm()
   }
 
   async fanout(msg: ServerMsg): Promise<void> {
@@ -278,7 +282,66 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   async getHuddle(): Promise<HuddleState> {
-    return (await this.ctx.storage.get<HuddleState>('huddle')) ?? emptyHuddle()
+    return { ...emptyHuddle(), ...(await this.ctx.storage.get<Partial<HuddleState>>('huddle')) }
+  }
+
+  async refreshScheduleAlarm(): Promise<void> {
+    await this.refreshAlarm()
+  }
+
+  async joinHuddle(userId: string): Promise<HuddleState> {
+    const huddle = await this.getHuddle()
+    if (!huddle.active) throw new Error('No active huddle')
+    if (!huddle.participantIds.includes(userId)) huddle.participantIds.push(userId)
+    const presence = await this.huddlePresence()
+    presence[userId] = Date.now() + 45_000
+    await this.ctx.storage.put('huddlePresence', presence)
+    await this.ctx.storage.delete('huddleCleanupAt')
+    await this.setHuddle(huddle)
+    await this.refreshAlarm()
+    this.broadcast({ t: 'huddle', huddle })
+    this.broadcast({ t: 'voice', voice: huddle })
+    return huddle
+  }
+
+  async leaveHuddle(userId: string): Promise<HuddleState> {
+    const huddle = await this.getHuddle()
+    huddle.participantIds = huddle.participantIds.filter(id => id !== userId)
+    const presence = await this.huddlePresence()
+    const { [userId]: _removed, ...remainingPresence } = presence
+    await this.ctx.storage.put('huddlePresence', remainingPresence)
+    await this.setHuddle(huddle)
+    this.broadcast({ t: 'huddle', huddle })
+    this.broadcast({ t: 'voice', voice: huddle })
+    if (huddle.active && huddle.participantIds.length === 0) {
+      const authz = await this.loadAuthz(userId)
+      await this.scheduleCleanup(isDmType(authz?.type ?? '') ? 30_000 : 30 * 60 * 1000)
+    }
+    return huddle
+  }
+
+  async pingHuddle(userId: string): Promise<void> {
+    const huddle = await this.getHuddle()
+    if (!huddle.active || !huddle.participantIds.includes(userId)) return
+    const presence = await this.huddlePresence()
+    presence[userId] = Date.now() + 45_000
+    await this.ctx.storage.put('huddlePresence', presence)
+    await this.refreshAlarm()
+  }
+
+  async endHuddle(actor?: PublicUser): Promise<HuddleState> {
+    const current = await this.getHuddle()
+    if (current.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), current.meetingId)
+    const huddle = emptyHuddle()
+    await this.setHuddle(huddle)
+    await this.ctx.storage.delete('huddleCleanupAt')
+    await this.ctx.storage.delete('huddlePresence')
+    await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
+    await this.refreshAlarm()
+    this.broadcast({ t: 'huddle', huddle })
+    this.broadcast({ t: 'voice', voice: huddle })
+    this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), huddle, actor))
+    return huddle
   }
 
   private async handle(ws: WebSocket, sock: Sock, raw: string) {
@@ -314,7 +377,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         break
       case 'huddle.start':
       case 'voice.join':
-        await this.onHuddleStart(ws, sock, authz)
+        await this.onHuddleStart(ws, sock, authz, (JSON.parse(raw) as { scheduleId?: string }).scheduleId)
         break
       case 'huddle.join':
         await this.onHuddleJoin(ws, sock, authz)
@@ -571,9 +634,13 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     this.ctx.waitUntil(signalChannelRead(this.env, sock.userId, this.channelId(), cursor))
   }
 
-  private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz) {
-    if (!isVoiceType(authz.type) && !isDmType(authz.type)) {
-      this.send(ws, { t: 'error', code: 'forbidden', message: 'Huddles are for voice channels and DMs' })
+  private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz, scheduleId?: string) {
+    if (authz.type === 'thread') {
+      this.send(ws, { t: 'error', code: 'forbidden', message: 'Start the huddle in the parent conversation' })
+      return
+    }
+    if (authz.frozen) {
+      this.send(ws, { t: 'error', code: 'frozen', message: 'You can no longer start a call in this Direct Message' })
       return
     }
     if (!isDmType(authz.type) && !hasPermission(authz.perms, Permission.startHuddle)) {
@@ -593,13 +660,28 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
     let huddle = await this.getHuddle()
     if (huddle.active && huddle.meetingId) {
-      if (!huddle.participantIds.includes(sock.userId)) huddle.participantIds.push(sock.userId)
-      await this.setHuddle(huddle)
-      this.broadcast({ t: 'huddle', huddle })
-      this.broadcast({ t: 'voice', voice: huddle })
+      await this.joinHuddle(sock.userId)
       return
     }
-    const meeting = await createMeeting(realtimekit, `huddle:${this.channelId()}`)
+
+    let schedule: { id: string; title: string } | null = null
+    if (scheduleId) {
+      schedule = await this.env.DB.prepare(
+        `SELECT id, title FROM scheduled_huddles
+         WHERE id = ? AND channel_id = ? AND status IN ('scheduled', 'ready')`,
+      ).bind(scheduleId, this.channelId()).first<{ id: string; title: string }>()
+      if (!schedule) {
+        this.send(ws, { t: 'error', code: 'not_found', message: 'Scheduled huddle not found' })
+        return
+      }
+    }
+
+    const participantCount = isDmType(authz.type)
+      ? (await this.env.DB.prepare('SELECT count(*) AS count FROM channel_members WHERE channel_id = ?').bind(this.channelId()).first<{ count: number }>())?.count ?? 0
+      : 0
+    const kind = isDmType(authz.type) && participantCount === 2 ? 'call' : 'huddle'
+    const title = schedule?.title || null
+    const meeting = await createMeeting(realtimekit, title || `${kind}:${this.channelId()}`)
     huddle = {
       active: true,
       huddleId: meeting.id,
@@ -607,43 +689,43 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       participantIds: [sock.userId],
       startedBy: sock.userId,
       startedAt: nowIso(),
+      kind,
+      title,
+      scheduleId: schedule?.id ?? null,
     }
     await this.setHuddle(huddle)
-    const notification = await huddleNotificationStatement(this.env, this.channelId(), meeting.id, sock.user)
+    await this.ctx.storage.put('huddlePresence', { [sock.userId]: Date.now() + 45_000 })
+    await this.ctx.storage.delete('huddleCleanupAt')
+    const notification = await huddleNotificationStatement(this.env, this.channelId(), meeting.id, sock.user, { kind, title })
     await this.env.DB.batch([
       this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = ? WHERE id = ?').bind(meeting.id, this.channelId()),
+      ...(schedule
+        ? [this.env.DB.prepare(
+            `UPDATE scheduled_huddles
+             SET status = 'started', meeting_id = ?, updated_at = ?
+             WHERE id = ?`,
+          ).bind(meeting.id, nowIso(), schedule.id)]
+        : []),
       this.env.DB.prepare(
         'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).bind(newId(), sock.userId, 'huddle.start', 'channel', this.channelId(), '{}', nowIso()),
       ...(notification ? [notification] : []),
     ])
     this.ctx.waitUntil(signalNotificationOutbox(this.env))
+    this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), huddle, sock.user))
+    await this.refreshAlarm()
     this.broadcast({ t: 'huddle', huddle })
     this.broadcast({ t: 'voice', voice: huddle })
+    if (schedule) this.broadcast({ t: 'huddle.schedule', channelId: this.channelId() })
   }
 
   private async onHuddleJoin(ws: WebSocket, sock: Sock, _authz: Authz) {
-    const huddle = await this.getHuddle()
-    if (!huddle.active) {
-      this.send(ws, { t: 'error', code: 'not_found', message: 'No active huddle' })
-      return
-    }
-    if (!huddle.participantIds.includes(sock.userId)) huddle.participantIds.push(sock.userId)
-    await this.setHuddle(huddle)
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
+    try { await this.joinHuddle(sock.userId) }
+    catch { this.send(ws, { t: 'error', code: 'not_found', message: 'No active huddle' }) }
   }
 
   private async onHuddleLeave(sock: Sock) {
-    const huddle = await this.getHuddle()
-    huddle.participantIds = huddle.participantIds.filter((id) => id !== sock.userId)
-    await this.setHuddle(huddle)
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
-    if (huddle.participantIds.length === 0) {
-      const ms = isDmType((await this.loadAuthz(sock.userId))?.type ?? '') ? 30_000 : 30 * 60 * 1000
-      await this.ctx.storage.setAlarm(Date.now() + ms)
-    }
+    await this.leaveHuddle(sock.userId)
   }
 
   private async hello(ws: WebSocket, user: PublicUser) {
@@ -898,6 +980,109 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       deletedAt: row.deleted_at,
       createdAt: row.created_at,
     }
+  }
+
+  private async markDueSchedulesReady(now: number) {
+    const at = new Date(now).toISOString()
+    const rows = await this.env.DB.prepare(
+      `SELECT sh.id, sh.channel_id, sh.title, sh.starts_at, sh.status, sh.created_by,
+              sh.meeting_id, sh.created_at, sh.updated_at,
+              u.kind, u.display_name, u.avatar_r2_key
+       FROM scheduled_huddles sh
+       JOIN users u ON u.id = sh.created_by
+       WHERE sh.channel_id = ? AND sh.status = 'scheduled' AND sh.starts_at <= ?
+       ORDER BY sh.starts_at, sh.id`,
+    ).bind(this.channelId(), at).all<{
+      id: string
+      channel_id: string
+      title: string
+      starts_at: string
+      status: 'scheduled'
+      created_by: string
+      meeting_id: string | null
+      created_at: string
+      updated_at: string
+      kind: 'human' | 'agent'
+      display_name: string
+      avatar_r2_key: string | null
+    }>()
+
+    for (const row of rows.results ?? []) {
+      const schedule: ScheduledHuddleDTO = {
+        id: row.id,
+        channelId: row.channel_id,
+        title: row.title,
+        startsAt: row.starts_at,
+        status: 'ready',
+        createdBy: {
+          id: row.created_by,
+          kind: row.kind,
+          displayName: row.display_name,
+          avatarR2Key: row.avatar_r2_key,
+        },
+        meetingId: row.meeting_id,
+        createdAt: row.created_at,
+        updatedAt: at,
+      }
+      const notification = await scheduledHuddleNotificationStatement(this.env, schedule)
+      await this.env.DB.batch([
+        this.env.DB.prepare(
+          `UPDATE scheduled_huddles SET status = 'ready', updated_at = ?
+           WHERE id = ? AND status = 'scheduled'`,
+        ).bind(at, row.id),
+        this.env.DB.prepare(
+          'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).bind(newId(), row.created_by, 'huddle.schedule.ready', 'scheduled_huddle', row.id, JSON.stringify({ channelId: this.channelId() }), at),
+        ...(notification ? [notification] : []),
+      ])
+      this.broadcast({ t: 'huddle.schedule', channelId: this.channelId() })
+      this.ctx.waitUntil(signalScheduledHuddleReady(this.env, schedule))
+      this.ctx.waitUntil(signalNotificationOutbox(this.env))
+    }
+  }
+
+  private async scheduleCleanup(delayMs: number) {
+    await this.ctx.storage.put('huddleCleanupAt', Date.now() + delayMs)
+    await this.refreshAlarm()
+  }
+
+  private async huddlePresence(): Promise<Record<string, number>> {
+    return await this.ctx.storage.get<Record<string, number>>('huddlePresence') ?? {}
+  }
+
+  private async expireHuddleParticipants(now: number) {
+    const huddle = await this.getHuddle()
+    if (!huddle.active || !huddle.participantIds.length) return
+    const presence = await this.huddlePresence()
+    const alive = huddle.participantIds.filter(userId => (presence[userId] ?? 0) > now)
+    if (alive.length === huddle.participantIds.length) return
+    huddle.participantIds = alive
+    const aliveSet = new Set(alive)
+    const remainingPresence = Object.fromEntries(Object.entries(presence).filter(([userId]) => aliveSet.has(userId)))
+    await this.ctx.storage.put('huddlePresence', remainingPresence)
+    await this.setHuddle(huddle)
+    this.broadcast({ t: 'huddle', huddle })
+    this.broadcast({ t: 'voice', voice: huddle })
+    if (!alive.length) {
+      const authz = await this.loadAuthz(huddle.startedBy ?? '')
+      await this.scheduleCleanup(isDmType(authz?.type ?? '') ? 30_000 : 30 * 60 * 1000)
+    }
+  }
+
+  private async refreshAlarm() {
+    const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
+    const presence = await this.huddlePresence()
+    const presenceAt = Object.values(presence).length ? Math.min(...Object.values(presence)) : undefined
+    const next = await this.env.DB.prepare(
+      `SELECT starts_at FROM scheduled_huddles
+       WHERE channel_id = ? AND status = 'scheduled'
+       ORDER BY starts_at LIMIT 1`,
+    ).bind(this.channelId()).first<{ starts_at: string }>()
+    const scheduleAt = next ? Date.parse(next.starts_at) : Number.NaN
+    const candidates = [cleanupAt, presenceAt, Number.isFinite(scheduleAt) ? scheduleAt : undefined]
+      .filter((value): value is number => typeof value === 'number')
+    if (candidates.length) await this.ctx.storage.setAlarm(Math.max(Date.now(), Math.min(...candidates)))
+    else await this.ctx.storage.deleteAlarm()
   }
 
   private async setHuddle(huddle: HuddleState) {

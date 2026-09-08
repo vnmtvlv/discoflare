@@ -1,4 +1,4 @@
-import type { PublicUser } from '../shared/types'
+import type { PublicUser, ScheduledHuddleDTO } from '../shared/types'
 import { channelPath } from '../shared/paths'
 import { notificationPreview, type NotificationKind, type PushNotificationPayload } from '../shared/notifications'
 import type { DiscoflareEnv } from './env'
@@ -41,13 +41,20 @@ async function channelAndRoot(env: DiscoflareEnv, channelId: string): Promise<{ 
   return root ? { channel, root } : null
 }
 
-async function activeDmRecipients(env: DiscoflareEnv, channelId: string, actorId: string): Promise<string[]> {
-  const rows = await env.DB.prepare(
-    `SELECT cm.user_id
-     FROM channel_members cm
-     JOIN users u ON u.id = cm.user_id AND u.status = 'active'
-     WHERE cm.channel_id = ? AND cm.user_id <> ?`,
-  ).bind(channelId, actorId).all<{ user_id: string }>()
+async function activeDmRecipients(env: DiscoflareEnv, channelId: string, actorId?: string): Promise<string[]> {
+  const rows = actorId
+    ? await env.DB.prepare(
+        `SELECT cm.user_id
+         FROM channel_members cm
+         JOIN users u ON u.id = cm.user_id AND u.status = 'active'
+         WHERE cm.channel_id = ? AND cm.user_id <> ?`,
+      ).bind(channelId, actorId).all<{ user_id: string }>()
+    : await env.DB.prepare(
+        `SELECT cm.user_id
+         FROM channel_members cm
+         JOIN users u ON u.id = cm.user_id AND u.status = 'active'
+         WHERE cm.channel_id = ?`,
+      ).bind(channelId).all<{ user_id: string }>()
   return (rows.results ?? []).map(row => row.user_id)
 }
 
@@ -70,13 +77,17 @@ async function accessibleMentions(env: DiscoflareEnv, root: ChannelRow, actorId:
   return (rows.results ?? []).map(row => row.id)
 }
 
-async function huddleRecipients(env: DiscoflareEnv, channel: ChannelRow, actorId: string): Promise<string[]> {
+async function huddleRecipients(env: DiscoflareEnv, channel: ChannelRow, actorId?: string): Promise<string[]> {
   if (channel.type === 'dm' || channel.visibility === 'private') {
     return activeDmRecipients(env, channel.id, actorId)
   }
-  const rows = await env.DB.prepare(
-    `SELECT id FROM users WHERE status = 'active' AND id <> ?`,
-  ).bind(actorId).all<{ id: string }>()
+  const rows = actorId
+    ? await env.DB.prepare(
+        `SELECT id FROM users WHERE status = 'active' AND id <> ?`,
+      ).bind(actorId).all<{ id: string }>()
+    : await env.DB.prepare(
+        `SELECT id FROM users WHERE status = 'active'`,
+      ).all<{ id: string }>()
   return (rows.results ?? []).map(row => row.id)
 }
 
@@ -137,6 +148,7 @@ export async function huddleNotificationStatement(
   channelId: string,
   meetingId: string,
   actor: PublicUser,
+  details: { kind?: 'call' | 'huddle'; title?: string | null } = {},
 ): Promise<D1PreparedStatement | null> {
   const channels = await channelAndRoot(env, channelId)
   if (!channels || channels.channel.type === 'thread') return null
@@ -147,10 +159,35 @@ export async function huddleNotificationStatement(
     channelId,
     recipientIds,
     payload: {
-      title: `${actor.displayName} started a huddle in ${channels.channel.name}`,
-      body: 'Tap to join',
+      title: details.kind === 'call'
+        ? `${actor.displayName} is calling`
+        : `${actor.displayName} started a huddle in ${channels.channel.name}`,
+      body: details.title || 'Tap to join',
       tag: `huddle:${meetingId}`,
       url: channelPath(channelId),
+      icon: '/android-chrome-192x192.png',
+      badge: '/favicon-32x32.png',
+    },
+  })
+}
+
+export async function scheduledHuddleNotificationStatement(
+  env: DiscoflareEnv,
+  schedule: ScheduledHuddleDTO,
+): Promise<D1PreparedStatement | null> {
+  const channels = await channelAndRoot(env, schedule.channelId)
+  if (!channels || channels.channel.type === 'thread') return null
+  const recipientIds = await huddleRecipients(env, channels.channel)
+  return outboxStatement(env, {
+    eventId: `huddle-schedule:${schedule.id}`,
+    kind: 'huddle_started',
+    channelId: schedule.channelId,
+    recipientIds,
+    payload: {
+      title: 'Scheduled huddle is ready',
+      body: schedule.title || channels.channel.name,
+      tag: `huddle-schedule:${schedule.id}`,
+      url: channelPath(schedule.channelId),
       icon: '/android-chrome-192x192.png',
       badge: '/favicon-32x32.png',
     },

@@ -77,7 +77,7 @@ async function hide(id: string) {
 }
 
 function inCall(ch: ChannelDTO) {
-  return Boolean(ch.huddle?.active || (huddle.state?.active && selected.value === ch.id && huddle.state.participantIds.length))
+  return Boolean(huddle.stateFor(ch.id)?.active || ch.huddle?.active)
 }
 
 function titleOf(ch: ChannelDTO) {

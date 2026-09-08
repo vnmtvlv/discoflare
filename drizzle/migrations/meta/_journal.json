@@ -134,6 +134,27 @@
       "when": 1788710400000,
       "tag": "0018_documents_and_canvases",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1788796800000,
+      "tag": "0019_mcp_access_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1788883200000,
+      "tag": "0020_task_numbers",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1788969600000,
+      "tag": "0021_realtime_v1",
+      "breakpoints": true
     }
   ]
 }

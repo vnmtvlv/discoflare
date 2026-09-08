@@ -44,6 +44,10 @@ function participantName(id: string) {
   return membersQ.data.value?.members.find(member => member.user.id === id)?.user.displayName || 'Member'
 }
 
+function huddleFor(ch: Ch) {
+  return huddle.stateFor(ch.id) ?? ch.huddle
+}
+
 watch(() => channelsQ.data.value?.channels, (list) => {
   if (!list?.length) return
   if (route.path === '/channels') {
@@ -80,6 +84,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               {{ ch.name }}
               <template #trailing>
                 <UIcon v-if="ch.visibility === 'private'" name="i-ph-lock" class="size-3.5 shrink-0 text-dimmed" />
+                <UIcon v-if="huddleFor(ch)?.active" name="i-ph-waveform" class="size-3.5 shrink-0 text-success" />
                 <UBadge
                   v-if="ch.unread && selected !== ch.id"
                   color="primary"
@@ -91,11 +96,11 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               </template>
             </LayoutNavRow>
             <ul
-              v-if="isVoiceType(ch.type) && huddle.state?.active && selected === ch.id"
+              v-if="huddleFor(ch)?.active"
               class="space-y-0.5 pb-1 pl-8 pr-1"
             >
               <li
-                v-for="id in huddle.state.participantIds"
+                v-for="id in huddleFor(ch)?.participantIds ?? []"
                 :key="id"
                 class="flex h-7 items-center gap-2 text-sm text-default"
               >
