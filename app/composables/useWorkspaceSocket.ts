@@ -58,10 +58,36 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
           connection.value = 'connected'
         }
         else if (parsed.t === 'presence') presence.apply(parsed.users)
-        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'members.changed') {
+        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'members.changed' || parsed.t === 'huddle.changed' || parsed.t === 'huddle.schedule') {
           const qc = queryClient()
           if (qc) applyWorkspaceRealtimeEvent(qc, parsed)
-          if (parsed.t === 'channel.activity') {
+          if (parsed.t === 'huddle.changed') {
+            const huddle = useHuddleStore()
+            const toast = useToast()
+            huddle.receiveHuddle(parsed)
+            if (parsed.huddle.active && !parsed.ring && huddle.viewingChannelId !== parsed.channelId) {
+              toast.add({
+                title: parsed.notification.title,
+                description: parsed.notification.body,
+                icon: 'i-ph-waveform',
+                actions: [{ label: 'Open', onClick: () => navigateTo(parsed.notification.url) }],
+              })
+            }
+          }
+          else if (parsed.t === 'huddle.schedule') {
+            const huddle = useHuddleStore()
+            const toast = useToast()
+            huddle.receiveSchedule(parsed)
+            if (!parsed.ring) {
+              toast.add({
+                title: parsed.notification.title,
+                description: parsed.notification.body,
+                icon: 'i-ph-calendar-check',
+                actions: [{ label: 'Open', onClick: () => navigateTo(parsed.notification.url) }],
+              })
+            }
+          }
+          else if (parsed.t === 'channel.activity') {
             attention.notifyActivity(parsed)
           }
           else if (parsed.t === 'channel.read') attention.sync()

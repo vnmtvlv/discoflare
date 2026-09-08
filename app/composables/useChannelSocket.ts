@@ -146,7 +146,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             for (const message of outstanding.values()) socket.send(JSON.stringify(message))
             for (const queued of pending.splice(0)) socket.send(JSON.stringify(queued))
             if (pendingRead) socket.send(JSON.stringify(pendingRead))
-            if (parsed.huddle) huddle.setState(parsed.huddle)
+            if (parsed.huddle) huddle.setState(id, parsed.huddle)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
             presence.hydrateAgentTurns(id, parsed.agentTurns ?? [])
             break
@@ -204,7 +204,10 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             break
           case 'huddle':
           case 'voice':
-            huddle.setState(parsed.t === 'voice' ? parsed.voice : parsed.huddle)
+            huddle.setState(id, parsed.t === 'voice' ? parsed.voice : parsed.huddle)
+            break
+          case 'huddle.schedule':
+            void queryClient()?.invalidateQueries({ queryKey: ['scheduled-huddles', parsed.channelId] })
             break
           case 'dm.participants':
             void queryClient()?.invalidateQueries({ queryKey: ['dms'] })

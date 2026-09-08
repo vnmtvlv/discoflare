@@ -50,6 +50,12 @@ const workspacesQ = useQuery({
 const channels = computed(() => channelsQ.data.value?.channels ?? [])
 const categories = computed(() => channelsQ.data.value?.categories ?? [])
 const mailboxes = computed(() => mailboxesQ.data.value?.mailboxes ?? [])
+const connectedPath = computed(() => {
+  const id = huddle.currentChannelId
+  if (!id) return '/channels'
+  const conversation = [...channels.value, ...(dmsQ.data.value?.channels ?? [])].find(item => item.id === id)
+  return conversation ? channelPath(conversation) : `/channels/${id}`
+})
 
 /** The mode is read off the route, so a deep link lands in the right one. */
 const mode = computed<Mode>(() => {
@@ -103,10 +109,16 @@ function clearCommandHeld() {
   commandHeld.value = false
 }
 
+function leaveHuddleOnPageExit() {
+  if (!huddle.currentChannelId || huddle.connection !== 'live') return
+  navigator.sendBeacon?.(`/api/huddles/${huddle.currentChannelId}/leave`)
+}
+
 onMounted(() => {
   window.addEventListener('keydown', onAppShortcutKeydown)
   window.addEventListener('keyup', onAppShortcutKeyup)
   window.addEventListener('blur', clearCommandHeld)
+  window.addEventListener('pagehide', leaveHuddleOnPageExit)
 })
 
 onBeforeUnmount(() => {
@@ -114,10 +126,10 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onAppShortcutKeydown)
   window.removeEventListener('keyup', onAppShortcutKeyup)
   window.removeEventListener('blur', clearCommandHeld)
+  window.removeEventListener('pagehide', leaveHuddleOnPageExit)
 })
 
 const newName = ref('')
-const newType = ref<'text' | 'voice'>('text')
 const newPrivate = ref(false)
 const newMemberIds = ref<string[]>([])
 const newCategoryName = ref('')
@@ -167,11 +179,6 @@ const serverItems = computed<DropdownMenuItem[][]>(() => {
   return [invite, manage, switcher].filter(group => group.length)
 })
 
-const channelTypes = [
-  { label: 'Text', value: 'text', icon: 'i-ph-hash', description: 'Chat, images, GIFs' },
-  { label: 'Voice', value: 'voice', icon: 'i-ph-speaker-high', description: 'Hang out together' },
-]
-
 async function createChannel() {
   if (!newName.value.trim()) return
   creating.value = true
@@ -180,7 +187,7 @@ async function createChannel() {
       method: 'POST',
       body: {
         name: newName.value.trim().toLowerCase().replace(/\s+/g, '-'),
-        type: newType.value,
+        type: 'text',
         visibility: newPrivate.value ? 'private' : 'workspace',
         categoryId: nav.createChannelCategoryId.value,
         memberIds: newPrivate.value ? newMemberIds.value : undefined,
@@ -301,19 +308,24 @@ watch(nav.inviteOpen, (open) => {
       <LayoutMailNav v-else />
     </div>
 
-    <div v-if="huddle.connection === 'live'" class="mx-2 mb-0 rounded-lg bg-elevated px-2 py-2">
-      <p class="text-xs font-semibold text-success">Voice Connected</p>
-      <p class="truncate text-[11px] text-muted">{{ channels.find(channel => channel.id === (route.params.channel || route.params.channelId))?.name || 'Huddle' }}</p>
-    </div>
+    <button
+      v-if="huddle.connection === 'live' && huddle.currentChannelId"
+      type="button"
+      class="mx-2 mb-0 rounded-lg bg-success/10 px-3 py-2 text-start hover:bg-success/15"
+      @click="navigateTo(connectedPath)"
+    >
+      <p class="flex items-center gap-1.5 text-xs font-semibold text-success">
+        <UIcon :name="huddle.currentKind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" class="size-3.5" />
+        Connected
+      </p>
+      <p class="truncate text-[11px] text-muted">{{ huddle.currentTitle || 'Huddle' }}</p>
+    </button>
     <LayoutUserPanel />
     <SettingsWorkspaceSettings v-if="canOpenWorkspaceSettings" v-model:open="nav.workspaceSettingsOpen.value" :workspace-id="workspaceId" />
 
     <UModal v-model:open="nav.createChannelOpen.value" title="Create Channel">
       <template #body>
         <div class="space-y-4">
-          <UFormField label="Channel type">
-            <URadioGroup v-model="newType" variant="card" orientation="vertical" :items="channelTypes" />
-          </UFormField>
           <UFormField label="Channel name" class="w-full">
             <UInput v-model="newName" placeholder="new-channel" autofocus class="w-full" @keyup.enter="createChannel" />
           </UFormField>
@@ -364,5 +376,6 @@ watch(nav.inviteOpen, (open) => {
         </UInput>
       </template>
     </UModal>
+    <HuddleIncomingCall />
   </div>
 </template>

@@ -1,29 +1,21 @@
-import { eq } from 'drizzle-orm'
-import { channels } from '../../../../drizzle/schema'
-import { Permission } from '../../../../shared/permissions'
-import { requireChannelMember } from '../../../utils/guards'
+import { hasPermission, Permission } from '../../../../shared/permissions'
+import { requireChannelAccess } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
-import { getDb } from '../../../utils/db'
-import { endMeeting, loadRealtimeKitConfig } from '../../../../workers/realtimekit'
 import { writeAudit } from '../../../utils/messages'
 
 export default defineEventHandler(async (event) => {
   const channelId = getRouterParam(event, 'channelId')!
-  const member = await requireChannelMember(event, channelId, Permission.manageChannels)
+  const member = await requireChannelAccess(event, channelId)
   const { env } = cf(event)
-  const db = getDb(env.DB)
-  const ch = member.channel
-  if (!ch.huddleMeetingId) fail(404, 'not_found', 'No huddle to end')
-  await endMeeting(await loadRealtimeKitConfig(env), ch.huddleMeetingId)
-  await db.update(channels).set({ huddleMeetingId: null }).where(eq(channels.id, channelId))
-  try {
-    const stub = asRpc<{ fanout: (msg: unknown) => Promise<void> }>(env.CHANNEL_DO.getByName(`channel:${channelId}`))
-    await stub.fanout({
-      t: 'huddle',
-      huddle: { active: false, huddleId: null, meetingId: null, participantIds: [], startedBy: null, startedAt: null },
-    })
-  }
-  catch { /* ignore */ }
+  const stub = asRpc<{
+    getHuddle: () => Promise<{ active: boolean; startedBy: string | null }>
+    endHuddle: (actor: typeof member.user) => Promise<unknown>
+  }>(env.CHANNEL_DO.getByName(`channel:${channelId}`))
+  const huddle = await stub.getHuddle()
+  if (!huddle.active) fail(404, 'not_found', 'No huddle to end')
+  const canManage = member.isOwner || hasPermission(member.perms, Permission.manageChannels)
+  if (huddle.startedBy !== member.user.id && !canManage) fail(403, 'forbidden', 'Only the starter or a channel manager can end this huddle')
+  await stub.endHuddle(member.user)
   await writeAudit(env, { workspaceId: member.workspaceId, actorId: member.user.id, action: 'huddle.end', targetType: 'channel', targetId: channelId })
   return { ok: true }
 })
