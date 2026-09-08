@@ -119,6 +119,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     const stillIn = new Set(memberRows.map((m) => m.userId))
     const frozen = parts.some((p) => !stillIn.has(p.userId))
     const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
+    if (flag === Permission.startHuddle && frozen) fail(403, 'forbidden', 'This direct message can no longer start calls')
     if (flag !== undefined && !frozen && !hasPermission(perms, flag) && flag !== Permission.sendMessages) {
       fail(403, 'forbidden', 'Missing permission')
     }

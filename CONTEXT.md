@@ -1,6 +1,6 @@
 # Discoflare
 
-Self-hosted team chat that runs on a Cloudflare account. One operator, many members, text plus optional voice huddles.
+Self-hosted team chat that runs on a Cloudflare account. One operator, many members, text plus optional realtime calls and huddles.
 
 ## Language
 
@@ -33,12 +33,20 @@ A private Channel among workspace members. Two members is 1:1; three to twenty-f
 _Avoid_: Friend chat, private message, Group DM as a separate kind, DM voice channel
 
 **Huddle**:
-A live voice session, optionally with camera, on a Voice Channel or Direct Message.
-_Avoid_: Call, meeting (except UI copy), a second conversation entity
+A live session in a workspace Channel or group Direct Message. It starts as audio and participants may turn on camera or share their screen. The parent conversation owns access and there is at most one active Huddle per conversation.
+_Avoid_: Permanent audio room, meeting as a second conversation entity
+
+**Call**:
+The 1:1 Direct Message presentation of a live session. A Call rings the other participant; it uses the same lifecycle and RealtimeKit media plane as a Huddle.
+_Avoid_: Separate call store, separate call permissions
+
+**Scheduled Huddle**:
+A D1-backed event attached to a Channel or Direct Message. At its start time it becomes ready and notifies eligible participants; the first participant starts the live session.
+_Avoid_: Calendar as a separate product, scheduled RealtimeKit meeting as source of truth
 
 **Voice channel**:
-A workspace Channel of type `voice` whose huddle is the room itself.
-_Avoid_: DM voice, huddle channel
+A legacy workspace Channel type retained for existing installations. New Channels are ordinary text Channels because every Channel can host a Huddle.
+_Avoid_: Creating a new permanent voice-only taxonomy
 
 **Thread**:
 A child Channel of type `thread` hanging off a text or Direct Message Channel.

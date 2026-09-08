@@ -7,6 +7,7 @@ import taskManagementSql from '../../drizzle/migrations/0009_task_management.sql
 import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_boundary.sql?raw'
 import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
 import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
+import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -56,10 +57,30 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE `task_numbers`')
     expect(INIT_SQL).toContain('CREATE TABLE `task_number_sequence`')
     expect(INIT_SQL).toContain('CREATE TRIGGER `tasks_assign_number_after_insert`')
+    expect(INIT_SQL).toContain('CREATE TABLE `scheduled_huddles`')
     expect(INIT_SQL).not.toContain('CREATE TABLE IF NOT EXISTS `sessions`')
     expect(INIT_SQL).not.toContain('password_hash')
     expect(INIT_SQL).not.toContain('guild_id')
     expect(INIT_SQL).not.toContain('dm_participants')
+  })
+
+  it('adds conversation-scoped scheduled huddles without changing existing channels', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(INIT_SQL)
+    sqlite.exec("INSERT INTO roles (id, key, name, permissions_bitmask) VALUES ('role', 'member', 'Member', 0)")
+    sqlite.exec("INSERT INTO identity_keys (id, name, email) VALUES ('user', 'User', 'user@example.com')")
+    sqlite.exec("INSERT INTO users (id, kind, display_name, status, role_id, joined_at) VALUES ('user', 'human', 'User', 'active', 'role', '2026-09-08T10:00:00.000Z')")
+    sqlite.exec("INSERT INTO channels (id, name, type, visibility) VALUES ('channel', 'General', 'text', 'workspace')")
+    sqlite.exec("INSERT INTO scheduled_huddles (id, channel_id, title, starts_at, created_by) VALUES ('scheduled', 'channel', 'Weekly sync', '2026-09-09T10:00:00.000Z', 'user')")
+
+    expect(sqlite.prepare('SELECT channel_id, title, status, meeting_id FROM scheduled_huddles').get()).toEqual({
+      channel_id: 'channel',
+      title: 'Weekly sync',
+      status: 'scheduled',
+      meeting_id: null,
+    })
+    expect(realtimeV1Sql).toContain('REFERENCES `channels`(`id`) ON UPDATE no action ON DELETE cascade')
+    sqlite.close()
   })
 
   it('keeps trigger bodies together as one D1 exec statement', () => {
