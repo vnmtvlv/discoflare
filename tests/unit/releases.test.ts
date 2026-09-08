@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { compareStableVersions, newerStableReleases, stableSemver, type PublishedRelease } from '../../shared/releases'
+import { compareStableVersions, discoflareReleaseUrl, newerStableReleases, stableSemver, type PublishedRelease } from '../../shared/releases'
 import { discoflareReleases } from '../../server/utils/releases'
 
 function release(tagName: string): PublishedRelease {
@@ -7,6 +7,11 @@ function release(tagName: string): PublishedRelease {
 }
 
 describe('release versions', () => {
+  it('links an installed version to its GitHub release', () => {
+    expect(discoflareReleaseUrl('0.3.3')).toBe('https://github.com/vnmtvlv/discoflare/releases/tag/v0.3.3')
+    expect(discoflareReleaseUrl('v0.3.3')).toBe('https://github.com/vnmtvlv/discoflare/releases/tag/v0.3.3')
+  })
+
   it('accepts stable tags and rejects prereleases', () => {
     expect(stableSemver('v0.1.3')).toEqual([0, 1, 3])
     expect(stableSemver('0.1.3')).toEqual([0, 1, 3])

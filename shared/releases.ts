@@ -19,6 +19,13 @@ export type UpdateStatusDTO = {
 
 type Semver = readonly [major: number, minor: number, patch: number]
 
+const DISCOFLARE_RELEASES_URL = 'https://github.com/vnmtvlv/discoflare/releases/tag'
+
+export function discoflareReleaseUrl(version: string): string {
+  const tag = version.trim().replace(/^v/, '')
+  return `${DISCOFLARE_RELEASES_URL}/v${tag}`
+}
+
 export function stableSemver(value: string): Semver | null {
   const match = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(value.trim())
   if (!match) return null
