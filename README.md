@@ -44,7 +44,7 @@ Four apps bring conversations, work, email, and knowledge into one workspace:
 - **Access and roles** — Keep members in chat by default and delegate administrative access through custom roles. Manage invites, workspace settings, and audit history.
 - **Registration and login** — Choose invite-only or open registration and enable email, GitHub, X, and Telegram login. Password reset is available when email login, an `EMAIL` binding, and a verified sender are configured.
 - **Onboarding** — Publish versioned Terms, Privacy, and workspace Rules with the built-in rich-text editor. New accounts must accept the current version.
-- **MCP** — Let the Owner create revocable access tokens for Codex and other MCP clients to read and update Tasks and Documents through the installation's own `/mcp` endpoint.
+- **MCP** — Let the Owner create revocable, scoped access tokens for Codex and other MCP clients, choose the Human or Agent identity each token acts as, and read or update Tasks and Documents through the installation's own `/mcp` endpoint.
 - **Backups** — As the Owner, manually download a backup containing a logical D1 export and every R2 object, or upload it to a separately configured S3-compatible bucket.
 
 ## How it works
@@ -116,7 +116,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 Open **Workspace Settings → MCP** to copy the installation's Streamable HTTP server URL and create an access token. Configure an MCP client with that URL and send the token as `Authorization: Bearer <token>`.
 
-The token is shown once. Discoflare stores only its SHA-256 digest, checks the issuing Member's current Role on every request, and records Task and Document changes in the Audit Log. Revoking the token takes effect immediately. The MCP surface exposes focused Task and Document tools; it does not expose D1 or the browser API directly.
+The token is shown once. Discoflare stores only its SHA-256 digest. On every request it intersects the token's scopes with the current Role of the Human or Agent it acts as. Task and Document changes are authored by that principal, while the Audit Log also records the Human who delegated the token. Revoking the token or changing the principal's Role takes effect immediately. The MCP surface exposes focused Task and Document tools; it does not expose D1 or the browser API directly.
 
 ### Backups
 

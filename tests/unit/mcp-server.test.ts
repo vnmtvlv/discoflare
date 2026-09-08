@@ -6,6 +6,7 @@ import { ALL_PERMISSIONS } from '../../shared/permissions'
 import { INIT_SQL } from '../../server/utils/db'
 import { createDiscoflareMcpServer } from '../../server/utils/mcp-server'
 import type { DiscoflareEnv } from '../../workers/env'
+import type { McpPrincipal } from '../../server/utils/mcp-access'
 
 let sqlite: DatabaseSync
 
@@ -38,19 +39,30 @@ beforeEach(() => {
 
 afterEach(() => sqlite.close())
 
-function createHandler() {
+function ownerPrincipal(): McpPrincipal {
+  const authorization = {
+    workspaceId: 'main',
+    principal: { id: 'owner', kind: 'human' as const, roleId: 'owner-role', roleName: 'Owner', permissions: ALL_PERMISSIONS, isOwner: true },
+    credential: { kind: 'mcp' as const, id: 'token', scopes: ['tasks:read', 'tasks:write', 'documents:read', 'documents:write'] as const },
+  }
+  return {
+    tokenId: 'token',
+    userId: 'owner',
+    workspaceId: 'main',
+    roleId: 'owner-role',
+    roleName: 'Owner',
+    perms: ALL_PERMISSIONS,
+    isOwner: true,
+    scopes: [...authorization.credential.scopes],
+    delegatedBy: null,
+    authorization,
+  }
+}
+
+function createHandler(principal = ownerPrincipal()) {
   return createMcpHandler(() => createDiscoflareMcpServer({
     env: { DB: d1(sqlite) } as DiscoflareEnv,
-    principal: {
-      tokenId: 'token',
-      userId: 'owner',
-      workspaceId: 'main',
-      roleId: 'owner-role',
-      roleName: 'Owner',
-      perms: ALL_PERMISSIONS,
-      isOwner: true,
-      scopes: ['tasks:read', 'tasks:write', 'documents:read', 'documents:write'],
-    },
+    principal,
     schedule: () => {},
   }), { allowedHostnames: ['localhost'], allowedOriginHostnames: ['localhost'] })
 }
@@ -124,8 +136,25 @@ describe('Discoflare MCP server', () => {
     expect(result.task).toMatchObject({ id: 'task-1', number: 1001, title: 'Ship native numbers' })
   })
 
-  it('creates a workspace document through the MCP protocol and writes the normal audit entry', async () => {
-    const { response, payload } = await call(createHandler(), {
+  it('creates a workspace document as an Agent and records its human delegator', async () => {
+    sqlite.exec(`
+      INSERT INTO roles (id, key, name, permissions_bitmask) VALUES ('agent-role', 'agent', 'Agent', ${ALL_PERMISSIONS});
+      INSERT INTO identity_keys (id, name, email) VALUES ('agent', 'Codex Agent', 'agent@discoflare.invalid');
+      INSERT INTO users (id, kind, display_name, status, role_id, joined_at)
+        VALUES ('agent', 'agent', 'Codex Agent', 'active', 'agent-role', '2026-09-06T00:00:00.000Z');
+    `)
+    const principal = ownerPrincipal()
+    principal.userId = 'agent'
+    principal.roleId = 'agent-role'
+    principal.roleName = 'Agent'
+    principal.isOwner = false
+    principal.delegatedBy = 'owner'
+    principal.authorization = {
+      ...principal.authorization,
+      principal: { id: 'agent', kind: 'agent', roleId: 'agent-role', roleName: 'Agent', permissions: ALL_PERMISSIONS, isOwner: false },
+      delegation: { by: 'owner' },
+    }
+    const { response, payload } = await call(createHandler(principal), {
       jsonrpc: '2.0',
       id: 2,
       method: 'tools/call',
@@ -140,11 +169,14 @@ describe('Discoflare MCP server', () => {
     expect(sqlite.prepare('SELECT title, content, created_by as createdBy FROM documents').get()).toEqual({
       title: 'Portal',
       content: '<p>Import Slack, Mattermost, and Discord.</p>',
-      createdBy: 'owner',
+      createdBy: 'agent',
     })
-    expect(sqlite.prepare('SELECT action, target_type as targetType FROM audit_log').get()).toEqual({
+    const audit = sqlite.prepare('SELECT action, target_type as targetType, actor_id as actorId, meta_json as metaJson FROM audit_log').get() as { action: string; targetType: string; actorId: string; metaJson: string }
+    expect(audit).toMatchObject({
       action: 'document.create',
       targetType: 'document',
+      actorId: 'agent',
     })
+    expect(JSON.parse(audit.metaJson)).toMatchObject({ delegatedBy: 'owner', credentialKind: 'mcp' })
   })
 })

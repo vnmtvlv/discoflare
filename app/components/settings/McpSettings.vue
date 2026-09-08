@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { useMutation, useQuery, useQueryClient } from '@tanstack/vue-query'
 import { useClipboard } from '@vueuse/core'
-import type { CreatedMcpAccessTokenDTO, McpAccessTokenDTO } from '~~/shared/mcp'
+import { MCP_SCOPES, type CreatedMcpAccessTokenDTO, type McpAccessTokenDTO, type McpScope } from '~~/shared/mcp'
+import type { MemberDTO } from '~~/shared/types'
 import { formatDateTime } from '~~/shared/format'
 
 const props = defineProps<{ workspaceId: string }>()
@@ -10,6 +11,8 @@ const toast = useToast()
 const queryClient = useQueryClient()
 const { copy } = useClipboard()
 const name = ref('Codex')
+const subjectId = ref<string>()
+const scopes = ref<McpScope[]>([...MCP_SCOPES])
 const created = shallowRef<CreatedMcpAccessTokenDTO | null>(null)
 const revokeTarget = shallowRef<McpAccessTokenDTO | null>(null)
 
@@ -17,11 +20,27 @@ const tokensQ = useQuery({
   queryKey: computed(() => ['mcp-tokens', props.workspaceId]),
   queryFn: () => api<{ tokens: McpAccessTokenDTO[] }>(`/api/workspaces/${props.workspaceId}/mcp-tokens`),
 })
+const membersQ = useQuery({
+  queryKey: computed(() => ['members', props.workspaceId]),
+  queryFn: () => api<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
+})
+const subjectOptions = computed(() => (membersQ.data.value?.members ?? []).map(member => ({
+  label: `${member.user.displayName} · ${member.user.kind === 'agent' ? 'Agent' : member.role.name}`,
+  value: member.user.id,
+})))
+watch(subjectOptions, (options) => { if (!subjectId.value && options[0]) subjectId.value = options[0].value }, { immediate: true })
+
+const scopeOptions: Array<{ value: McpScope; label: string }> = [
+  { value: 'tasks:read', label: 'Read tasks' },
+  { value: 'tasks:write', label: 'Write tasks' },
+  { value: 'documents:read', label: 'Read documents' },
+  { value: 'documents:write', label: 'Write documents' },
+]
 
 const createToken = useMutation({
-  mutationFn: (tokenName: string) => api<{ token: CreatedMcpAccessTokenDTO }>(`/api/workspaces/${props.workspaceId}/mcp-tokens`, {
+  mutationFn: (input: { name: string; subjectId: string; scopes: McpScope[] }) => api<{ token: CreatedMcpAccessTokenDTO }>(`/api/workspaces/${props.workspaceId}/mcp-tokens`, {
     method: 'POST',
-    body: { name: tokenName },
+    body: input,
   }),
   onSuccess: async ({ token }) => {
     created.value = token
@@ -45,9 +64,9 @@ const revokeToken = useMutation({
 
 function create() {
   const tokenName = name.value.trim()
-  if (!tokenName || createToken.isPending.value) return
+  if (!tokenName || !subjectId.value || !scopes.value.length || createToken.isPending.value) return
   created.value = null
-  createToken.mutate(tokenName)
+  createToken.mutate({ name: tokenName, subjectId: subjectId.value, scopes: scopes.value })
 }
 
 async function copyValue(value: string, label: string) {
@@ -69,11 +88,27 @@ async function copyValue(value: string, label: string) {
         </div>
       </UFormField>
 
-      <div class="mt-5 flex items-end gap-2">
-        <UFormField label="Token name" class="min-w-0 flex-1">
+      <div class="mt-5 grid gap-4 sm:grid-cols-2">
+        <UFormField label="Token name">
           <UInput v-model="name" class="w-full" maxlength="80" autocomplete="off" @keyup.enter="create" />
         </UFormField>
-        <UButton label="Create access token" :loading="createToken.isPending.value" :disabled="!name.trim()" @click="create" />
+        <UFormField label="Acts as">
+          <USelect v-model="subjectId" :items="subjectOptions" class="w-full" />
+        </UFormField>
+      </div>
+      <UFormField label="Scopes" class="mt-4">
+        <div class="grid gap-2 sm:grid-cols-2">
+          <UCheckbox
+            v-for="scope in scopeOptions"
+            :key="scope.value"
+            :model-value="scopes.includes(scope.value)"
+            :label="scope.label"
+            @update:model-value="(checked: boolean | 'indeterminate') => { scopes = checked === true ? [...new Set([...scopes, scope.value])] : scopes.filter(value => value !== scope.value) }"
+          />
+        </div>
+      </UFormField>
+      <div class="mt-4 flex justify-end">
+        <UButton label="Create access token" :loading="createToken.isPending.value" :disabled="!name.trim() || !subjectId || !scopes.length" @click="create" />
       </div>
 
       <UAlert
@@ -104,6 +139,7 @@ async function copyValue(value: string, label: string) {
         <li v-for="token in tokensQ.data.value.tokens" :key="token.id" class="flex items-center gap-4 px-5 py-4">
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-highlighted">{{ token.name }}</p>
+            <p class="mt-1 text-xs text-muted">Acts as {{ token.subject.displayName }} · {{ token.scopes.join(', ') }}</p>
             <p class="mt-1 text-xs text-muted">
               <span class="font-mono">{{ token.tokenPrefix }}…</span>
               · Created {{ formatDateTime(token.createdAt) }}

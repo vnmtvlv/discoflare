@@ -2,13 +2,14 @@ import { eq, or } from 'drizzle-orm'
 import { taskDependencies, taskLabelLinks, tasks } from '../../drizzle/schema'
 import { newId, nowIso, WORKSPACE_ID } from '../../shared/ids'
 import { canSetTaskStatus } from '../../shared/task-status'
-import type { TaskDetailDTO, TaskPriority, TaskStatus } from '../../shared/types'
+import type { TaskBoardDTO, TaskDetailDTO, TaskPriority, TaskStatus } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { signalTasksChanged } from '../../workers/task-events'
 import { fail } from './cf'
 import { getDb } from './db'
 import { writeAudit } from './messages'
-import { loadTaskDetail } from './task-data'
+import { authorize, WorkspaceAction, type AuthorizationContext } from '../../shared/authorization'
+import { loadTaskBoards, loadTaskDetail } from './task-data'
 import { nextTaskPosition, requireBoard, requireTask, validateTaskAgent, validateTaskChannel, validateTaskDependencies, validateTaskLabels } from './task-policy'
 
 type Schedule = (promise: Promise<unknown>) => void
@@ -39,13 +40,33 @@ export type UpdateTaskInput = {
   dependencyIds?: string[]
 }
 
+export async function listTasks(
+  env: DiscoflareEnv,
+  authorization: AuthorizationContext,
+  includeArchived = false,
+): Promise<TaskBoardDTO[]> {
+  authorize(authorization, WorkspaceAction.readTasks)
+  return loadTaskBoards(env, includeArchived)
+}
+
+export async function getTask(
+  env: DiscoflareEnv,
+  authorization: AuthorizationContext,
+  taskReference: string | number,
+): Promise<TaskDetailDTO | null> {
+  authorize(authorization, WorkspaceAction.readTasks)
+  return loadTaskDetail(env, taskReference)
+}
+
 export async function createTask(
   env: DiscoflareEnv,
-  actorId: string,
+  authorization: AuthorizationContext,
   boardId: string,
   input: CreateTaskInput,
   schedule: Schedule,
 ): Promise<TaskDetailDTO> {
+  authorize(authorization, WorkspaceAction.writeTasks)
+  const actorId = authorization.principal.id
   const db = getDb(env.DB)
   await Promise.all([
     requireBoard(env, boardId),
@@ -82,18 +103,20 @@ export async function createTask(
     ...[...new Set(input.labelIds)].map(labelId => db.insert(taskLabelLinks).values({ taskId: id, labelId })),
     ...[...new Set(input.dependencyIds)].map(dependsOnTaskId => db.insert(taskDependencies).values({ taskId: id, dependsOnTaskId, createdAt: now })),
   ])
-  await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId, action: 'task.create', targetType: 'task', targetId: id, meta: { boardId, assigneeId: input.assigneeId } })
+  await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId, action: 'task.create', targetType: 'task', targetId: id, meta: { boardId, assigneeId: input.assigneeId }, authorization })
   schedule(signalTasksChanged(env, boardId, id))
   return (await loadTaskDetail(env, id))!
 }
 
 export async function updateTask(
   env: DiscoflareEnv,
-  actorId: string,
+  authorization: AuthorizationContext,
   taskReference: string | number,
   input: UpdateTaskInput,
   schedule: Schedule,
 ): Promise<TaskDetailDTO> {
+  authorize(authorization, WorkspaceAction.writeTasks)
+  const actorId = authorization.principal.id
   const db = getDb(env.DB)
   const task = await requireTask(env, taskReference)
   const id = task.id
@@ -155,8 +178,46 @@ export async function updateTask(
     targetType: 'task',
     targetId: id,
     meta: { fields: Object.keys(input), fromBoardId: task.boardId, toBoardId: boardId, fromStatus: task.status, toStatus: status },
+    authorization,
   })
   schedule(signalTasksChanged(env, boardId, id))
   if (boardId !== task.boardId) schedule(signalTasksChanged(env, task.boardId, id))
   return (await loadTaskDetail(env, id))!
+}
+
+/** Narrow Agent capability: update only its own assigned, non-running task result. */
+export async function updateAssignedTaskResult(
+  env: DiscoflareEnv,
+  authorization: AuthorizationContext,
+  taskId: string,
+  input: { status: Exclude<TaskStatus, 'running'>; summary?: string; details?: string },
+  schedule: Schedule,
+): Promise<{ updated: boolean }> {
+  authorize(authorization, WorkspaceAction.writeTasks)
+  const actorId = authorization.principal.id
+  const current = await env.DB.prepare(
+    "SELECT board_id as boardId, status FROM tasks WHERE id = ? AND assignee_id = ? AND status <> 'running'",
+  ).bind(taskId, actorId).first<{ boardId: string; status: TaskStatus }>()
+  if (!current) return { updated: false }
+  if (!canSetTaskStatus(current.status, input.status)) return { updated: false }
+
+  const result = await env.DB.prepare(
+    `UPDATE tasks SET status = ?, result_summary = coalesce(?, result_summary),
+     result_details = coalesce(?, result_details), updated_at = ?
+     WHERE id = ? AND assignee_id = ? AND status <> 'running'`,
+  ).bind(input.status, input.summary ?? null, input.details ?? null, nowIso(), taskId, actorId).run()
+  const updated = (result.meta.changes ?? 0) > 0
+  if (updated) {
+    await writeAudit(env, {
+      workspaceId: WORKSPACE_ID,
+      actorId,
+      action: 'task.update',
+      targetType: 'task',
+      targetId: taskId,
+      meta: { fields: ['status', 'result'], status: input.status },
+      authorization,
+    })
+    schedule(signalTasksChanged(env, current.boardId, taskId))
+  }
+  return { updated }
 }

@@ -12,12 +12,13 @@ import type { DiscoflareEnv } from '../../workers/env'
 type BoardRow = Omit<TaskBoardDTO, 'tasks' | 'labels'>
 type TaskRow = Omit<TaskDTO, 'latestRun' | 'labels' | 'checklistTotal' | 'checklistCompleted' | 'dependencyIds' | 'attachmentCount'>
 type LabelLinkRow = TaskLabelDTO & { taskId: string }
+type TaskRunRow = Omit<TaskRunDTO, 'approval'> & { approvalJson: string | null }
 
 const RUN_SELECT = `r.id, r.task_id as taskId, r.agent_id as agentId, r.workflow_id as workflowId, r.status,
   r.triggered_by as triggeredBy, r.title_snapshot as titleSnapshot, r.description_snapshot as descriptionSnapshot,
   r.channel_id_snapshot as channelIdSnapshot, r.agent_model_snapshot as agentModelSnapshot,
   r.agent_instructions_snapshot as agentInstructionsSnapshot, r.task_status_before as taskStatusBefore,
-  r.summary, r.details, r.error, r.progress, r.started_at as startedAt, r.completed_at as completedAt,
+  r.summary, r.details, r.error, r.progress, r.approval_json as approvalJson, r.started_at as startedAt, r.completed_at as completedAt,
   r.cancelled_at as cancelledAt, r.cancelled_by as cancelledBy, r.created_at as createdAt`
 
 export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false): Promise<TaskBoardDTO[]> {
@@ -38,7 +39,7 @@ export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false
     env.DB.prepare(
       `SELECT ${RUN_SELECT} FROM task_runs r
        WHERE r.id = (SELECT newest.id FROM task_runs newest WHERE newest.task_id = r.task_id ORDER BY newest.created_at DESC, newest.id DESC LIMIT 1)`,
-    ).all<TaskRunDTO>(),
+    ).all<TaskRunRow>(),
     env.DB.prepare(
       `SELECT id, board_id as boardId, name, color, position, created_at as createdAt, updated_at as updatedAt
        FROM task_labels ORDER BY position, created_at`,
@@ -55,7 +56,7 @@ export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false
     env.DB.prepare('SELECT task_id as taskId, COUNT(*) as count FROM task_attachments GROUP BY task_id').all<{ taskId: string; count: number }>(),
   ])
 
-  const latestRuns = new Map((runResult.results ?? []).map(run => [run.taskId, run]))
+  const latestRuns = new Map((runResult.results ?? []).map(run => [run.taskId, toTaskRun(run)]))
   const labelsByTask = new Map<string, TaskLabelDTO[]>()
   for (const { taskId, ...label } of linksResult.results ?? []) {
     const list = labelsByTask.get(taskId) ?? []
@@ -96,7 +97,7 @@ export async function loadTaskDetail(env: DiscoflareEnv, taskReference: string |
   const taskId = task.id
   const [runsResult, checklistResult, attachmentsResult] = await Promise.all([
     env.DB.prepare(`SELECT ${RUN_SELECT} FROM task_runs r WHERE r.task_id = ? ORDER BY r.created_at DESC, r.id DESC`)
-      .bind(taskId).all<TaskRunDTO>(),
+      .bind(taskId).all<TaskRunRow>(),
     env.DB.prepare(
       `SELECT id, task_id as taskId, title, completed, position, created_by as createdBy,
        created_at as createdAt, updated_at as updatedAt FROM task_checklist_items
@@ -110,8 +111,18 @@ export async function loadTaskDetail(env: DiscoflareEnv, taskReference: string |
   ])
   return {
     ...task,
-    runs: runsResult.results ?? [],
+    runs: (runsResult.results ?? []).map(toTaskRun),
     checklist: (checklistResult.results ?? []).map(item => ({ ...item, completed: Boolean(item.completed) })),
     attachments: (attachmentsResult.results ?? []).map(item => ({ ...item, url: `/api/task-files/${item.id}` })),
   }
+}
+
+function toTaskRun(row: TaskRunRow): TaskRunDTO {
+  let approval: TaskRunDTO['approval'] = null
+  if (row.approvalJson) {
+    try { approval = JSON.parse(row.approvalJson) as TaskRunDTO['approval'] }
+    catch { approval = null }
+  }
+  const { approvalJson: _approvalJson, ...run } = row
+  return { ...run, approval }
 }

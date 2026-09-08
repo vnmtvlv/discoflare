@@ -1,3 +1,5 @@
+import type { PublicUser } from './types'
+
 export const MCP_SCOPES = [
   'tasks:read',
   'tasks:write',
@@ -12,6 +14,8 @@ export type McpAccessTokenDTO = {
   name: string
   tokenPrefix: string
   scopes: McpScope[]
+  subject: PublicUser
+  createdBy: PublicUser
   lastUsedAt: string | null
   createdAt: string
 }

@@ -55,7 +55,7 @@ To complete first-owner setup after the manual GitHub deployment:
 
 ### MCP access
 
-The Owner can open **Workspace Settings → MCP**, copy the installation URL ending in `/mcp`, and create a named access token for Codex or another MCP client. The endpoint uses stateless Streamable HTTP. Clients authenticate each request with `Authorization: Bearer <token>`.
+The Owner can open **Workspace Settings → MCP**, copy the installation URL ending in `/mcp`, and create a named access token for Codex or another MCP client. Choose which active Human or Agent the token acts as and grant only the Task and Document scopes it needs. The endpoint uses stateless Streamable HTTP. Clients authenticate each request with `Authorization: Bearer <token>`.
 
 Copy the token when it is created because its raw value is never stored or shown again. D1 retains only a SHA-256 digest and the token's fixed Task and Document scopes. The Worker also checks that the issuing Member is still active and still has the necessary current Role Grant for each tool. Revoke unused or exposed tokens from the same settings section; revocation is immediate and token creation and revocation appear in the Audit Log.
 

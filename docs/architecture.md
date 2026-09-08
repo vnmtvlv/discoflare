@@ -51,7 +51,7 @@ RealtimeKit
 18. The first managed installation in an account is marked Primary. The installer OAuth token or CLI API token is provisioning authority and is never stored in the workspace. Custom-domain attachment, Email Routing, DNS, and Worker bindings persist after that credential is gone. The Primary Worker owns its zone's mail route; another installation on the same zone must leave workspace mail disabled.
 19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. The Data navigation index returns only lightweight resource metadata, and each Document or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
-21. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. Every request resolves the issuing Member's active status and current Role Grants, then each tool checks its fixed token scope and product permission. MCP calls reuse the same Task and Document domain operations and Audit Log as the browser API; no raw SQL or general browser-session bypass is exposed.
+21. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. A token names an active Human or Agent principal separately from the Human who created it. Every request resolves that principal's current Role Grants and intersects them with the credential's scopes. Browser, MCP, Agent, and Workflow writes reuse the same authorized Task and Document domain operations. Audit entries name the acting principal and retain credential, delegator, and Task Run attribution; no raw SQL or general browser-session bypass is exposed.
 
 ## Email flow
 
@@ -76,6 +76,7 @@ Human creates Task in D1
   → Workflow marks Task Run running in D1
   → Think runs the model through Workers AI
   → tools read and write the Agent DO's durable Computer filesystem
+  → a risky command parks durably and appears on the Task Run for a task manager to approve or reject
   → command tools synchronize that filesystem with the Container backend and execute
   → Workflow records review/done/failed in D1 and clears the active-run claim
   → optional result Message is authored by the Agent

@@ -8,6 +8,7 @@ import adminTaskBoundarySql from '../../drizzle/migrations/0011_admin_task_bound
 import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identity_boundary.sql?raw'
 import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
+import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -137,6 +138,28 @@ describe('D1 bootstrap schema', () => {
     expect(sqlite.prepare('SELECT priority, active_run_id FROM tasks WHERE id = ?').get('task-1')).toEqual({ priority: 'normal', active_run_id: null })
     expect(sqlite.prepare('SELECT number FROM task_numbers WHERE task_id = ?').get('task-1')).toEqual({ number: 1001 })
     expect(sqlite.prepare('SELECT status, progress, task_status_before FROM task_runs WHERE id = ?').get('run-1')).toEqual({ status: 'running', progress: 'Thinking', task_status_before: 'ready' })
+  })
+
+  it('backfills existing MCP token subjects and preserves Task Run history', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE mcp_access_tokens (
+        id TEXT PRIMARY KEY,
+        created_by TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE TABLE task_runs (id TEXT PRIMARY KEY, progress TEXT);
+      INSERT INTO users VALUES ('owner');
+      INSERT INTO mcp_access_tokens VALUES ('token', 'owner');
+      INSERT INTO task_runs VALUES ('run', 'Thinking');
+    `)
+
+    sqlite.exec(d1ExecSql(agentPrincipalsAndApprovalsSql))
+
+    expect(sqlite.prepare('SELECT subject_id FROM mcp_access_tokens WHERE id = ?').get('token')).toEqual({ subject_id: 'owner' })
+    expect(sqlite.prepare('SELECT progress, approval_json FROM task_runs WHERE id = ?').get('run')).toEqual({ progress: 'Thinking', approval_json: null })
+    sqlite.close()
   })
 
   it('adds participant kind without replacing a referenced users table', () => {

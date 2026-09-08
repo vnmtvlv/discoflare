@@ -116,9 +116,10 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
 
 export async function writeAudit(
   env: DiscoflareEnv,
-  input: { workspaceId: string; actorId: string; action: string; targetType: string; targetId: string; meta?: Record<string, unknown> },
+  input: { workspaceId: string; actorId: string; action: string; targetType: string; targetId: string; meta?: Record<string, unknown>; authorization?: import('../../shared/authorization').AuthorizationContext },
 ) {
   const { newId, nowIso } = await import('../../shared/ids')
+  const { auditAttribution } = await import('../../shared/authorization')
   await env.DB.prepare(
     'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
   ).bind(
@@ -127,7 +128,7 @@ export async function writeAudit(
     input.action,
     input.targetType,
     input.targetId,
-    JSON.stringify(input.meta ?? {}),
+    JSON.stringify({ ...(input.meta ?? {}), ...(input.authorization ? auditAttribution(input.authorization) : {}) }),
     nowIso(),
   ).run()
 }

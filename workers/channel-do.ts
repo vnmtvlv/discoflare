@@ -172,6 +172,10 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   async postAgentMessage(input: z.infer<typeof agentPostSchema>): Promise<{ id: string, channelId: string }> {
     const body = agentPostSchema.parse(input)
+    const authz = await this.loadAuthz(body.agentId)
+    if (!authz || !hasPermission(authz.perms, Permission.sendMessages)) {
+      throw new Error('Agent cannot send messages in this channel')
+    }
     const agent = await this.env.DB.prepare(
       `SELECT u.id, u.kind, u.display_name as displayName, u.avatar_r2_key as avatarR2Key
        FROM users u JOIN agents a ON a.user_id = u.id
