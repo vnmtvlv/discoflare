@@ -35,7 +35,9 @@ describe('documents and canvases', () => {
     } as never)
     expect(resources.databases).toEqual([{
       id: 'db-1', name: 'Archive', archivedAt: expect.any(String), itemCount: 1,
+      views: [{ id: 'default:db-1', databaseId: 'db-1', name: 'All records', layout: 'table', position: 1024 }],
     }])
+    expect(resources.bookmarks).toEqual([])
     expect(resources.documents[0]).not.toHaveProperty('content')
     expect(resources.canvases[0]).not.toHaveProperty('nodes')
     expect(resources.canvases[0]?.nodeCount).toBe(1)

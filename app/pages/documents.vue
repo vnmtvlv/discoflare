@@ -92,6 +92,7 @@ async function removeDocument() {
       <span class="font-semibold">Docs</span>
       <div class="ml-auto flex items-center gap-2">
         <span v-if="activeDocument" class="text-xs text-dimmed">{{ saving ? 'Saving…' : saveError ? 'Not saved' : dirty ? 'Unsaved' : 'Saved' }}</span>
+        <DataBookmarkButton v-if="activeDocument" :workspace-id="workspaceId" target-type="document" :target-id="activeDocument.id" />
         <UButton color="neutral" variant="ghost" icon="i-ph-trash" aria-label="Delete document" :disabled="!activeDocument || saving || deleting" @click="showDelete = true" />
         <UButton icon="i-ph-plus" label="Document" @click="nav.createDocumentOpen.value = true" />
       </div>

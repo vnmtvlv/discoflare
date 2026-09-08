@@ -1,5 +1,5 @@
 import type { JSONContent } from '@tiptap/core'
-import type { DatabaseFieldType, DatabaseValue } from './database'
+import type { DatabaseFieldType, DatabaseValue, DatabaseViewConfig, DatabaseViewLayout } from './database'
 
 export type PresenceStatus = 'online' | 'idle' | 'offline'
 export type UserStatus = 'pending' | 'active' | 'removed'
@@ -187,6 +187,33 @@ export type DatabaseDTO = {
   items: DatabaseItemDTO[]
 }
 
+export type DatabaseViewDTO = {
+  id: string
+  databaseId: string
+  name: string
+  layout: DatabaseViewLayout
+  config: DatabaseViewConfig
+  position: number
+  version: number
+  createdBy: string
+  createdAt: string
+  updatedAt: string
+}
+
+export type DatabaseViewSummaryDTO = Pick<DatabaseViewDTO, 'id' | 'databaseId' | 'name' | 'layout' | 'position'>
+
+export type DatabasePageDTO = {
+  database: Omit<DatabaseDTO, 'items'>
+  views: DatabaseViewDTO[]
+  view: DatabaseViewDTO
+  items: DatabaseItemDTO[]
+  total: number
+  page: number
+  pageSize: number
+  /** Total records per board group. The empty key represents records without a value. */
+  groupCounts?: Record<string, number>
+}
+
 export type DocumentDTO = {
   id: string
   title: string
@@ -246,12 +273,23 @@ export type CanvasSummaryDTO = Omit<CanvasDTO, 'nodes' | 'edges'> & {
 
 export type DatabaseSummaryDTO = Pick<DatabaseDTO, 'id' | 'name' | 'archivedAt'> & {
   itemCount: number
+  views: DatabaseViewSummaryDTO[]
+}
+
+export type DataBookmarkTargetType = 'database_view' | 'document' | 'canvas'
+
+export type DataBookmarkDTO = {
+  targetType: DataBookmarkTargetType
+  targetId: string
+  position: number
+  createdAt: string
 }
 
 export type DataResourcesDTO = {
   databases: DatabaseSummaryDTO[]
   documents: DocumentSummaryDTO[]
   canvases: CanvasSummaryDTO[]
+  bookmarks: DataBookmarkDTO[]
 }
 
 export type MailboxPermission = 'read' | 'send' | 'manage'
