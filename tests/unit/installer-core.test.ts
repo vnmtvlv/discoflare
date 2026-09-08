@@ -3,6 +3,7 @@ import {
   durableObjectMigrations,
   InstallerError,
   parseDeployRequest,
+  requiresInitialInfrastructureProvisioning,
   realtimeKitAvPreset,
   realtimeKitPreset,
 } from '../../packages/installer-core/src/index'
@@ -84,5 +85,10 @@ describe('installer-core', () => {
 
   it('does not emit a migration when an installation is current', () => {
     expect(durableObjectMigrations(manifest, { exists: true, migrationTag: 'v4' })).toBeUndefined()
+  })
+
+  it('does not reprovision domain and mail infrastructure during an upgrade', () => {
+    expect(requiresInitialInfrastructureProvisioning(true)).toBe(false)
+    expect(requiresInitialInfrastructureProvisioning(false)).toBe(true)
   })
 })

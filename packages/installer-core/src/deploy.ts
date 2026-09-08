@@ -75,6 +75,11 @@ type DeploymentHealth = { version?: string; ok?: boolean; ready?: boolean; migra
 export const installerMarker = 'discoflare.com/v1'
 const bootstrapMarker = 'discoflare.com/bootstrap/v1'
 
+/** Domain and mail routes already belong to a discovered installation and are not part of a version upgrade. */
+export function requiresInitialInfrastructureProvisioning(existing: boolean): boolean {
+  return !existing
+}
+
 function mailDomain(request: DeployRequest) {
   return `${request.mailSubdomain}.${request.zoneName}`
 }
@@ -607,7 +612,8 @@ export async function deployDiscoflare(
   const requestedHostname = request.customDomainEnabled
     ? `${request.appSubdomain}.${request.zoneName}`
     : existing.appHostname || await ensureWorkersHostname(client, request.accountId, request.workerName)
-  await assertDomainAvailable(accessToken, request)
+  const provisionInfrastructure = requiresInitialInfrastructureProvisioning(existing.exists)
+  if (provisionInfrastructure) await assertDomainAvailable(accessToken, request)
   const requestedMailDomain = mailDomain(request)
   if (existing.appHostname && existing.appHostname !== requestedHostname) {
     throw createError({
@@ -714,7 +720,7 @@ export async function deployDiscoflare(
   }
 
   await progress('worker', 'active')
-  const primaryMail = request.mailEnabled
+  const primaryMail = request.mailEnabled && provisionInfrastructure
     ? await ensurePrimaryMail(
         client,
         accessToken,
@@ -736,18 +742,20 @@ export async function deployDiscoflare(
     enabled: !request.customDomainEnabled,
     previews_enabled: false,
   })
-  if (request.customDomainEnabled) await attachAppDomain(accessToken, request)
+  if (request.customDomainEnabled && provisionInfrastructure) await attachAppDomain(accessToken, request)
   await progress('domain', 'complete', requestedHostname)
 
   await progress('mail', 'active')
-  if (request.mailEnabled) {
+  if (request.mailEnabled && provisionInfrastructure) {
     await Promise.all([
       ensureEmailRouting(accessToken, request),
       ensureEmailSending(accessToken, request),
     ])
     await attachMailCatchAll(accessToken, request, primaryMail!.name)
   }
-  await progress('mail', 'complete', request.mailEnabled ? mailDomain(request) : 'Skipped')
+  let mailDetail = 'Skipped'
+  if (request.mailEnabled) mailDetail = provisionInfrastructure ? mailDomain(request) : 'Existing routes preserved'
+  await progress('mail', 'complete', mailDetail)
 
   await progress('computer', 'active')
   await deployContainer(accessToken, request.accountId, request.workerName, uploaded.deployment_id || uploaded.id, release.manifest)
