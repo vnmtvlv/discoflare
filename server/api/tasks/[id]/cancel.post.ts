@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   }
   const now = nowIso()
   await db.batch([
-    db.update(taskRuns).set({ status: 'cancelled', progress: null, cancelledAt: now, cancelledBy: actor.user.id, completedAt: now }).where(eq(taskRuns.id, run.id)),
+    db.update(taskRuns).set({ status: 'cancelled', progress: null, approvalJson: null, cancelledAt: now, cancelledBy: actor.user.id, completedAt: now }).where(eq(taskRuns.id, run.id)),
     db.update(tasks).set({ status: run.taskStatusBefore, activeRunId: null, updatedAt: now }).where(eq(tasks.activeRunId, run.id)),
   ])
   await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task.cancel', targetType: 'task', targetId: taskId, meta: { runId: run.id, workflowId: run.workflowId } })

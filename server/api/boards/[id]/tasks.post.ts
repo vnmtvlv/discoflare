@@ -22,5 +22,5 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
   const body = parseBody(bodySchema, await readBody(event))
   const { env, waitUntil } = cf(event)
-  return { task: await createTask(env, actor.user.id, boardId, body, waitUntil) }
+  return { task: await createTask(env, actor.authorization, boardId, body, waitUntil) }
 })

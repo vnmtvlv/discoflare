@@ -1,14 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/server'
 import { z } from 'zod'
 import { version as packageVersion } from '../../package.json'
-import { WORKSPACE_ID } from '../../shared/ids'
-import { Permission } from '../../shared/permissions'
 import type { DiscoflareEnv } from '../../workers/env'
-import { loadDataResources, requireDocument } from './data-resources'
-import { createDocument, updateDocument } from './document-service'
-import { requireMcpAccess, type McpPrincipal } from './mcp-access'
-import { loadTaskBoards, loadTaskDetail } from './task-data'
-import { createTask, updateTask } from './task-service'
+import { createDocument, getDocument, listAuthorizedDataResources, updateDocument } from './document-service'
+import type { McpPrincipal } from './mcp-access'
+import { createTask, getTask, listTasks, updateTask } from './task-service'
 
 type McpServerContext = {
   env: DiscoflareEnv
@@ -33,8 +29,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     inputSchema: { includeArchived: z.boolean().default(false) },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ includeArchived }) => {
-    requireMcpAccess(principal, 'tasks:read', Permission.manageTasks)
-    return result({ boards: await loadTaskBoards(env, includeArchived) })
+    return result({ boards: await listTasks(env, principal.authorization, includeArchived) })
   })
 
   server.registerTool('get_task', {
@@ -42,8 +37,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     inputSchema: { taskId: taskReferenceSchema.describe('Task UUID or human-readable number') },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ taskId }) => {
-    requireMcpAccess(principal, 'tasks:read', Permission.manageTasks)
-    const task = await loadTaskDetail(env, taskId)
+    const task = await getTask(env, principal.authorization, taskId)
     if (!task) throw new Error('Task not found')
     return result({ task })
   })
@@ -63,8 +57,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async ({ boardId, ...input }) => {
-    requireMcpAccess(principal, 'tasks:write', Permission.manageTasks)
-    return result({ task: await createTask(env, principal.userId, boardId, input, schedule) })
+    return result({ task: await createTask(env, principal.authorization, boardId, input, schedule) })
   })
 
   server.registerTool('update_task', {
@@ -86,9 +79,8 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async ({ taskId, ...input }) => {
-    requireMcpAccess(principal, 'tasks:write', Permission.manageTasks)
     if (!Object.keys(input).length) throw new Error('No changes supplied')
-    return result({ task: await updateTask(env, principal.userId, taskId, input, schedule) })
+    return result({ task: await updateTask(env, principal.authorization, taskId, input, schedule) })
   })
 
   server.registerTool('list_documents', {
@@ -96,8 +88,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     inputSchema: {},
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async () => {
-    requireMcpAccess(principal, 'documents:read', Permission.manageDatabases)
-    const resources = await loadDataResources(env)
+    const resources = await listAuthorizedDataResources(env, principal.authorization)
     return result({ documents: resources.documents })
   })
 
@@ -106,8 +97,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     inputSchema: { documentId: z.string().min(8) },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ documentId }) => {
-    requireMcpAccess(principal, 'documents:read', Permission.manageDatabases)
-    return result({ document: await requireDocument(env, documentId) })
+    return result({ document: await getDocument(env, principal.authorization, documentId) })
   })
 
   server.registerTool('create_document', {
@@ -118,8 +108,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async (input) => {
-    requireMcpAccess(principal, 'documents:write', Permission.manageDatabases)
-    return result({ document: await createDocument(env, WORKSPACE_ID, principal.userId, input) })
+    return result({ document: await createDocument(env, principal.authorization, input) })
   })
 
   server.registerTool('update_document', {
@@ -132,9 +121,8 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
     },
     annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
   }, async ({ documentId, ...input }) => {
-    requireMcpAccess(principal, 'documents:write', Permission.manageDatabases)
     if (input.title === undefined && input.content === undefined) throw new Error('No changes supplied')
-    return result({ document: await updateDocument(env, WORKSPACE_ID, principal.userId, documentId, input) })
+    return result({ document: await updateDocument(env, principal.authorization, documentId, input) })
   })
 
   return server

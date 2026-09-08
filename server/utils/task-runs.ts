@@ -21,20 +21,20 @@ export async function reconcileTaskRun(
     const summary = output?.summary ?? run.summary ?? 'Workflow completed'
     const details = output?.details ?? run.details ?? ''
     await db.batch([
-      db.update(taskRuns).set({ status: 'completed', progress: null, summary, details, error: null, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
+      db.update(taskRuns).set({ status: 'completed', progress: null, approvalJson: null, summary, details, error: null, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
       db.update(tasks).set({ status, resultSummary: summary, resultDetails: details, lastError: null, activeRunId: null, updatedAt: now }).where(eq(tasks.activeRunId, run.id)),
     ])
   }
   else if (state.status === 'errored') {
     const error = state.error?.message ?? 'Workflow failed'
     await db.batch([
-      db.update(taskRuns).set({ status: 'failed', progress: null, error, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
+      db.update(taskRuns).set({ status: 'failed', progress: null, approvalJson: null, error, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
       db.update(tasks).set({ status: 'failed', lastError: error, activeRunId: null, updatedAt: now }).where(eq(tasks.activeRunId, run.id)),
     ])
   }
   else if (state.status === 'terminated') {
     await db.batch([
-      db.update(taskRuns).set({ status: 'cancelled', progress: null, cancelledAt: run.cancelledAt ?? now, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
+      db.update(taskRuns).set({ status: 'cancelled', progress: null, approvalJson: null, cancelledAt: run.cancelledAt ?? now, completedAt: run.completedAt ?? now }).where(eq(taskRuns.id, run.id)),
       db.update(tasks).set({ status: run.taskStatusBefore, activeRunId: null, updatedAt: now }).where(eq(tasks.activeRunId, run.id)),
     ])
   }

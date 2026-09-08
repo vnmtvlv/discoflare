@@ -10,7 +10,14 @@ const context = vi.hoisted(() => ({
   afterWrite: undefined as (() => void) | undefined,
 }))
 
-vi.mock('../../server/utils/guards', () => ({ requireMember: async () => ({ user: { id: 'owner' } }) }))
+vi.mock('../../server/utils/guards', () => ({ requireMember: async () => ({
+  user: { id: 'owner' },
+  authorization: {
+    workspaceId: 'main',
+    principal: { id: 'owner', kind: 'human', roleId: 'role', roleName: 'Owner', permissions: 1023, isOwner: true },
+    credential: { kind: 'session' },
+  },
+}) }))
 vi.mock('../../server/utils/messages', () => ({ writeAudit: async () => context.afterWrite?.() }))
 vi.mock('../../server/utils/cf', () => ({
   fail: (statusCode: number, code: string, message: string) => { throw Object.assign(new Error(message), { statusCode, code }) },

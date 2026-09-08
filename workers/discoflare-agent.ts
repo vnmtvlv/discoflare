@@ -25,6 +25,10 @@ import { agentModelSupportsVision, attachMessageImages } from './agent-vision'
 import { mailPermissionAllows } from '../shared/mail'
 import type { MailboxPermission } from '../shared/types'
 import { AgentComputerHost, openAgentComputer, type AgentComputer } from './agent-computer'
+import { WorkspaceAction, type AuthorizationContext } from '../shared/authorization'
+import { loadAuthorizationContext } from '../server/utils/authorization'
+import { createTask, updateAssignedTaskResult } from '../server/utils/task-service'
+import { taskRunIdFromTurnMetadata } from './agent-task-context'
 
 const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.7-code'
 const WORKSPACE_ROOT = '/workspace'
@@ -131,7 +135,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
         description: 'Run a shell command on your isolated Cloudflare Computer. Files under /workspace persist with your Agent. High-risk or externally mutating commands require human approval.',
         inputSchema: z.object({ command: z.string().min(1).max(12_000) }),
         kind: 'durable-pause',
-        approval: ({ input }) => Boolean(this.messageMetadata(this.activeTurnMetadata)) && requiresCommandApproval(input.command),
+        approval: ({ input }) => requiresCommandApproval(input.command),
         approvalSummary: 'Run a high-risk command',
         approvalRisk: 'high',
         timeoutMs: 120_000,
@@ -224,6 +228,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
         execute: async ({ title, description }) => {
           const agentId = this.agentId()
           const runId = this.name.startsWith('task-') ? this.name.slice('task-'.length) : null
+          const authorization = await this.agentAuthorization()
           const current = runId
             ? await this.env.DB.prepare(
                 'SELECT t.board_id as id FROM task_runs r JOIN tasks t ON t.id = r.task_id WHERE r.id = ?',
@@ -233,20 +238,17 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
             'SELECT id FROM task_boards WHERE archived_at IS NULL ORDER BY position, created_at LIMIT 1',
           ).first<{ id: string }>()
           if (!board) throw new Error('No task board exists')
-          const id = newId()
-          const now = nowIso()
-          const position = await this.env.DB.prepare(
-            "SELECT coalesce(max(position), 0) + 1024 as value FROM tasks WHERE board_id = ? AND status = 'ready'",
-          ).bind(board.id).first<{ value: number }>()
-          await this.env.DB.prepare(
-            `INSERT INTO tasks (id, board_id, title, description, status, position, assignee_id, channel_id, created_by, created_at, updated_at)
-             VALUES (?, ?, ?, ?, 'ready', ?, ?, NULL, ?, ?, ?)`,
-          ).bind(id, board.id, title, description, position?.value ?? 1024, agentId, agentId, now, now).run()
-          await this.env.DB.prepare(
-            'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          ).bind(newId(), agentId, 'task.create', 'task', id, JSON.stringify({ boardId: board.id, sourceRunId: runId }), now).run()
-          await signalTasksChanged(this.env, board.id, id)
-          return { id, title, status: 'ready' }
+          const task = await createTask(this.env, authorization, board.id, {
+            title,
+            description,
+            priority: 'normal',
+            dueAt: null,
+            assigneeId: agentId,
+            channelId: null,
+            labelIds: [],
+            dependencyIds: [],
+          }, promise => this.ctx.waitUntil(promise))
+          return { id: task.id, title: task.title, status: task.status }
         },
       }),
       update_task: tool({
@@ -258,23 +260,13 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
           details: z.string().max(20_000).optional(),
         }),
         execute: async ({ taskId, status, summary, details }) => {
-          const agentId = this.agentId()
-          const current = await this.env.DB.prepare('SELECT board_id as boardId FROM tasks WHERE id = ? AND assignee_id = ? AND status <> \'running\'')
-            .bind(taskId, agentId).first<{ boardId: string }>()
-          if (!current) return { updated: false }
-          const result = await this.env.DB.prepare(
-            `UPDATE tasks SET status = ?, result_summary = coalesce(?, result_summary), result_details = coalesce(?, result_details), updated_at = ?
-             WHERE id = ? AND assignee_id = ? AND status <> 'running'`,
-          ).bind(status, summary ?? null, details ?? null, nowIso(), taskId, agentId).run()
-          const updated = (result.meta.changes ?? 0) > 0
-          if (updated) {
-            const now = nowIso()
-            await this.env.DB.prepare(
-              'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-            ).bind(newId(), agentId, 'task.update', 'task', taskId, JSON.stringify({ fields: ['status', 'result'], status }), now).run()
-            await signalTasksChanged(this.env, current.boardId, taskId)
-          }
-          return { updated }
+          return updateAssignedTaskResult(
+            this.env,
+            await this.agentAuthorization(),
+            taskId,
+            { status, summary, details },
+            promise => this.ctx.waitUntil(promise),
+          )
         },
       }),
       post_message: tool({
@@ -463,6 +455,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
   override async beforeToolCall(ctx: ToolCallContext): Promise<void> {
     const metadata = this.messageMetadata(this.activeTurnMetadata)
     if (!metadata) {
+      await this.clearTaskApproval()
       await this.setTaskProgress(toolLabel(ctx.toolName))
       return
     }
@@ -473,6 +466,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
   override async afterToolCall(_ctx: ToolCallResultContext): Promise<void> {
     const metadata = this.messageMetadata(this.activeTurnMetadata)
     if (!metadata) {
+      await this.clearTaskApproval()
       await this.setTaskProgress('Thinking')
       return
     }
@@ -495,9 +489,20 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
 
   override async onChatResponse(result: ChatResponseResult): Promise<void> {
     const metadata = this.messageMetadata(this.activeTurnMetadata)
-    if (!metadata) return
+    const taskRunId = taskRunIdFromTurnMetadata(this.activeTurnMetadata)
     const approval = (await this.pendingApprovals()).find(item => item.descriptor.requestId === result.requestId)
     if (approval) {
+      if (taskRunId) {
+        await this.setTaskApproval(taskRunId, {
+          executionId: approval.executionId,
+          action: approval.descriptor.action,
+          summary: approval.descriptor.summary,
+          input: approval.descriptor.input,
+          risk: approval.descriptor.risk,
+        })
+        return
+      }
+      if (!metadata) return
       await patchAgentTurn(this.env, metadata.submissionId, {
         requestId: result.requestId,
         status: 'waiting_approval',
@@ -513,6 +518,12 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
       await fanoutAgentTurns(this.env, metadata.channelId, this.agentId())
       return
     }
+
+    if (taskRunId) {
+      await this.clearTaskApproval(taskRunId)
+      return
+    }
+    if (!metadata) return
 
     const content = clipped(messageText(result.message), 2000).trim()
     if (content) await this.flushDraft(metadata, content)
@@ -572,6 +583,46 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
       'SELECT t.id, t.board_id as boardId FROM task_runs r JOIN tasks t ON t.id = r.task_id WHERE r.id = ?',
     ).bind(runId).first<{ id: string; boardId: string }>()
     if (task) await signalTasksChanged(this.env, task.boardId, task.id)
+  }
+
+  private async setTaskApproval(runId: string, approval: import('../shared/types').AgentApprovalDTO): Promise<void> {
+    await this.env.DB.prepare(
+      "UPDATE task_runs SET progress = 'Waiting for approval', approval_json = ? WHERE id = ? AND status = 'running'",
+    ).bind(JSON.stringify(approval), runId).run()
+    await this.signalTaskRun(runId)
+  }
+
+  private async clearTaskApproval(runId = this.name.startsWith('task-') ? this.name.slice('task-'.length) : ''): Promise<void> {
+    if (!runId) return
+    await this.env.DB.prepare("UPDATE task_runs SET approval_json = NULL WHERE id = ? AND status IN ('queued', 'running')")
+      .bind(runId).run()
+    await this.signalTaskRun(runId)
+  }
+
+  private async signalTaskRun(runId: string): Promise<void> {
+    const task = await this.env.DB.prepare(
+      'SELECT t.id, t.board_id as boardId FROM task_runs r JOIN tasks t ON t.id = r.task_id WHERE r.id = ?',
+    ).bind(runId).first<{ id: string; boardId: string }>()
+    if (task) await signalTasksChanged(this.env, task.boardId, task.id)
+  }
+
+  private async agentAuthorization(): Promise<AuthorizationContext> {
+    const message = this.messageMetadata(this.activeTurnMetadata)
+    const runId = this.name.startsWith('task-') ? this.name.slice('task-'.length) : null
+    const run = runId
+      ? await this.env.DB.prepare('SELECT triggered_by as triggeredBy FROM task_runs WHERE id = ? AND agent_id = ?')
+          .bind(runId, this.agentId()).first<{ triggeredBy: string | null }>()
+      : null
+    const delegatedBy = message?.initiatedBy ?? run?.triggeredBy ?? undefined
+    const authorization = await loadAuthorizationContext(this.env, {
+      principalId: this.agentId(),
+      credential: { kind: 'agent_runtime', id: this.name },
+      delegatedBy,
+      taskRunId: runId ?? undefined,
+      delegatedActions: runId ? [WorkspaceAction.writeTasks, WorkspaceAction.sendMessages] : undefined,
+    })
+    if (!authorization) throw new Error('Agent is not an active workspace principal')
+    return authorization
   }
 
   private async cancelActive(includePending: boolean, reason: string): Promise<void> {
@@ -822,6 +873,23 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     }
     return channel.postAgentMessage({ agentId, content })
   }
+
+  async controlTask(input: { runId: string; action: 'approve' | 'reject'; executionId: string }): Promise<void> {
+    if (this.name !== `task-${input.runId}`) throw new Error('Task Run does not match this Agent runtime')
+    const pending = (await this.pendingApprovals(input.executionId))[0]
+    if (!pending || pending.executionId !== input.executionId) {
+      await this.clearTaskApproval(input.runId)
+      throw new Error('Approval request is no longer pending')
+    }
+    const result = input.action === 'approve'
+      ? await this.approveExecution(input.executionId)
+      : await this.rejectExecution(input.executionId, 'Rejected by a workspace member')
+    await this.clearTaskApproval(input.runId)
+    if (result && typeof result === 'object' && 'status' in result && result.status === 'error') {
+      throw new Error('Approval request was resolved concurrently')
+    }
+    await this.setTaskProgress('Thinking')
+  }
 }
 
 /** Stable top-level coordinator. Each channel/thread and task run receives its own Think facet. */
@@ -843,5 +911,10 @@ export class DiscoflareAgent extends AgentComputerHost {
   }): Promise<void> {
     const conversation = await this.subAgent(DiscoflareThink, `channel-${input.channelId}`)
     await conversation.controlConversation(input)
+  }
+
+  async controlTask(input: { runId: string; action: 'approve' | 'reject'; executionId: string }): Promise<void> {
+    const run = await this.subAgent(DiscoflareThink, `task-${input.runId}`)
+    await run.controlTask(input)
   }
 }

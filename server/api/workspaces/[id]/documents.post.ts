@@ -12,5 +12,5 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, workspaceId, Permission.manageDatabases)
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  return { document: await createDocument(env, workspaceId, actor.user.id, body) }
+  return { document: await createDocument(env, actor.authorization, body) }
 })

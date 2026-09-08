@@ -227,12 +227,14 @@ export const mcpAccessTokens = sqliteTable('mcp_access_tokens', {
   tokenHash: text('token_hash').notNull(),
   tokenPrefix: text('token_prefix').notNull(),
   scopesJson: text('scopes_json').notNull(),
+  subjectId: text('subject_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   createdBy: text('created_by').notNull().references(() => users.id, { onDelete: 'cascade' }),
   lastUsedAt: text('last_used_at'),
   revokedAt: text('revoked_at'),
   ...isoTimestamps(),
 }, table => [
   uniqueIndex('mcp_access_tokens_hash_unique').on(table.tokenHash),
+  index('mcp_access_tokens_subject_id_idx').on(table.subjectId),
   index('mcp_access_tokens_created_by_idx').on(table.createdBy),
   index('mcp_access_tokens_active_idx').on(table.revokedAt, table.createdAt),
 ])
@@ -806,6 +808,7 @@ export const taskRuns = sqliteTable('task_runs', {
   details: text('details'),
   error: text('error'),
   progress: text('progress'),
+  approvalJson: text('approval_json'),
   startedAt: text('started_at'),
   completedAt: text('completed_at'),
   cancelledAt: text('cancelled_at'),

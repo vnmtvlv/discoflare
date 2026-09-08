@@ -78,7 +78,7 @@ export class AgentTaskWorkflow extends ThinkWorkflow<DiscoflareThink, AgentTaskW
             'UPDATE tasks SET status = ?, result_summary = ?, result_details = ?, last_error = NULL, active_run_id = NULL, updated_at = ? WHERE id = ? AND active_run_id = ?',
           ).bind(result.status, result.summary, result.details, now, taskId, runId),
           this.env.DB.prepare(
-            "UPDATE task_runs SET status = 'completed', progress = NULL, summary = ?, details = ?, completed_at = ? WHERE id = ? AND status = 'running'",
+            "UPDATE task_runs SET status = 'completed', progress = NULL, approval_json = NULL, summary = ?, details = ?, completed_at = ? WHERE id = ? AND status = 'running'",
           ).bind(result.summary, result.details, now, runId),
           this.env.DB.prepare('UPDATE agents SET last_active_at = ?, updated_at = ? WHERE user_id = ?')
             .bind(now, now, task.agentId),
@@ -132,7 +132,7 @@ export class AgentTaskWorkflow extends ThinkWorkflow<DiscoflareThink, AgentTaskW
              )`,
           ).bind(newId(), task.agentId, taskId, JSON.stringify({ runId, error: message }), now, runId),
           this.env.DB.prepare("UPDATE tasks SET status = 'failed', last_error = ?, active_run_id = NULL, updated_at = ? WHERE id = ? AND active_run_id = ?").bind(message, now, taskId, runId),
-          this.env.DB.prepare("UPDATE task_runs SET status = 'failed', progress = NULL, error = ?, completed_at = ? WHERE id = ? AND status <> 'cancelled'").bind(message, now, runId),
+          this.env.DB.prepare("UPDATE task_runs SET status = 'failed', progress = NULL, approval_json = NULL, error = ?, completed_at = ? WHERE id = ? AND status <> 'cancelled'").bind(message, now, runId),
         ])
         await signalTasksChanged(this.env, task.boardId, taskId)
         return { failed: true }

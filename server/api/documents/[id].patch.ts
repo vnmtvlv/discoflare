@@ -17,5 +17,5 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  return { document: await updateDocument(env, WORKSPACE_ID, actor.user.id, id, body) }
+  return { document: await updateDocument(env, actor.authorization, id, body) }
 })

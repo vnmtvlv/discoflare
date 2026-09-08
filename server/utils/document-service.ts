@@ -1,9 +1,10 @@
-import type { DocumentDTO } from '../../shared/types'
+import type { DataResourcesDTO, DocumentDTO } from '../../shared/types'
 import { newId, nowIso } from '../../shared/ids'
 import type { DiscoflareEnv } from '../../workers/env'
 import { fail } from './cf'
-import { requireDocument } from './data-resources'
+import { loadDataResources, requireDocument } from './data-resources'
 import { writeAudit } from './messages'
+import { authorize, WorkspaceAction, type AuthorizationContext } from '../../shared/authorization'
 
 export type CreateDocumentInput = {
   title: string
@@ -16,12 +17,31 @@ export type UpdateDocumentInput = {
   version: number
 }
 
+export async function listAuthorizedDataResources(
+  env: DiscoflareEnv,
+  authorization: AuthorizationContext,
+): Promise<DataResourcesDTO> {
+  authorize(authorization, WorkspaceAction.readDocuments)
+  return loadDataResources(env)
+}
+
+export async function getDocument(
+  env: DiscoflareEnv,
+  authorization: AuthorizationContext,
+  id: string,
+): Promise<DocumentDTO> {
+  authorize(authorization, WorkspaceAction.readDocuments)
+  return requireDocument(env, id)
+}
+
 export async function createDocument(
   env: DiscoflareEnv,
-  workspaceId: string,
-  actorId: string,
+  authorization: AuthorizationContext,
   input: CreateDocumentInput,
 ): Promise<DocumentDTO> {
+  authorize(authorization, WorkspaceAction.writeDocuments)
+  const workspaceId = authorization.workspaceId
+  const actorId = authorization.principal.id
   if (await env.DB.prepare('SELECT id FROM documents WHERE lower(title) = lower(?) LIMIT 1').bind(input.title).first()) {
     fail(409, 'duplicate_name', 'A document with this title already exists')
   }
@@ -40,17 +60,20 @@ export async function createDocument(
     targetType: 'document',
     targetId: id,
     meta: { title: input.title },
+    authorization,
   })
   return { id, title: input.title, content, position: position?.value ?? 1024, version: 1, createdBy: actorId, createdAt: now, updatedAt: now }
 }
 
 export async function updateDocument(
   env: DiscoflareEnv,
-  workspaceId: string,
-  actorId: string,
+  authorization: AuthorizationContext,
   id: string,
   input: UpdateDocumentInput,
 ): Promise<DocumentDTO> {
+  authorize(authorization, WorkspaceAction.writeDocuments)
+  const workspaceId = authorization.workspaceId
+  const actorId = authorization.principal.id
   const document = await requireDocument(env, id)
   if (document.version !== input.version) fail(409, 'stale_document', 'This document changed elsewhere. Reload and try again.')
   if (input.title !== undefined && await env.DB.prepare('SELECT id FROM documents WHERE id <> ? AND lower(title) = lower(?) LIMIT 1').bind(id, input.title).first()) {
@@ -73,6 +96,7 @@ export async function updateDocument(
     targetType: 'document',
     targetId: id,
     meta: { fields: Object.keys(input).filter(key => key !== 'version') },
+    authorization,
   })
   return updated
 }

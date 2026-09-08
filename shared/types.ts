@@ -98,6 +98,7 @@ export type TaskRunDTO = {
   details: string | null
   error: string | null
   progress: string | null
+  approval: AgentApprovalDTO | null
   startedAt: string | null
   completedAt: string | null
   cancelledAt: string | null

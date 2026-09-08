@@ -6,6 +6,7 @@ import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
 import { mailPermissionAllows } from '../../shared/mail'
 import type { ChannelType, PublicUser } from '../../shared/types'
+import type { AuthorizationContext } from '../../shared/authorization'
 import { requireUser } from './auth'
 import { cf, fail } from './cf'
 import { getDb } from './db'
@@ -19,6 +20,7 @@ export type Membership = {
   perms: number
   ownerId: string
   isOwner: boolean
+  authorization: AuthorizationContext
 }
 
 export type ChannelAccess = Membership & {
@@ -51,6 +53,18 @@ export async function requireMember(event: H3Event, workspaceId: string, flag?: 
   if (flag !== undefined && !hasPermission(perms, flag)) {
     fail(403, 'forbidden', 'Missing permission')
   }
+  const authorization: AuthorizationContext = {
+    workspaceId,
+    principal: {
+      id: user.id,
+      kind: user.kind,
+      roleId: row.roleId!,
+      roleName: row.roleName,
+      permissions: perms,
+      isOwner,
+    },
+    credential: { kind: 'session' },
+  }
   return {
     user,
     workspaceId,
@@ -59,6 +73,7 @@ export async function requireMember(event: H3Event, workspaceId: string, flag?: 
     perms,
     ownerId: home.ownerId,
     isOwner,
+    authorization,
   }
 }
 
@@ -135,6 +150,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
       accessRootType: rootType,
       frozen,
       participants,
+      authorization: { ...baseMember.authorization, principal: { ...baseMember.authorization.principal, permissions: perms } },
     }
   }
 
@@ -153,5 +169,13 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     fail(403, 'forbidden', 'Missing permission')
   }
 
-  return { ...baseMember, perms, channel, accessRootType: rootType, frozen: false, participants: [] }
+  return {
+    ...baseMember,
+    perms,
+    authorization: { ...baseMember.authorization, principal: { ...baseMember.authorization.principal, permissions: perms } },
+    channel,
+    accessRootType: rootType,
+    frozen: false,
+    participants: [],
+  }
 }

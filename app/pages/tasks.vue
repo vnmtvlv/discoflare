@@ -41,6 +41,7 @@ const showLabels = ref(false)
 const showConfirm = ref(false)
 const saving = ref(false)
 const runningId = ref<string | null>(null)
+const approvalBusyId = ref<string | null>(null)
 const draggedTaskId = ref<string | null>(null)
 const confirmAction = shallowRef<null | (() => Promise<void>)>(null)
 const confirmTitle = ref('')
@@ -365,6 +366,28 @@ async function reconcileTask(taskId: string) {
   await mutate(() => api(`/api/tasks/${taskId}/reconcile`, { method: 'POST' }), 'Run checked')
 }
 
+async function controlTaskApproval(runId: string, action: 'approve' | 'reject', executionId: string) {
+  const task = selectedTask.value
+  if (!task) return
+  approvalBusyId.value = executionId
+  try {
+    await api(`/api/tasks/${task.id}/runs/${runId}/approval`, { method: 'POST', body: { action, executionId } })
+    await refresh(task.id)
+    toast.add({ title: action === 'approve' ? 'Action approved' : 'Action rejected', color: 'success' })
+  }
+  catch (error) {
+    toast.add({ title: errorMessage(error), color: 'error' })
+  }
+  finally {
+    approvalBusyId.value = null
+  }
+}
+
+function approvalInput(input: unknown): string {
+  if (input && typeof input === 'object' && 'command' in input && typeof input.command === 'string') return input.command
+  return JSON.stringify(input, null, 2)
+}
+
 function archiveTask() {
   const task = selectedTask.value
   if (!task) return
@@ -615,6 +638,18 @@ const boardMenu = computed(() => [[
             <UButton color="error" variant="soft" icon="i-ph-stop" label="Cancel" @click="cancelTask(selectedTask.id)" />
             <UButton color="neutral" variant="soft" icon="i-ph-arrows-clockwise" label="Check run" @click="reconcileTask(selectedTask.id)" />
             <span v-if="selectedTask.latestRun?.progress" class="text-sm text-muted">{{ selectedTask.latestRun.progress }}</span>
+          </div>
+          <div v-if="selectedTask.latestRun?.approval" class="rounded-lg border border-warning/40 bg-warning/5 p-4">
+            <div class="flex items-center gap-2">
+              <UIcon name="i-ph-warning" class="size-5 text-warning" />
+              <span class="font-medium text-highlighted">{{ selectedTask.latestRun.approval.summary }}</span>
+              <UBadge class="ml-auto" color="warning" variant="subtle">{{ selectedTask.latestRun.approval.risk ?? 'approval' }}</UBadge>
+            </div>
+            <pre class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs">{{ approvalInput(selectedTask.latestRun.approval.input) }}</pre>
+            <div class="mt-3 flex justify-end gap-2">
+              <UButton color="neutral" variant="outline" label="Reject" :loading="approvalBusyId === selectedTask.latestRun.approval.executionId" @click="controlTaskApproval(selectedTask.latestRun.id, 'reject', selectedTask.latestRun.approval.executionId)" />
+              <UButton color="warning" label="Approve" :loading="approvalBusyId === selectedTask.latestRun.approval.executionId" @click="controlTaskApproval(selectedTask.latestRun.id, 'approve', selectedTask.latestRun.approval.executionId)" />
+            </div>
           </div>
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField label="Title" class="sm:col-span-2"><UInput v-model="editTask.title" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
