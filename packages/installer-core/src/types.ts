@@ -26,6 +26,8 @@ export type DeployRequest = {
   mailEnabled: boolean
   mailSubdomain: string
   mailLocalPart: string
+  realtimekitEnabled: boolean
+  realtimekitApiToken: string
   targetVersion?: string
 }
 
@@ -56,6 +58,8 @@ export type CloudflareInstallation = {
     accessApplicationId: string | null
     accessHealthApplicationId: string | null
     accessDeletionApplicationId: string | null
+    realtimekitAppId: string | null
+    realtimekitManaged: boolean
   }
 }
 
@@ -70,6 +74,7 @@ export type DeployProgressStep =
   | 'worker'
   | 'domain'
   | 'mail'
+  | 'realtimekit'
   | 'computer'
   | 'schedule'
   | 'verify'

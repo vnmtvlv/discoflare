@@ -7,6 +7,7 @@ import { randomBase64Url } from './random.js'
 import { ensureCloudflareAccess, ensureWorkersHostname } from './access.js'
 import { ensurePrimaryMail } from './primary-mail.js'
 import { ensureTenantContainerImage } from './container-registry.js'
+import { ensureManagedRealtimeKit, realtimeKitCapability, type ManagedRealtimeKit } from './realtimekit.js'
 
 type WorkerUploadResult = {
   deployment_id?: string
@@ -55,6 +56,12 @@ type ExistingWorker = {
   accessHealthApplicationId?: string
   accessDeletionApplicationId?: string
   primary?: boolean
+  realtimekitAccountId?: string
+  realtimekitAppId?: string
+  realtimekitVoicePreset?: string
+  realtimekitAvPreset?: string
+  realtimekitApiTokenConfigured?: boolean
+  realtimekitManaged?: boolean
 }
 
 type EmailRoutingSettings = { enabled?: boolean; status?: string }
@@ -63,7 +70,7 @@ type DnsRecord = { name?: string; content?: string; type?: string }
 type SendingSubdomain = { name: string; enabled: boolean }
 type WorkerDomain = { hostname: string; service: string }
 type WorkerSearchResult = { id?: string, script_name?: string }
-type DeploymentHealth = { version?: string; ok?: boolean; ready?: boolean; migrated?: boolean }
+type DeploymentHealth = { version?: string; ok?: boolean; ready?: boolean; migrated?: boolean; realtimekit?: boolean }
 
 export const installerMarker = 'discoflare.com/v1'
 const bootstrapMarker = 'discoflare.com/bootstrap/v1'
@@ -123,6 +130,12 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       accessHealthApplicationId: text('CF_ACCESS_HEALTH_APP_ID'),
       accessDeletionApplicationId: text('CF_ACCESS_DELETION_APP_ID'),
       primary: text('DISCOFLARE_PRIMARY') === 'true',
+      realtimekitAccountId: text('REALTIMEKIT_ACCOUNT_ID'),
+      realtimekitAppId: text('REALTIMEKIT_APP_ID'),
+      realtimekitVoicePreset: text('REALTIMEKIT_PRESET_VOICE'),
+      realtimekitAvPreset: text('REALTIMEKIT_PRESET_AV'),
+      realtimekitApiTokenConfigured: bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text'),
+      realtimekitManaged: text('DISCOFLARE_REALTIMEKIT_MANAGED') === 'true',
     }
   }
   return { exists: false }
@@ -364,6 +377,7 @@ async function uploadWorker(
   telemetry: { installationId: string, token: string },
   access: { issuer: string, audience: string, applicationId: string, healthApplicationId: string, deletionApplicationId: string } | null,
   primary: boolean,
+  realtimekit: ManagedRealtimeKit | null,
 ) {
   const hostname = new URL(resources.origin).hostname
   const bindings: Array<Record<string, unknown>> = [
@@ -408,6 +422,18 @@ async function uploadWorker(
       { type: 'plain_text', name: 'MAIL_APP_HOSTNAME', text: hostname },
       { type: 'plain_text', name: 'MAIL_DEFAULT_LOCAL_PART', text: request.mailLocalPart },
     )
+  }
+  if (realtimekit) {
+    bindings.push(
+      { type: 'plain_text', name: 'REALTIMEKIT_ACCOUNT_ID', text: realtimekit.accountId },
+      { type: 'plain_text', name: 'REALTIMEKIT_APP_ID', text: realtimekit.appId },
+      { type: 'plain_text', name: 'REALTIMEKIT_PRESET_VOICE', text: realtimekit.voicePreset },
+      { type: 'plain_text', name: 'REALTIMEKIT_PRESET_AV', text: realtimekit.avPreset },
+    )
+    if (realtimekit.apiToken) bindings.push({ type: 'secret_text', name: 'REALTIMEKIT_API_KEY', text: realtimekit.apiToken })
+    if (realtimekit.managed) {
+      bindings.push({ type: 'plain_text', name: 'DISCOFLARE_REALTIMEKIT_MANAGED', text: 'true' })
+    }
   }
   if (!existing.exists) {
     bindings.push(
@@ -505,7 +531,7 @@ async function deployContainer(
   })
 }
 
-async function verifyDeployment(origin: string, version: string, expectReady: boolean, report?: DeployProgressReporter) {
+async function verifyDeployment(origin: string, version: string, expectReady: boolean, expectRealtimeKit: boolean, report?: DeployProgressReporter) {
   const attempts = 10
   let lastStatus = 0
   let lastFailure = ''
@@ -529,7 +555,13 @@ async function verifyDeployment(origin: string, version: string, expectReady: bo
         continue
       }
       const health = await response.json() as DeploymentHealth
-      if (health.version === version && health.ok && health.migrated && (!expectReady || health.ready)) return true
+      if (
+        health.version === version
+        && health.ok
+        && health.migrated
+        && (!expectReady || health.ready)
+        && (!expectRealtimeKit || health.realtimekit)
+      ) return true
       lastFailure = `health response was not ready for Discoflare ${version}`
     }
     catch (error) {
@@ -556,6 +588,9 @@ export async function deployDiscoflare(
   await progress('installation', 'active')
   if (request.mailEnabled && !release.manifest.capabilities?.includes('primary-workspace-mail-v1')) {
     throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support primary workspace mail` })
+  }
+  if (request.realtimekitEnabled && !release.manifest.capabilities?.includes(realtimeKitCapability)) {
+    throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support managed RealtimeKit` })
   }
   const existing = await inspectWorker(client, request.accountId, request.workerName)
   const existingPrimary = await primaryWorker(client, request.accountId)
@@ -648,6 +683,36 @@ export async function deployDiscoflare(
   }
   await progress('access', 'complete', request.authMode === 'access' ? 'Email code sign-in ready' : 'Using Discoflare accounts')
 
+  let realtimekit: ManagedRealtimeKit | null = null
+  await progress('realtimekit', 'active')
+  const existingRealtimeKit = Boolean(
+    existing.realtimekitAccountId
+    && existing.realtimekitAppId
+    && existing.realtimekitApiTokenConfigured,
+  )
+  if (existingRealtimeKit) {
+    realtimekit = {
+      accountId: existing.realtimekitAccountId!,
+      appId: existing.realtimekitAppId!,
+      voicePreset: existing.realtimekitVoicePreset || 'voice',
+      avPreset: existing.realtimekitAvPreset || existing.realtimekitVoicePreset || 'group_call_host',
+      managed: existing.realtimekitManaged === true,
+    }
+    await progress('realtimekit', 'complete', existing.realtimekitManaged ? 'Managed credentials reused' : 'Existing credentials preserved')
+  }
+  else if (request.realtimekitEnabled) {
+    if (!request.realtimekitApiToken) {
+      throw createError({ statusCode: 400, statusMessage: 'Create and paste a Cloudflare Realtime API token to enable Huddles' })
+    }
+    realtimekit = await ensureManagedRealtimeKit(request.realtimekitApiToken, request.accountId, request.workerName, {
+      appId: existing.realtimekitAppId,
+    })
+    await progress('realtimekit', 'complete', 'App, presets, and runtime token verified')
+  }
+  else {
+    await progress('realtimekit', 'complete', 'Skipped')
+  }
+
   await progress('worker', 'active')
   const primaryMail = request.mailEnabled
     ? await ensurePrimaryMail(
@@ -662,7 +727,7 @@ export async function deployDiscoflare(
     kvId,
     assetsJwt,
     origin,
-  }, existing, ownerSetupToken, telemetry, access, primary)
+  }, existing, ownerSetupToken, telemetry, access, primary, realtimekit)
   await progress('worker', 'complete', `Discoflare ${release.manifest.version}`)
 
   await progress('domain', 'active')
@@ -696,7 +761,13 @@ export async function deployDiscoflare(
   await progress('schedule', 'complete')
 
   await progress('verify', 'active')
-  await verifyDeployment(origin, release.manifest.version, existing.exists && request.authMode !== 'access', report)
+  await verifyDeployment(
+    origin,
+    release.manifest.version,
+    existing.exists && request.authMode !== 'access',
+    Boolean(realtimekit),
+    report,
+  )
   await progress('verify', 'complete', 'Workspace health verified')
   return {
     url: origin,
