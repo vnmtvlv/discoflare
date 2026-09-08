@@ -10,6 +10,11 @@ type ItemRow = Parameters<typeof databaseItemDto>[0]
 const operators = new Set<string>(DatabaseViewFilterOperators)
 const layouts = new Set<string>(DatabaseViewLayouts)
 
+export function validCalendarRange(from: string, to: string): boolean {
+  const duration = Date.parse(to) - Date.parse(from)
+  return duration >= 0 && duration <= 62 * 86_400_000
+}
+
 function fieldFor(fields: StoredDatabaseField[], fieldId: string): StoredDatabaseField | null {
   return fields.find(field => field.id === fieldId) ?? null
 }
@@ -72,10 +77,12 @@ export function normalizeDatabaseViewConfig(
   const defaults = defaultDatabaseViewConfig()
   const raw = value && typeof value === 'object' ? value as Partial<DatabaseViewConfig> : {}
   const validFieldIds = new Set(fields.map(field => field.id))
-  const visibleFieldIds = Array.isArray(raw.visibleFieldIds)
+  const visibleFieldIds = raw.visibleFieldIds === null
+    ? null
+    : Array.isArray(raw.visibleFieldIds)
     ? [...new Set(raw.visibleFieldIds.filter((id): id is string => typeof id === 'string' && validFieldIds.has(id)))]
     : defaults.visibleFieldIds
-  if (strict && Array.isArray(raw.visibleFieldIds) && visibleFieldIds.length !== raw.visibleFieldIds.length) {
+  if (strict && Array.isArray(raw.visibleFieldIds) && visibleFieldIds?.length !== raw.visibleFieldIds.length) {
     fail(400, 'bad_request', 'Visible fields must belong to this database')
   }
   const filters = Array.isArray(raw.filters)
@@ -149,7 +156,12 @@ function sqlValue(value: DatabaseValue | undefined): string | number | null {
   return typeof value === 'boolean' ? Number(value) : value ?? null
 }
 
-function viewQuery(config: DatabaseViewConfig, fields: StoredDatabaseField[], search: string) {
+function viewQuery(
+  config: DatabaseViewConfig,
+  fields: StoredDatabaseField[],
+  search: string,
+  dateRange?: { from: string, to: string },
+) {
   const clauses = ['database_id = ?']
   const values: Array<string | number | null> = []
   for (const filter of config.filters) {
@@ -176,6 +188,13 @@ function viewQuery(config: DatabaseViewConfig, fields: StoredDatabaseField[], se
     const pattern = `%${escapeLike(needle)}%`
     values.push(...columns.map(() => pattern))
   }
+  if (dateRange && config.dateFieldId) {
+    const column = columnFor(fields, config.dateFieldId)
+    if (column) {
+      clauses.push(`${column} >= ? AND ${column} <= ?`)
+      values.push(dateRange.from, dateRange.to)
+    }
+  }
   const order = config.sorts.flatMap((sort) => {
     const column = columnFor(fields, sort.fieldId)
     return column ? [`${column} IS NULL`, `${column} COLLATE NOCASE ${sort.direction.toUpperCase()}`] : []
@@ -187,7 +206,7 @@ function viewQuery(config: DatabaseViewConfig, fields: StoredDatabaseField[], se
 export async function loadDatabasePage(
   env: DiscoflareEnv,
   databaseId: string,
-  options: { viewId?: string, page: number, pageSize: number, search?: string },
+  options: { viewId?: string, page: number, pageSize: number, search?: string, dateFrom?: string, dateTo?: string },
 ): Promise<DatabasePageDTO> {
   const definition = await requireDatabase(env, databaseId)
   const fields = await databaseFieldsFor(env, databaseId)
@@ -196,16 +215,29 @@ export async function loadDatabasePage(
   if (options.viewId && !requestedView) fail(404, 'not_found', 'Database view not found')
   const view = requestedView ?? views[0]
   if (!view) fail(500, 'missing_database_view', 'This database has no view')
-  const query = viewQuery(view.config, fields, options.search ?? '')
+  const dateRange = view.layout === 'calendar' && options.dateFrom && options.dateTo
+    ? { from: options.dateFrom, to: options.dateTo }
+    : undefined
+  const query = viewQuery(view.config, fields, options.search ?? '', dateRange)
   const offset = (options.page - 1) * options.pageSize
-  const [countResult, itemsResult] = await env.DB.batch([
+  const groupColumn = view.layout === 'board' && view.config.groupFieldId
+    ? columnFor(fields, view.config.groupFieldId)
+    : null
+  const statements = [
     env.DB.prepare(`SELECT COUNT(*) as total FROM database_items WHERE ${query.where}`).bind(databaseId, ...query.values),
     env.DB.prepare(
       `SELECT *, database_id as databaseId, created_by as createdBy,
        created_at as createdAt, updated_at as updatedAt FROM database_items
        WHERE ${query.where} ORDER BY ${query.order} LIMIT ? OFFSET ?`,
     ).bind(databaseId, ...query.values, options.pageSize, offset),
-  ])
+  ]
+  if (groupColumn) {
+    statements.push(env.DB.prepare(
+      `SELECT COALESCE(CAST(${groupColumn} AS TEXT), '') as groupKey, COUNT(*) as total
+       FROM database_items WHERE ${query.where} GROUP BY ${groupColumn}`,
+    ).bind(databaseId, ...query.values))
+  }
+  const [countResult, itemsResult, groupResult] = await env.DB.batch(statements)
   const count = (countResult?.results?.[0] as { total?: number } | undefined)?.total ?? 0
   const items = (itemsResult?.results ?? []) as ItemRow[]
   return {
@@ -216,5 +248,8 @@ export async function loadDatabasePage(
     total: Number(count),
     page: options.page,
     pageSize: options.pageSize,
+    ...(groupResult
+      ? { groupCounts: Object.fromEntries((groupResult.results ?? []).map(row => [String((row as { groupKey?: unknown }).groupKey ?? ''), Number((row as { total?: unknown }).total ?? 0)])) }
+      : {}),
   }
 }

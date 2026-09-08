@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
 import { defaultDatabaseViewConfig } from '../../shared/database'
 import { INIT_SQL } from '../../server/utils/db'
-import { loadDatabasePage, normalizeDatabaseViewConfig } from '../../server/utils/database-views'
+import { loadDatabasePage, normalizeDatabaseViewConfig, validCalendarRange } from '../../server/utils/database-views'
 
 function d1(sqlite: DatabaseSync): D1Database {
   function prepare(sql: string) {
@@ -72,6 +72,8 @@ describe('database views', () => {
       { id: 'status', databaseId: 'leads', name: 'Status', type: 'select' as const, slot: 'select_1', options: ['Open', 'Won'], position: 0, createdAt: '', updatedAt: '' },
     ]
     expect(() => normalizeDatabaseViewConfig(defaultDatabaseViewConfig(), fields, 'board', true)).toThrow()
+    expect(normalizeDatabaseViewConfig(defaultDatabaseViewConfig(), fields, 'table', true).visibleFieldIds).toBeNull()
+    expect(normalizeDatabaseViewConfig({ ...defaultDatabaseViewConfig(), visibleFieldIds: [] }, fields, 'table', true).visibleFieldIds).toEqual([])
     const board = { ...defaultDatabaseViewConfig(), groupFieldId: 'status' }
     expect(normalizeDatabaseViewConfig(board, fields, 'board', true).groupFieldId).toBe('status')
     expect(() => normalizeDatabaseViewConfig({ ...board, filters: [{ fieldId: 'status', operator: 'equals', value: 'Missing' }] }, fields, 'board', true)).toThrow()
@@ -88,6 +90,39 @@ describe('database views', () => {
       DELETE FROM database_definitions WHERE id = 'leads';
     `)
     expect(sqlite.prepare('SELECT COUNT(*) as count FROM data_bookmarks').get()).toEqual({ count: 0 })
+    sqlite.close()
+  })
+
+  it('limits calendar data to its visible range and returns complete board group totals', async () => {
+    expect(validCalendarRange('2026-09-12', '2026-09-11')).toBe(false)
+    expect(validCalendarRange('2026-09-11', '2026-09-12')).toBe(true)
+    const sqlite = fixture()
+    const calendar = {
+      ...defaultDatabaseViewConfig(),
+      dateFieldId: 'due',
+    }
+    const board = {
+      ...defaultDatabaseViewConfig(),
+      groupFieldId: 'status',
+    }
+    sqlite.prepare(`INSERT INTO database_views (id, database_id, name, layout, config_json, position, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run('calendar', 'leads', 'Calendar', 'calendar', JSON.stringify(calendar), 2048, 'owner')
+    sqlite.prepare(`INSERT INTO database_views (id, database_id, name, layout, config_json, position, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      .run('board', 'leads', 'Board', 'board', JSON.stringify(board), 3072, 'owner')
+
+    const calendarPage = await loadDatabasePage({ DB: d1(sqlite) } as never, 'leads', {
+      viewId: 'calendar',
+      page: 1,
+      pageSize: 100,
+      dateFrom: '2026-09-11',
+      dateTo: '2026-09-12',
+    })
+    expect(calendarPage.items.map(item => item.id)).toEqual(['three', 'two'])
+    expect(calendarPage.total).toBe(2)
+
+    const boardPage = await loadDatabasePage({ DB: d1(sqlite) } as never, 'leads', { viewId: 'board', page: 1, pageSize: 1 })
+    expect(boardPage.items).toHaveLength(1)
+    expect(boardPage.groupCounts).toEqual({ Open: 2, Won: 1 })
     sqlite.close()
   })
 })

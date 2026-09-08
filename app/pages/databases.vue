@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
-import { DatabaseFieldTypes, DatabaseSlotCounts, DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseFieldType, type DatabaseValue, type DatabaseViewFilterOperator, type DatabaseViewLayout } from '~~/shared/database'
+import { DatabaseFieldTypes, DatabaseSlotCounts, DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseFieldType, type DatabaseValue, type DatabaseViewFilter, type DatabaseViewFilterOperator, type DatabaseViewLayout, type DatabaseViewSort } from '~~/shared/database'
 import { databasePath } from '~~/shared/paths'
 import type { DataResourcesDTO, DatabaseDTO, DatabaseFieldDTO, DatabaseItemDTO, DatabasePageDTO, DatabaseViewDTO } from '~~/shared/types'
 
@@ -40,10 +40,31 @@ const search = ref('')
 const debouncedSearch = refDebounced(search, 250)
 const page = ref(1)
 const pageSize = 100
+const calendarCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
+function localDateKey(date: Date) {
+  const year = String(date.getFullYear())
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+const calendarRange = computed(() => {
+  const from = new Date(calendarCursor.value.getFullYear(), calendarCursor.value.getMonth(), 1)
+  from.setDate(from.getDate() - from.getDay())
+  const to = new Date(from)
+  to.setDate(from.getDate() + 41)
+  return { from: localDateKey(from), to: localDateKey(to) }
+})
 const databaseQ = useQuery({
-  queryKey: computed(() => ['database', activeDatabaseSummary.value?.id, selectedViewId.value, debouncedSearch.value, page.value]),
+  queryKey: computed(() => ['database', activeDatabaseSummary.value?.id, selectedViewId.value, debouncedSearch.value, page.value, calendarRange.value.from, calendarRange.value.to]),
   queryFn: () => api<DatabasePageDTO>(`/api/databases/${activeDatabaseSummary.value!.id}`, {
-    query: { view: selectedViewId.value || undefined, search: debouncedSearch.value, page: page.value, pageSize },
+    query: {
+      view: selectedViewId.value || undefined,
+      search: debouncedSearch.value,
+      page: page.value,
+      pageSize,
+      dateFrom: calendarRange.value.from,
+      dateTo: calendarRange.value.to,
+    },
   }),
   enabled: computed(() => Boolean(activeDatabaseSummary.value?.id)),
   refetchInterval: 10_000,
@@ -55,8 +76,8 @@ const views = computed(() => databaseQ.data.value?.views ?? [])
 const activeView = computed(() => databaseQ.data.value?.view ?? null)
 const visibleFields = computed(() => {
   const fields = activeDatabase.value?.fields ?? []
-  const visible = activeView.value?.config.visibleFieldIds ?? []
-  return visible.length ? fields.filter(field => visible.includes(field.id)) : fields
+  const visible = activeView.value?.config.visibleFieldIds
+  return visible === null || visible === undefined ? fields : fields.filter(field => visible.includes(field.id))
 })
 const saving = ref(false)
 const rowEdits = useDatabaseEdits(
@@ -99,11 +120,9 @@ const editingViewId = ref<string | null>(null)
 const viewName = ref('')
 const viewLayout = ref<DatabaseViewLayout>('table')
 const viewVisibleFieldIds = ref<string[]>([])
-const viewSortFieldId = ref('title')
-const viewSortDirection = ref<'asc' | 'desc'>('asc')
-const viewFilterFieldId = ref('')
-const viewFilterOperator = ref<DatabaseViewFilterOperator>('equals')
-const viewFilterValue = ref('')
+type EditableViewFilter = { fieldId: string, operator: DatabaseViewFilterOperator, value: string }
+const viewSorts = ref<DatabaseViewSort[]>([])
+const viewFilters = ref<EditableViewFilter[]>([])
 const viewGroupFieldId = ref('')
 const viewDateFieldId = ref('')
 const showConfirm = ref(false)
@@ -126,20 +145,13 @@ const boardField = computed(() => activeDatabase.value?.fields.find(field => fie
 const boardGroups = computed(() => {
   const field = boardField.value
   if (!field) return []
-  return [...field.options.map(option => ({ key: option, label: option, items: visibleItems.value.filter(item => item.values[field.id] === option) })), {
-    key: '', label: 'No value', items: visibleItems.value.filter(item => !item.values[field.id]),
+  const counts = databaseQ.data.value?.groupCounts ?? {}
+  return [...field.options.map(option => ({ key: option, label: option, total: counts[option] ?? 0, items: visibleItems.value.filter(item => item.values[field.id] === option) })), {
+    key: '', label: 'No value', total: counts[''] ?? 0, items: visibleItems.value.filter(item => !item.values[field.id]),
   }]
 })
-const calendarCursor = ref(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
-function localDateKey(date: Date) {
-  const year = String(date.getFullYear())
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
 const calendarDays = computed(() => {
-  const start = new Date(calendarCursor.value.getFullYear(), calendarCursor.value.getMonth(), 1)
-  start.setDate(start.getDate() - start.getDay())
+  const start = new Date(`${calendarRange.value.from}T00:00:00`)
   return Array.from({ length: 42 }, (_, index) => {
     const date = new Date(start)
     date.setDate(start.getDate() + index)
@@ -148,29 +160,36 @@ const calendarDays = computed(() => {
     return { date, key, current: date.getMonth() === calendarCursor.value.getMonth(), items: fieldId ? visibleItems.value.filter(item => item.values[fieldId] === key) : [] }
   })
 })
-const calendarUnscheduledItems = computed(() => {
-  const fieldId = activeView.value?.config.dateFieldId
-  return fieldId ? visibleItems.value.filter(item => !item.values[fieldId]) : []
-})
 const calendarTitle = computed(() => calendarCursor.value.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))
-const selectedFilterField = computed(() => activeDatabase.value?.fields.find(field => field.id === viewFilterFieldId.value) ?? null)
-const selectedFilterOptions = computed(() => selectedFilterField.value?.options.map(option => ({ label: option, value: option })) ?? [])
-const filterOperatorOptions = computed(() => {
-  const type = viewFilterFieldId.value === 'title' ? 'text' : selectedFilterField.value?.type
+function filterField(filter: EditableViewFilter) {
+  return activeDatabase.value?.fields.find(field => field.id === filter.fieldId) ?? null
+}
+function filterOperatorOptions(filter: EditableViewFilter) {
+  const type = filter.fieldId === 'title' ? 'text' : filterField(filter)?.type
   return DatabaseViewFilterOperators.filter((operator) => {
     if (['equals', 'not_equals', 'is_empty', 'is_not_empty'].includes(operator)) return true
     if (operator === 'contains') return type === 'text' || type === 'select'
     if (operator === 'greater_than' || operator === 'less_than') return type === 'number'
     return type === 'date'
   }).map(operator => ({ label: operator.replaceAll('_', ' '), value: operator }))
-})
-const showFilterValue = computed(() => !['is_empty', 'is_not_empty'].includes(viewFilterOperator.value))
-const usesSelectFilterChoice = computed(() => showFilterValue.value
-  && selectedFilterField.value?.type === 'select'
-  && viewFilterOperator.value !== 'contains')
+}
+function normalizeEditableFilter(filter: EditableViewFilter) {
+  const allowed = filterOperatorOptions(filter)
+  if (!allowed.some(option => option.value === filter.operator)) filter.operator = 'equals'
+  const field = filterField(filter)
+  if (field?.type === 'boolean' && !['true', 'false'].includes(filter.value)) filter.value = ''
+  if (filterUsesSelectChoice(filter) && !field?.options.includes(filter.value)) filter.value = ''
+}
+function filterNeedsValue(filter: EditableViewFilter) {
+  return !['is_empty', 'is_not_empty'].includes(filter.operator)
+}
+function filterUsesSelectChoice(filter: EditableViewFilter) {
+  return filterNeedsValue(filter) && filterField(filter)?.type === 'select' && filter.operator !== 'contains'
+}
 const canSaveView = computed(() => Boolean(
   viewName.value.trim()
-  && (!showFilterValue.value || !viewFilterFieldId.value || viewFilterValue.value !== '')
+  && viewFilters.value.every(filter => filter.fieldId && (!filterNeedsValue(filter) || filter.value !== ''))
+  && viewSorts.value.every(sort => sort.fieldId)
   && (viewLayout.value !== 'board' || viewGroupFieldId.value)
   && (viewLayout.value !== 'calendar' || viewDateFieldId.value),
 ))
@@ -188,11 +207,6 @@ watch([activeDatabaseSummary, selectedViewId], ([database, viewId]) => {
   }
 }, { immediate: true })
 watch([selectedDatabaseId, selectedViewId, debouncedSearch], () => { page.value = 1 })
-watch([viewFilterFieldId, viewFilterOperator], () => {
-  if (!filterOperatorOptions.value.some(option => option.value === viewFilterOperator.value)) viewFilterOperator.value = 'equals'
-  if (selectedFilterField.value?.type === 'boolean' && !['true', 'false'].includes(viewFilterValue.value)) viewFilterValue.value = ''
-  if (usesSelectFilterChoice.value && !selectedFilterField.value?.options.includes(viewFilterValue.value)) viewFilterValue.value = ''
-})
 
 watch(() => nav.createDatabaseOpen.value, (open) => {
   if (!open) return
@@ -335,11 +349,8 @@ function openCreateView() {
   viewName.value = ''
   viewLayout.value = 'table'
   viewVisibleFieldIds.value = fields.map(field => field.id)
-  viewSortFieldId.value = 'title'
-  viewSortDirection.value = 'asc'
-  viewFilterFieldId.value = ''
-  viewFilterOperator.value = 'equals'
-  viewFilterValue.value = ''
+  viewSorts.value = [{ fieldId: 'title', direction: 'asc' }]
+  viewFilters.value = []
   viewGroupFieldId.value = selectFields.value[0]?.id ?? ''
   viewDateFieldId.value = dateFields.value[0]?.id ?? ''
   showViewForm.value = true
@@ -347,27 +358,36 @@ function openCreateView() {
 
 function openEditView(view: DatabaseViewDTO) {
   const fields = activeDatabase.value?.fields ?? []
-  const filter = view.config.filters[0]
-  const sort = view.config.sorts[0]
   editingViewId.value = view.id
   viewName.value = view.name
   viewLayout.value = view.layout
-  viewVisibleFieldIds.value = view.config.visibleFieldIds.length ? [...view.config.visibleFieldIds] : fields.map(field => field.id)
-  viewSortFieldId.value = sort?.fieldId ?? ''
-  viewSortDirection.value = sort?.direction ?? 'asc'
-  viewFilterFieldId.value = filter?.fieldId ?? ''
-  viewFilterOperator.value = filter?.operator ?? 'equals'
-  viewFilterValue.value = filter?.value === undefined || filter.value === null ? '' : String(filter.value)
+  viewVisibleFieldIds.value = view.config.visibleFieldIds === null ? fields.map(field => field.id) : [...view.config.visibleFieldIds]
+  viewSorts.value = view.config.sorts.map(sort => ({ ...sort }))
+  viewFilters.value = view.config.filters.map(filter => ({
+    fieldId: filter.fieldId,
+    operator: filter.operator,
+    value: filter.value === undefined || filter.value === null ? '' : String(filter.value),
+  }))
   viewGroupFieldId.value = view.config.groupFieldId ?? ''
   viewDateFieldId.value = view.config.dateFieldId ?? ''
   showViewForm.value = true
 }
 
-function filterValue(): DatabaseValue {
-  const field = selectedFilterField.value
-  if (field?.type === 'number') return Number(viewFilterValue.value)
-  if (field?.type === 'boolean') return String(viewFilterValue.value) === 'true'
-  return String(viewFilterValue.value)
+function filterValue(filter: EditableViewFilter): DatabaseValue {
+  const field = filterField(filter)
+  if (field?.type === 'number') return Number(filter.value)
+  if (field?.type === 'boolean') return filter.value === 'true'
+  return filter.value
+}
+
+function addViewFilter() {
+  if (viewFilters.value.length >= 8) return
+  viewFilters.value.push({ fieldId: 'title', operator: 'contains', value: '' })
+}
+
+function addViewSort() {
+  if (viewSorts.value.length >= 3) return
+  viewSorts.value.push({ fieldId: 'title', direction: 'asc' })
 }
 
 async function saveView() {
@@ -377,11 +397,13 @@ async function saveView() {
   const current = editingViewId.value ? views.value.find(view => view.id === editingViewId.value) : null
   const allFieldIds = database.fields.map(field => field.id)
   const config = defaultDatabaseViewConfig()
-  config.visibleFieldIds = viewVisibleFieldIds.value.length === allFieldIds.length ? [] : [...viewVisibleFieldIds.value]
-  config.sorts = viewSortFieldId.value ? [{ fieldId: viewSortFieldId.value, direction: viewSortDirection.value }] : []
-  config.filters = viewFilterFieldId.value
-    ? [{ fieldId: viewFilterFieldId.value, operator: viewFilterOperator.value, ...(showFilterValue.value ? { value: filterValue() } : {}) }]
-    : []
+  config.visibleFieldIds = viewVisibleFieldIds.value.length === allFieldIds.length ? null : [...viewVisibleFieldIds.value]
+  config.sorts = viewSorts.value.map(sort => ({ ...sort }))
+  config.filters = viewFilters.value.map((filter): DatabaseViewFilter => ({
+    fieldId: filter.fieldId,
+    operator: filter.operator,
+    ...(filterNeedsValue(filter) ? { value: filterValue(filter) } : {}),
+  }))
   config.groupFieldId = viewLayout.value === 'board' ? viewGroupFieldId.value || null : null
   config.dateFieldId = viewLayout.value === 'calendar' ? viewDateFieldId.value || null : null
   let createdId: string | null = null
@@ -417,6 +439,7 @@ function toggleVisibleField(fieldId: string, visible: boolean) {
 
 function changeCalendarMonth(direction: -1 | 1) {
   calendarCursor.value = new Date(calendarCursor.value.getFullYear(), calendarCursor.value.getMonth() + direction, 1)
+  page.value = 1
 }
 
 function dropBoard(group: string) {
@@ -573,7 +596,7 @@ const viewMenu = computed(() => activeView.value ? [[
           </template>
         </UAlert>
 
-        <div v-if="!visibleItems.length" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
+        <div v-if="!visibleItems.length && activeView.layout !== 'calendar'" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
         <div v-else-if="activeView.layout === 'table'" class="min-h-0 flex-1 overflow-auto">
           <table class="min-w-max border-separate border-spacing-0 text-sm">
             <thead class="sticky top-0 z-10 bg-default">
@@ -623,7 +646,7 @@ const viewMenu = computed(() => activeView.value ? [[
         <div v-else-if="activeView.layout === 'board'" class="min-h-0 flex-1 overflow-auto p-3">
           <div class="flex min-h-full min-w-max gap-3">
             <section v-for="group in boardGroups" :key="group.key" class="w-72 shrink-0 rounded-lg bg-muted/60 p-2" @dragover.prevent @drop="dropBoard(group.key)">
-              <header class="mb-2 flex items-center gap-2 px-1 text-sm font-medium"><span>{{ group.label }}</span><span class="text-xs text-dimmed">{{ group.items.length }}</span></header>
+              <header class="mb-2 flex items-center gap-2 px-1 text-sm font-medium"><span>{{ group.label }}</span><span class="text-xs text-dimmed">{{ group.total }}</span></header>
               <div class="space-y-2">
                 <article v-for="item in group.items" :key="item.id" :draggable="!showArchived" class="rounded-md border border-default bg-default p-3 shadow-sm" @dragstart="draggedItemId = item.id">
                   <p class="font-medium">{{ item.title }}</p>
@@ -643,10 +666,7 @@ const viewMenu = computed(() => activeView.value ? [[
               <div class="mt-1 space-y-1"><div v-for="item in day.items" :key="item.id" class="truncate rounded bg-primary/10 px-1.5 py-1 text-default">{{ item.title }}</div></div>
             </div>
           </div>
-          <section v-if="calendarUnscheduledItems.length" class="mt-3 min-w-[700px] rounded-lg border border-default p-3">
-            <header class="mb-2 text-sm font-medium">No date <span class="ms-1 text-xs text-dimmed">{{ calendarUnscheduledItems.length }}</span></header>
-            <div class="flex flex-wrap gap-2"><span v-for="item in calendarUnscheduledItems" :key="item.id" class="rounded bg-muted px-2 py-1 text-xs">{{ item.title }}</span></div>
-          </section>
+          <p class="mt-2 text-xs text-muted">Records without a date remain available from a table or list view.</p>
         </div>
 
         <div v-if="databaseQ.data.value && databaseQ.data.value.total > pageSize" class="flex shrink-0 justify-end border-t border-default px-4 py-2"><UPagination v-model:page="page" :total="databaseQ.data.value.total" :items-per-page="pageSize" /></div>
@@ -692,39 +712,51 @@ const viewMenu = computed(() => activeView.value ? [[
           </fieldset>
 
           <fieldset class="space-y-2">
-            <legend class="text-sm font-medium">Filter</legend>
-            <USelect v-model="viewFilterFieldId" :items="[{ label: 'No filter', value: '' }, ...sortOptions]" class="w-full" />
-            <template v-if="viewFilterFieldId">
-              <USelect v-model="viewFilterOperator" :items="filterOperatorOptions" class="w-full" />
+            <legend class="text-sm font-medium">Filters</legend>
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-ph-plus" label="Add filter" :disabled="viewFilters.length >= 8" @click="addViewFilter" />
+            </div>
+            <div v-for="(filter, index) in viewFilters" :key="index" class="space-y-2 rounded-md border border-default p-2">
+              <div class="flex gap-2">
+                <USelect v-model="filter.fieldId" :items="sortOptions" class="min-w-0 flex-1" @update:model-value="normalizeEditableFilter(filter)" />
+                <UButton color="neutral" variant="ghost" icon="i-ph-x" aria-label="Remove filter" @click="viewFilters.splice(index, 1)" />
+              </div>
+              <USelect v-model="filter.operator" :items="filterOperatorOptions(filter)" class="w-full" @update:model-value="normalizeEditableFilter(filter)" />
               <USelect
-                v-if="showFilterValue && selectedFilterField?.type === 'boolean'"
-                v-model="viewFilterValue"
+                v-if="filterNeedsValue(filter) && filterField(filter)?.type === 'boolean'"
+                v-model="filter.value"
                 :items="[{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]"
                 class="w-full"
               />
               <USelect
-                v-else-if="usesSelectFilterChoice"
-                v-model="viewFilterValue"
-                :items="selectedFilterOptions"
+                v-else-if="filterUsesSelectChoice(filter)"
+                v-model="filter.value"
+                :items="filterField(filter)?.options.map(option => ({ label: option, value: option })) ?? []"
                 placeholder="Choose a value"
                 class="w-full"
               />
               <UInput
-                v-else-if="showFilterValue"
-                v-model="viewFilterValue"
-                :type="selectedFilterField?.type === 'number' ? 'number' : selectedFilterField?.type === 'date' ? 'date' : 'text'"
+                v-else-if="filterNeedsValue(filter)"
+                v-model="filter.value"
+                :type="filterField(filter)?.type === 'number' ? 'number' : filterField(filter)?.type === 'date' ? 'date' : 'text'"
                 placeholder="Value"
                 class="w-full"
               />
-            </template>
+            </div>
+            <p v-if="!viewFilters.length" class="text-xs text-muted">No filters</p>
           </fieldset>
 
           <fieldset class="space-y-2">
-            <legend class="text-sm font-medium">Sort</legend>
-            <div class="flex gap-2">
-              <USelect v-model="viewSortFieldId" :items="[{ label: 'No sort', value: '' }, ...sortOptions]" class="min-w-0 flex-1" />
-              <USelect v-model="viewSortDirection" :items="[{ label: 'Ascending', value: 'asc' }, { label: 'Descending', value: 'desc' }]" :disabled="!viewSortFieldId" class="w-36" />
+            <legend class="text-sm font-medium">Sorts</legend>
+            <div class="flex justify-end">
+              <UButton color="neutral" variant="ghost" size="xs" icon="i-ph-plus" label="Add sort" :disabled="viewSorts.length >= 3" @click="addViewSort" />
             </div>
+            <div v-for="(sort, index) in viewSorts" :key="index" class="flex gap-2">
+              <USelect v-model="sort.fieldId" :items="sortOptions" class="min-w-0 flex-1" />
+              <USelect v-model="sort.direction" :items="[{ label: 'Ascending', value: 'asc' }, { label: 'Descending', value: 'desc' }]" class="w-36" />
+              <UButton color="neutral" variant="ghost" icon="i-ph-x" aria-label="Remove sort" @click="viewSorts.splice(index, 1)" />
+            </div>
+            <p v-if="!viewSorts.length" class="text-xs text-muted">No sorting</p>
           </fieldset>
         </div>
       </template>

@@ -644,7 +644,7 @@ export const databaseViews = sqliteTable('database_views', {
   databaseId: text('database_id').notNull().references(() => databaseDefinitions.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
   layout: text('layout', { enum: ['table', 'board', 'calendar', 'list'] }).notNull().default('table'),
-  configJson: text('config_json').notNull().default('{"visibleFieldIds":[],"filters":[],"sorts":[{"fieldId":"title","direction":"asc"}],"groupFieldId":null,"dateFieldId":null}'),
+  configJson: text('config_json').notNull().default('{"visibleFieldIds":null,"filters":[],"sorts":[{"fieldId":"title","direction":"asc"}],"groupFieldId":null,"dateFieldId":null}'),
   position: integer('position').notNull().default(0),
   version: integer('version').notNull().default(1),
   createdBy: text('created_by').notNull().references(() => users.id),

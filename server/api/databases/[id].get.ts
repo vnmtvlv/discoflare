@@ -3,7 +3,7 @@ import type { DatabasePageDTO } from '../../../shared/types'
 import { WORKSPACE_ID } from '../../../shared/ids'
 import { Permission } from '../../../shared/permissions'
 import { cf, fail } from '../../utils/cf'
-import { loadDatabasePage } from '../../utils/database-views'
+import { loadDatabasePage, validCalendarRange } from '../../utils/database-views'
 import { requireMember } from '../../utils/guards'
 
 const querySchema = z.object({
@@ -11,6 +11,12 @@ const querySchema = z.object({
   search: z.string().max(500).default(''),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(100),
+  dateFrom: z.string().date().optional(),
+  dateTo: z.string().date().optional(),
+}).refine(query => Boolean(query.dateFrom) === Boolean(query.dateTo), {
+  message: 'Calendar range requires both dates',
+}).refine(query => !query.dateFrom || !query.dateTo || validCalendarRange(query.dateFrom, query.dateTo), {
+  message: 'Calendar range must be ordered and cannot exceed 62 days',
 })
 
 export default defineEventHandler(async (event): Promise<DatabasePageDTO> => {
@@ -23,5 +29,7 @@ export default defineEventHandler(async (event): Promise<DatabasePageDTO> => {
     search: query.search,
     page: query.page,
     pageSize: query.pageSize,
+    dateFrom: query.dateFrom,
+    dateTo: query.dateTo,
   })
 })

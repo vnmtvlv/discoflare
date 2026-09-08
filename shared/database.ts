@@ -32,7 +32,8 @@ export type DatabaseViewSort = {
 }
 
 export type DatabaseViewConfig = {
-  visibleFieldIds: string[]
+  /** null follows all current and future fields; an empty array intentionally hides every custom field. */
+  visibleFieldIds: string[] | null
   filters: DatabaseViewFilter[]
   sorts: DatabaseViewSort[]
   groupFieldId: string | null
@@ -41,7 +42,7 @@ export type DatabaseViewConfig = {
 
 export function defaultDatabaseViewConfig(): DatabaseViewConfig {
   return {
-    visibleFieldIds: [],
+    visibleFieldIds: null,
     filters: [],
     sorts: [{ fieldId: 'title', direction: 'asc' }],
     groupFieldId: null,

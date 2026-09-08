@@ -3,7 +3,7 @@ CREATE TABLE `database_views` (
   `database_id` text NOT NULL,
   `name` text NOT NULL,
   `layout` text DEFAULT 'table' NOT NULL,
-  `config_json` text DEFAULT '{"visibleFieldIds":[],"filters":[],"sorts":[{"fieldId":"title","direction":"asc"}],"groupFieldId":null,"dateFieldId":null}' NOT NULL,
+  `config_json` text DEFAULT '{"visibleFieldIds":null,"filters":[],"sorts":[{"fieldId":"title","direction":"asc"}],"groupFieldId":null,"dateFieldId":null}' NOT NULL,
   `position` integer DEFAULT 0 NOT NULL,
   `version` integer DEFAULT 1 NOT NULL,
   `created_by` text NOT NULL,

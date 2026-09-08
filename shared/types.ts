@@ -210,6 +210,8 @@ export type DatabasePageDTO = {
   total: number
   page: number
   pageSize: number
+  /** Total records per board group. The empty key represents records without a value. */
+  groupCounts?: Record<string, number>
 }
 
 export type DocumentDTO = {
