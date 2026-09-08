@@ -69,7 +69,7 @@ async function call(handler: ReturnType<typeof createHandler>, message: Record<s
   const json = body.startsWith('event:') ? body.split('\ndata: ')[1]?.trim() : body
   return {
     response,
-    payload: JSON.parse(json!) as { result: { tools?: Array<{ name: string }>; isError?: boolean } },
+    payload: JSON.parse(json!) as { result: { tools?: Array<{ name: string }>; content?: Array<{ type: string; text: string }>; isError?: boolean } },
   }
 }
 
@@ -103,6 +103,25 @@ describe('Discoflare MCP server', () => {
       'create_document',
       'update_document',
     ])
+  })
+
+  it('gets a task through MCP by its database-assigned number', async () => {
+    sqlite.exec(`
+      INSERT INTO task_boards (id, name, created_by) VALUES ('board-1', 'Roadmap', 'owner');
+      INSERT INTO tasks (id, board_id, title, created_by) VALUES ('task-1', 'board-1', 'Ship native numbers', 'owner');
+    `)
+
+    const { response, payload } = await call(createHandler(), {
+      jsonrpc: '2.0',
+      id: 2,
+      method: 'tools/call',
+      params: { name: 'get_task', arguments: { taskId: 1001 } },
+    })
+    const result = JSON.parse(payload.result.content?.[0]?.text ?? '{}') as { task?: { id: string; number: number; title: string } }
+
+    expect(response.status).toBe(200)
+    expect(payload.result.isError).not.toBe(true)
+    expect(result.task).toMatchObject({ id: 'task-1', number: 1001, title: 'Ship native numbers' })
   })
 
   it('creates a workspace document through the MCP protocol and writes the normal audit entry', async () => {

@@ -10,14 +10,15 @@ import { requireMember } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
+import { requireTask } from '../../../utils/task-policy'
 
 export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
-  const taskId = getRouterParam(event, 'id')!
+  const taskReference = getRouterParam(event, 'id')!
   const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
-  const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
-  if (!task) fail(404, 'not_found', 'Task not found')
+  const task = await requireTask(env, taskReference)
+  const taskId = task.id
   if (task.archivedAt) fail(409, 'task_archived', 'Restore the task before running it')
   if (task.activeRunId) fail(409, 'already_running', 'Task already has an active run')
   if (!canRunTask(task.status as TaskStatus)) fail(409, 'invalid_status', task.status === 'done' ? 'Reopen the task before running it again' : 'Task is already running')

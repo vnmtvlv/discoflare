@@ -22,18 +22,18 @@ const RUN_SELECT = `r.id, r.task_id as taskId, r.agent_id as agentId, r.workflow
 
 export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false): Promise<TaskBoardDTO[]> {
   const archivedClause = includeArchived ? '' : 'WHERE archived_at IS NULL'
-  const taskArchivedClause = includeArchived ? '' : 'WHERE archived_at IS NULL'
+  const taskArchivedClause = includeArchived ? '' : 'WHERE t.archived_at IS NULL'
   const [boardResult, taskResult, runResult, labelsResult, linksResult, dependenciesResult, checklistResult, attachmentResult] = await Promise.all([
     env.DB.prepare(
       `SELECT id, name, position, created_by as createdBy, archived_at as archivedAt,
        created_at as createdAt, updated_at as updatedAt FROM task_boards ${archivedClause} ORDER BY position, created_at`,
     ).all<BoardRow>(),
     env.DB.prepare(
-      `SELECT id, board_id as boardId, title, description, status, priority, due_at as dueAt, position,
-       assignee_id as assigneeId, channel_id as channelId, created_by as createdBy,
-       result_summary as resultSummary, result_details as resultDetails, last_error as lastError,
-       active_run_id as activeRunId, archived_at as archivedAt, created_at as createdAt, updated_at as updatedAt
-       FROM tasks ${taskArchivedClause} ORDER BY position, created_at`,
+      `SELECT t.id, n.number, t.board_id as boardId, t.title, t.description, t.status, t.priority, t.due_at as dueAt, t.position,
+       t.assignee_id as assigneeId, t.channel_id as channelId, t.created_by as createdBy,
+       t.result_summary as resultSummary, t.result_details as resultDetails, t.last_error as lastError,
+       t.active_run_id as activeRunId, t.archived_at as archivedAt, t.created_at as createdAt, t.updated_at as updatedAt
+       FROM tasks t JOIN task_numbers n ON n.task_id = t.id ${taskArchivedClause} ORDER BY t.position, t.created_at`,
     ).all<TaskRow>(),
     env.DB.prepare(
       `SELECT ${RUN_SELECT} FROM task_runs r
@@ -87,10 +87,13 @@ export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false
   }))
 }
 
-export async function loadTaskDetail(env: DiscoflareEnv, taskId: string): Promise<TaskDetailDTO | null> {
+export async function loadTaskDetail(env: DiscoflareEnv, taskReference: string | number): Promise<TaskDetailDTO | null> {
   const boards = await loadTaskBoards(env, true)
-  const task = boards.flatMap(board => board.tasks).find(item => item.id === taskId)
+  const reference = String(taskReference).trim()
+  const number = /^[1-9]\d*$/u.test(reference) ? Number(reference) : null
+  const task = boards.flatMap(board => board.tasks).find(item => item.id === reference || item.number === number)
   if (!task) return null
+  const taskId = task.id
   const [runsResult, checklistResult, attachmentsResult] = await Promise.all([
     env.DB.prepare(`SELECT ${RUN_SELECT} FROM task_runs r WHERE r.task_id = ? ORDER BY r.created_at DESC, r.id DESC`)
       .bind(taskId).all<TaskRunDTO>(),

@@ -14,10 +14,11 @@ const bodySchema = z.object({ title: z.string().trim().min(1).max(240), position
 
 export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
-  const taskId = getRouterParam(event, 'id')!
+  const taskReference = getRouterParam(event, 'id')!
   const body = parseBody(bodySchema, await readBody(event))
   const { env, waitUntil } = cf(event)
-  const task = await requireTask(env, taskId)
+  const task = await requireTask(env, taskReference)
+  const taskId = task.id
   if (task.status === 'running') fail(409, 'task_running', 'Checklist cannot change while the task is running')
   const now = nowIso()
   const id = newId()

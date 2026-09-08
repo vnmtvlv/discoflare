@@ -716,6 +716,20 @@ export const tasks = sqliteTable('tasks', {
   check('tasks_priority_check', sql`${table.priority} in ('low', 'normal', 'high', 'urgent')`),
 ])
 
+/** Human-readable task numbers are database-assigned while UUIDs remain stable internal keys. */
+export const taskNumbers = sqliteTable('task_numbers', {
+  taskId: text('task_id').primaryKey().references(() => tasks.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull().unique(),
+})
+
+export const taskNumberSequence = sqliteTable('task_number_sequence', {
+  id: integer('id').primaryKey(),
+  nextNumber: integer('next_number').notNull(),
+}, table => [
+  check('task_number_sequence_singleton_check', sql`${table.id} = 1`),
+  check('task_number_sequence_next_check', sql`${table.nextNumber} > 0`),
+])
+
 export const taskLabels = sqliteTable('task_labels', {
   id: text('id').primaryKey(),
   boardId: text('board_id').notNull().references(() => taskBoards.id, { onDelete: 'cascade' }),
@@ -848,6 +862,8 @@ export const schema = {
   canvasEdges,
   taskBoards,
   tasks,
+  taskNumbers,
+  taskNumberSequence,
   taskLabels,
   taskLabelLinks,
   taskDependencies,

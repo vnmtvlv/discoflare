@@ -107,6 +107,7 @@ export type TaskRunDTO = {
 
 export type TaskDTO = {
   id: string
+  number: number
   boardId: string
   title: string
   description: string

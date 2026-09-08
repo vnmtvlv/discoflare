@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { agents, channels, taskBoards, taskDependencies, taskLabels, tasks } from '../../drizzle/schema'
+import { agents, channels, taskBoards, taskDependencies, taskLabels, taskNumbers, tasks } from '../../drizzle/schema'
 import type { TaskStatus } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { fail } from './cf'
@@ -11,7 +11,14 @@ export async function requireBoard(env: DiscoflareEnv, boardId: string) {
   return row
 }
 
-export async function requireTask(env: DiscoflareEnv, taskId: string) {
+export async function requireTask(env: DiscoflareEnv, taskReference: string | number) {
+  const reference = String(taskReference).trim()
+  let taskId = reference
+  if (/^[1-9]\d*$/u.test(reference)) {
+    const numbered = (await getDb(env.DB).select({ taskId: taskNumbers.taskId }).from(taskNumbers)
+      .where(eq(taskNumbers.number, Number(reference))).limit(1))[0]
+    taskId = numbered?.taskId ?? ''
+  }
   const row = (await getDb(env.DB).select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
   if (!row) fail(404, 'not_found', 'Task not found')
   return row

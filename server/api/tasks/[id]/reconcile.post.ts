@@ -12,9 +12,10 @@ import { requireTask } from '../../../utils/task-policy'
 
 export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
-  const taskId = getRouterParam(event, 'id')!
+  const taskReference = getRouterParam(event, 'id')!
   const { env, waitUntil } = cf(event)
-  const task = await requireTask(env, taskId)
+  const task = await requireTask(env, taskReference)
+  const taskId = task.id
   if (!task.activeRunId) fail(409, 'not_running', 'Task has no active run')
   const run = (await getDb(env.DB).select().from(taskRuns).where(eq(taskRuns.id, task.activeRunId)).limit(1))[0]
   if (!run) fail(409, 'run_missing', 'Active task run is missing')

@@ -20,6 +20,7 @@ import telemetrySettingsSql from '../../drizzle/migrations/0016_telemetry_settin
 import backupDestinationSql from '../../drizzle/migrations/0017_backup_destination.sql?raw'
 import documentsAndCanvasesSql from '../../drizzle/migrations/0018_documents_and_canvases.sql?raw'
 import mcpAccessTokensSql from '../../drizzle/migrations/0019_mcp_access_tokens.sql?raw'
+import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -62,6 +63,7 @@ export const INIT_SQL = d1ExecSql([
   backupDestinationSql,
   documentsAndCanvasesSql,
   mcpAccessTokensSql,
+  taskNumbersSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

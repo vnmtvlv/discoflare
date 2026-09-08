@@ -23,6 +23,7 @@ function result(value: unknown) {
 const dueAtSchema = z.string().refine(value => !Number.isNaN(Date.parse(value)), 'Invalid due date').nullable()
 const prioritySchema = z.enum(['low', 'normal', 'high', 'urgent'])
 const statusSchema = z.enum(['backlog', 'ready', 'review', 'done', 'failed'])
+const taskReferenceSchema = z.union([z.string().trim().min(1), z.number().int().positive()])
 
 export function createDiscoflareMcpServer({ env, principal, schedule }: McpServerContext): McpServer {
   const server = new McpServer({ name: 'Discoflare', version: packageVersion })
@@ -37,8 +38,8 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
   })
 
   server.registerTool('get_task', {
-    description: 'Get one task with its labels, dependencies, checklist, attachments, and run history.',
-    inputSchema: { taskId: z.string().min(8) },
+    description: 'Get one task by UUID or human-readable number, with its labels, dependencies, checklist, attachments, and run history.',
+    inputSchema: { taskId: taskReferenceSchema.describe('Task UUID or human-readable number') },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ taskId }) => {
     requireMcpAccess(principal, 'tasks:read', Permission.manageTasks)
@@ -67,9 +68,9 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
   })
 
   server.registerTool('update_task', {
-    description: 'Update, move, archive, or restore a task. A running task must be cancelled before it can be changed.',
+    description: 'Update, move, archive, or restore a task by UUID or human-readable number. A running task must be cancelled before it can be changed.',
     inputSchema: {
-      taskId: z.string().min(8),
+      taskId: taskReferenceSchema.describe('Task UUID or human-readable number'),
       title: z.string().trim().min(1).max(160).optional(),
       description: z.string().trim().max(12_000).optional(),
       status: statusSchema.optional(),

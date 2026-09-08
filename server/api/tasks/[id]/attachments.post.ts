@@ -12,9 +12,10 @@ import { requireTask } from '../../../utils/task-policy'
 export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
   if (!hasPermission(actor.perms, Permission.attachFiles)) fail(403, 'forbidden', 'Missing attach-files permission')
-  const taskId = getRouterParam(event, 'id')!
+  const taskReference = getRouterParam(event, 'id')!
   const { env, waitUntil } = cf(event)
-  const task = await requireTask(env, taskId)
+  const task = await requireTask(env, taskReference)
+  const taskId = task.id
   if (task.status === 'running') fail(409, 'task_running', 'Attachments cannot change while the task is running')
   const form = await readMultipartFormData(event)
   const file = form?.find(part => part.name === 'file' && part.data)
