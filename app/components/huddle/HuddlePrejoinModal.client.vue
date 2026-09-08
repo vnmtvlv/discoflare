@@ -26,12 +26,7 @@ const devices = shallowRef<MediaDeviceInfo[]>([])
 let stream: MediaStream | null = null
 let previewGeneration = 0
 
-const deviceItems = (kind: MediaDeviceKind) => computed(() => devices.value
-  .filter(device => device.kind === kind)
-  .map((device, index) => ({
-    label: device.label || `${kind === 'audioinput' ? 'Microphone' : kind === 'videoinput' ? 'Camera' : 'Speaker'} ${index + 1}`,
-    value: device.deviceId,
-  })))
+const deviceItems = (kind: MediaDeviceKind) => computed(() => mediaDeviceItems(devices.value, kind))
 const microphones = deviceItems('audioinput')
 const cameras = deviceItems('videoinput')
 const speakers = deviceItems('audiooutput')
