@@ -81,7 +81,7 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 
 ### Managed server creation
 
-1. Open the [Discoflare installer](https://discoflare.com/deploy) and connect Cloudflare.
+1. Open the [Discoflare installer](https://discoflare.com/deploy), connect Cloudflare, and optionally enable managed Huddles.
 2. Enter the intended Owner email and choose Discoflare accounts or the advanced Cloudflare Access mode.
 3. Keep the generated `workers.dev` URL or add a custom domain; independently choose whether to provision workspace mail.
 4. Open the private setup link and create the first Owner password. If Cloudflare Access was explicitly selected, open the workspace and use the one-time code sent by Cloudflare instead.

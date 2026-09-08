@@ -45,6 +45,11 @@ function installationConfiguration(
   const mailEnabled = Boolean(mailDomain && mailZoneId && mailSubdomain)
   const registration = textBinding(bindings, 'AUTH_REGISTRATION_MODE')
   const mode = textBinding(bindings, 'AUTH_MODE') === 'access' ? 'access' : 'builtin'
+  const realtimekitEnabled = Boolean(
+    textBinding(bindings, 'REALTIMEKIT_ACCOUNT_ID')
+    && textBinding(bindings, 'REALTIMEKIT_APP_ID')
+    && bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text'),
+  )
 
   return {
     accountId,
@@ -61,6 +66,8 @@ function installationConfiguration(
     mailEnabled,
     mailSubdomain: mailEnabled ? mailSubdomain : customDomainEnabled ? appSubdomain : 'discoflare',
     mailLocalPart: textBinding(bindings, 'MAIL_DEFAULT_LOCAL_PART') || 'inbox',
+    realtimekitEnabled,
+    realtimekitApiToken: '',
   }
 }
 
@@ -110,6 +117,8 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           accessApplicationId: textBinding(bindings, 'CF_ACCESS_APP_ID') || null,
           accessHealthApplicationId: textBinding(bindings, 'CF_ACCESS_HEALTH_APP_ID') || null,
           accessDeletionApplicationId: textBinding(bindings, 'CF_ACCESS_DELETION_APP_ID') || null,
+          realtimekitAppId: textBinding(bindings, 'REALTIMEKIT_APP_ID') || null,
+          realtimekitManaged: textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED') === 'true',
         },
       })
     }

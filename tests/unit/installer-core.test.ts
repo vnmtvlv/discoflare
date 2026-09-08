@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { durableObjectMigrations, InstallerError, parseDeployRequest } from '../../packages/installer-core/src/index'
+import {
+  durableObjectMigrations,
+  InstallerError,
+  parseDeployRequest,
+  realtimeKitAvPreset,
+  realtimeKitPreset,
+} from '../../packages/installer-core/src/index'
 import type { InstallerReleaseManifest } from '../../packages/installer-core/src/index'
 
 const request = {
@@ -17,6 +23,8 @@ const request = {
   mailEnabled: true,
   mailSubdomain: 'hq',
   mailLocalPart: 'inbox',
+  realtimekitEnabled: false,
+  realtimekitApiToken: '',
 } as const
 
 const manifest = {
@@ -46,6 +54,21 @@ describe('installer-core', () => {
 
   it('rejects an invalid Cloudflare target before mutation', () => {
     expect(() => parseDeployRequest({ ...request, accountId: 'wrong' })).toThrow(InstallerError)
+  })
+
+  it('normalizes managed RealtimeKit as an explicit opt-in', () => {
+    expect(parseDeployRequest({ ...request, realtimekitEnabled: true }).realtimekitEnabled).toBe(true)
+    expect(parseDeployRequest({ ...request, realtimekitEnabled: 'yes' }).realtimekitEnabled).toBe(false)
+  })
+
+  it('creates a huddle preset without recording or RealtimeKit chat', () => {
+    const preset = realtimeKitPreset(realtimeKitAvPreset, true)
+    expect(preset.config.view_type).toBe('GROUP_CALL')
+    expect(preset.permissions.media.video.can_produce).toBe('ALLOWED')
+    expect(preset.permissions.media.screenshare.can_produce).toBe('ALLOWED')
+    expect(preset.permissions.can_record).toBe(false)
+    expect(preset.permissions.transcription_enabled).toBe(false)
+    expect(preset.permissions.chat.public.can_send).toBe(false)
   })
 
   it('groups fresh Durable Object migrations in release order', () => {

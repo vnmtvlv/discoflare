@@ -16,6 +16,8 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   const mailEnabled = body.mailEnabled === true
   const mailSubdomain = String(body.mailSubdomain || '').trim().toLowerCase()
   const mailLocalPart = String(body.mailLocalPart || '').trim().toLowerCase()
+  const realtimekitEnabled = body.realtimekitEnabled === true
+  const realtimekitApiToken = String(body.realtimekitApiToken || '').trim()
   if (!/^[0-9a-f]{32}$/u.test(accountId)) installerError(400, 'Select a Cloudflare account')
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName)) installerError(400, 'Worker name must use lowercase letters, numbers, and hyphens')
   if (!appName || appName.length > 80) installerError(400, 'App name must be 1–80 characters')
@@ -52,6 +54,8 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     mailEnabled,
     mailSubdomain,
     mailLocalPart,
+    realtimekitEnabled,
+    realtimekitApiToken,
     targetVersion,
   }
 }

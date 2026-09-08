@@ -8,11 +8,12 @@ The OAuth installer at `discoflare.com/deploy` deploys a complete workspace to t
 2. by default creates a private single-use Owner Setup Claim for choosing the first password, or, when explicitly selected, creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy;
 3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so the installation has one public origin;
 4. optionally enables Cloudflare Email Routing and Email Sending on the Primary workspace Worker and refuses to replace foreign MX or catch-all configuration; and
-5. creates the Owner and workspace atomically from the private setup claim, or when the intended Owner first arrives with a verified Access identity.
+5. optionally creates a RealtimeKit app, Discoflare voice/video presets, and a dedicated account-owned Realtime token stored only as a Worker secret; and
+6. creates the Owner and workspace atomically from the private setup claim, or when the intended Owner first arrives with a verified Access identity.
 
 The encrypted installer session holds the OAuth access token only during installation. The installed Worker receives no Cloudflare API token. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
 
-The Cloudflare OAuth client registered for `discoflare.com` must allow Access Read/Write in addition to its Worker and storage permissions. Zone, DNS, Email Routing, and Email Sending permissions remain necessary for the optional domain and mail paths. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying this installer version.
+The Cloudflare OAuth client registered for `discoflare.com` must allow Access Read/Write in addition to its Worker and storage permissions. Zone, DNS, Email Routing, and Email Sending permissions remain necessary for the optional domain and mail paths. Updating the requested scope string in the app does not expand an already-registered OAuth client; update that client in Cloudflare before deploying the corresponding installer version.
 
 Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 
@@ -166,7 +167,9 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 ## Secrets
 
-The owner can configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
+The guided installer can provision RealtimeKit when **Huddles** is selected. Cloudflare requires the operator to create a narrow API token with **Account → Realtime → Edit** first. The installer uses that token transiently to create app-specific Discoflare presets with recording, transcription, livestreaming, plugins, polls, and RealtimeKit chat disabled, then writes it directly to the Worker as `REALTIMEKIT_API_KEY`; `discoflare.com` does not retain it. Because Cloudflare currently exposes no RealtimeKit app deletion API and cannot revoke an operator-created token without receiving it again, managed uninstall reports both for manual cleanup.
+
+The owner can instead configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
 
 ```
 wrangler secret put ADMIN_EMAIL

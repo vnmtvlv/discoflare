@@ -142,6 +142,9 @@ export async function uninstallDiscoflare(
 
   await cleanup(`container ${installation.resources.containerName}`, () => deleteContainer(accessToken, installation, deleted))
   await cleanup(`workflow ${installation.resources.workflowName}`, () => deleteWorkflow(accessToken, installation, deleted))
+  if (installation.resources.realtimekitManaged && installation.resources.realtimekitAppId) {
+    remaining.push(`RealtimeKit app ${installation.resources.realtimekitAppId} and its operator-created API token`)
+  }
 
   if (installation.resources.bucketName) {
     await cleanup(`R2 bucket ${installation.resources.bucketName}`, async () => {
