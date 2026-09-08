@@ -638,6 +638,24 @@ export const databaseItems = sqliteTable('database_items', {
   check('database_items_version_check', sql`${table.version} > 0`),
 ])
 
+/** A shared, named lens over one Database. Config refers to semantic Field ids only. */
+export const databaseViews = sqliteTable('database_views', {
+  id: text('id').primaryKey(),
+  databaseId: text('database_id').notNull().references(() => databaseDefinitions.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  layout: text('layout', { enum: ['table', 'board', 'calendar', 'list'] }).notNull().default('table'),
+  configJson: text('config_json').notNull().default('{"visibleFieldIds":[],"filters":[],"sorts":[{"fieldId":"title","direction":"asc"}],"groupFieldId":null,"dateFieldId":null}'),
+  position: integer('position').notNull().default(0),
+  version: integer('version').notNull().default(1),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  uniqueIndex('database_views_name_unique').on(table.databaseId, table.name),
+  index('database_views_database_position_idx').on(table.databaseId, table.position),
+  check('database_views_layout_check', sql`${table.layout} in ('table', 'board', 'calendar', 'list')`),
+  check('database_views_version_check', sql`${table.version} > 0`),
+])
+
 /** Rich-text documents are durable workspace data. */
 export const documents = sqliteTable('documents', {
   id: text('id').primaryKey(),
@@ -695,6 +713,19 @@ export const canvasEdges = sqliteTable('canvas_edges', {
   uniqueIndex('canvas_edges_nodes_unique').on(table.canvasId, table.fromNodeId, table.toNodeId),
   index('canvas_edges_canvas_idx').on(table.canvasId, table.createdAt),
   check('canvas_edges_not_self_check', sql`${table.fromNodeId} <> ${table.toNodeId}`),
+])
+
+/** Private, cross-device shortcuts. Target existence is checked at the API boundary. */
+export const dataBookmarks = sqliteTable('data_bookmarks', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  targetType: text('target_type', { enum: ['database_view', 'document', 'canvas'] }).notNull(),
+  targetId: text('target_id').notNull(),
+  position: integer('position').notNull().default(0),
+  createdAt: text('created_at').notNull().default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+}, table => [
+  primaryKey({ columns: [table.userId, table.targetType, table.targetId] }),
+  index('data_bookmarks_user_position_idx').on(table.userId, table.position, table.createdAt),
+  check('data_bookmarks_target_type_check', sql`${table.targetType} in ('database_view', 'document', 'canvas')`),
 ])
 
 /** Task boards are shared product state, so they live in D1 rather than an Agent DO. */
@@ -876,10 +907,12 @@ export const schema = {
   databaseDefinitions,
   databaseFields,
   databaseItems,
+  databaseViews,
   documents,
   canvases,
   canvasNodes,
   canvasEdges,
+  dataBookmarks,
   taskBoards,
   tasks,
   taskNumbers,

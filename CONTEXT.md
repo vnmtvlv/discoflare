@@ -85,6 +85,14 @@ _Avoid_: Dynamically altering D1 for each Field, exposing `text_1` or another sl
 One titled row in a Database with values addressed by Database Field identity. Record versions prevent a stale browser from silently overwriting a newer edit.
 _Avoid_: Generic Item, Task unless it has Task execution semantics
 
+**Database View**:
+A shared, named lens over one Database. A View owns its table, board, calendar, or list layout plus visible Fields, typed filters, sorts, and any grouping or date Field. It never copies Records or exposes their physical storage slots.
+_Avoid_: A second Database, a private browser preference, saving free-form SQL
+
+**Data Bookmark**:
+A private, ordered shortcut that one human keeps to a Database View, Document, or Canvas. Bookmarks are durable across that person's devices but do not reorganize the shared workspace for anyone else.
+_Avoid_: A shared navigation category, browser-local state, a copied Data resource
+
 **Document**:
 A human-managed rich-text knowledge item in the Data app. Documents are versioned workspace state stored in the installation D1.
 _Avoid_: Attachment, Message, external document provider

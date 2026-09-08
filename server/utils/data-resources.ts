@@ -1,16 +1,20 @@
-import type { CanvasDTO, CanvasEdgeDTO, CanvasNodeDTO, CanvasSummaryDTO, DataResourcesDTO, DatabaseSummaryDTO, DocumentDTO, DocumentSummaryDTO } from '../../shared/types'
+import type { CanvasDTO, CanvasEdgeDTO, CanvasNodeDTO, CanvasSummaryDTO, DataBookmarkDTO, DataResourcesDTO, DatabaseSummaryDTO, DatabaseViewSummaryDTO, DocumentDTO, DocumentSummaryDTO } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { fail } from './cf'
 
 type CanvasRow = Omit<CanvasDTO, 'nodes' | 'edges'>
 
-export async function loadDataResources(env: DiscoflareEnv): Promise<DataResourcesDTO> {
-  const [databasesResult, documentsResult, canvasesResult] = await Promise.all([
+export async function loadDataResources(env: DiscoflareEnv, userId?: string): Promise<DataResourcesDTO> {
+  const [databasesResult, viewsResult, documentsResult, canvasesResult, bookmarksResult] = await Promise.all([
     env.DB.prepare(
       `SELECT id, name, archived_at as archivedAt,
        (SELECT COUNT(*) FROM database_items WHERE database_id = database_definitions.id) as itemCount
        FROM database_definitions ORDER BY position, created_at`,
     ).all<DatabaseSummaryDTO>(),
+    env.DB.prepare(
+      `SELECT id, database_id as databaseId, name, layout, position
+       FROM database_views ORDER BY database_id, position, created_at`,
+    ).all<DatabaseViewSummaryDTO>(),
     env.DB.prepare(
       `SELECT id, title, position, version, created_by as createdBy,
        created_at as createdAt, updated_at as updatedAt FROM documents ORDER BY position, created_at`,
@@ -21,11 +25,22 @@ export async function loadDataResources(env: DiscoflareEnv): Promise<DataResourc
        (SELECT COUNT(*) FROM canvas_nodes WHERE canvas_id = canvases.id) as nodeCount
        FROM canvases ORDER BY position, created_at`,
     ).all<CanvasSummaryDTO>(),
+    userId
+      ? env.DB.prepare(
+          `SELECT target_type as targetType, target_id as targetId, position, created_at as createdAt
+           FROM data_bookmarks WHERE user_id = ? ORDER BY position, created_at`,
+        ).bind(userId).all<DataBookmarkDTO>()
+      : Promise.resolve({ results: [] as DataBookmarkDTO[] }),
   ])
+  const views = viewsResult.results ?? []
   return {
-    databases: databasesResult.results ?? [],
+    databases: (databasesResult.results ?? []).map(database => ({
+      ...database,
+      views: views.filter(view => view.databaseId === database.id),
+    })),
     documents: documentsResult.results ?? [],
     canvases: canvasesResult.results ?? [],
+    bookmarks: bookmarksResult.results ?? [],
   }
 }
 

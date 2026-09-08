@@ -22,7 +22,7 @@ export async function listAuthorizedDataResources(
   authorization: AuthorizationContext,
 ): Promise<DataResourcesDTO> {
   authorize(authorization, WorkspaceAction.readDocuments)
-  return loadDataResources(env)
+  return loadDataResources(env, authorization.credential.kind === 'session' ? authorization.principal.id : undefined)
 }
 
 export async function getDocument(

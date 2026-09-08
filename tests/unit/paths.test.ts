@@ -24,6 +24,10 @@ describe('databasePath', () => {
 })
 
 describe('Data resource paths', () => {
+  it('keeps a database view in its shareable URL', () => {
+    expect(databasePath('db-1', false, 'view-1')).toBe('/databases?database=db-1&view=view-1')
+  })
+
   it('keeps the selected document in the URL', () => {
     expect(documentPath('doc 1')).toBe('/documents?document=doc%201')
   })

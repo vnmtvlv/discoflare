@@ -319,6 +319,7 @@ onBeforeRouteLeave(async () => {
       <UInput v-if="activeCanvas" v-model="canvasTitle" variant="none" aria-label="Canvas title" class="min-w-0 flex-1 sm:flex-none" :disabled="saving" :ui="{ base: 'px-1 font-semibold' }" @change="renameCanvas" />
       <span v-else class="font-semibold">Canvases</span>
       <div class="ml-auto flex max-w-full flex-wrap items-center gap-1">
+        <DataBookmarkButton v-if="activeCanvas" :workspace-id="workspaceId" target-type="canvas" :target-id="activeCanvas.id" />
         <UButton color="neutral" variant="soft" icon="i-ph-note" label="Note" :disabled="!activeCanvas" @click="addNode('note')" />
         <UButton color="neutral" variant="soft" icon="i-ph-text-t" label="Text" :disabled="!activeCanvas" @click="addNode('text')" />
         <UButton :color="connecting ? 'primary' : 'neutral'" :variant="connecting ? 'soft' : 'ghost'" icon="i-ph-path" label="Connect" :disabled="!activeCanvas || nodes.length < 2" @click="toggleConnecting" />

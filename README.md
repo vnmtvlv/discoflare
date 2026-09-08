@@ -31,7 +31,7 @@ Four apps bring conversations, work, email, and knowledge into one workspace:
 - **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first huddle with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Huddles can also be scheduled in their parent conversation. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
 - **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Assign Agents to execute Tasks, follow their progress, and retain run history with cancellation and recovery.
 - **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
-- **Data** — Keep structured information and knowledge together. Build Databases with typed custom fields, inline record editing, filtering, and sorting; write rich-text Documents; and connect notes and text cards on Canvases.
+- **Data** — Keep structured information and knowledge together. Shape each Database through shared table, list, board, and calendar Views with typed filters and sorting; bookmark the Views, Documents, and Canvases important to you; and edit records without exposing their physical D1 storage.
 
 ### AI agents
 

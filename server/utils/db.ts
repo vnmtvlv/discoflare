@@ -23,6 +23,7 @@ import mcpAccessTokensSql from '../../drizzle/migrations/0019_mcp_access_tokens.
 import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
+import dataViewsAndBookmarksSql from '../../drizzle/migrations/0023_data_views_and_bookmarks.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -68,6 +69,7 @@ export const INIT_SQL = d1ExecSql([
   taskNumbersSql,
   realtimeV1Sql,
   agentPrincipalsAndApprovalsSql,
+  dataViewsAndBookmarksSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

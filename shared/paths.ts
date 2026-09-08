@@ -31,9 +31,10 @@ export function boardPath(boardId?: string | null, archived = false): string {
   return suffix ? `/tasks?${suffix}` : '/tasks'
 }
 
-export function databasePath(databaseId?: string | null, archived = false): string {
+export function databasePath(databaseId?: string | null, archived = false, viewId?: string | null): string {
   const query = new URLSearchParams()
   if (databaseId) query.set('database', databaseId)
+  if (viewId) query.set('view', viewId)
   if (archived) query.set('archived', '1')
   const suffix = query.toString()
   return suffix ? `/databases?${suffix}` : '/databases'

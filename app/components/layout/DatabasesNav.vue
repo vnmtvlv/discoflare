@@ -24,10 +24,39 @@ const canvases = computed(() => resourcesQ.data.value?.canvases ?? [])
 const activeDatabaseId = computed(() => route.path === '/databases' ? String(route.query.database || '') || databases.value[0]?.id || '' : '')
 const activeDocumentId = computed(() => route.path === '/documents' ? String(route.query.document || '') || documents.value[0]?.id || '' : '')
 const activeCanvasId = computed(() => route.path === '/canvases' ? String(route.query.canvas || '') || canvases.value[0]?.id || '' : '')
+const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMap((bookmark) => {
+  if (bookmark.targetType === 'database_view') {
+    for (const database of resourcesQ.data.value?.databases ?? []) {
+      if (database.archivedAt) continue
+      const view = database.views.find(candidate => candidate.id === bookmark.targetId)
+      if (view) return [{ ...bookmark, label: `${database.name} / ${view.name}`, icon: 'i-ph-layout', to: databasePath(database.id, false, view.id) }]
+    }
+  }
+  if (bookmark.targetType === 'document') {
+    const document = documents.value.find(candidate => candidate.id === bookmark.targetId)
+    if (document) return [{ ...bookmark, label: document.title, icon: 'i-ph-file-text', to: documentPath(document.id) }]
+  }
+  if (bookmark.targetType === 'canvas') {
+    const canvas = canvases.value.find(candidate => candidate.id === bookmark.targetId)
+    if (canvas) return [{ ...bookmark, label: canvas.title, icon: 'i-ph-selection-background', to: canvasPath(canvas.id) }]
+  }
+  return []
+}))
 </script>
 
 <template>
   <div class="space-y-1">
+    <LayoutNavSection v-if="bookmarks.length" label="Bookmarks" collapse-key="data:bookmarks">
+      <ul>
+        <li v-for="bookmark in bookmarks" :key="`${bookmark.targetType}:${bookmark.targetId}`">
+          <LayoutNavRow :to="bookmark.to" :active="route.fullPath === bookmark.to">
+            <template #leading><UIcon :name="bookmark.icon" class="size-[18px] shrink-0 text-dimmed" /></template>
+            {{ bookmark.label }}
+          </LayoutNavRow>
+        </li>
+      </ul>
+    </LayoutNavSection>
+
     <LayoutNavSection
       label="Databases"
       collapse-key="data:databases"
@@ -39,7 +68,7 @@ const activeCanvasId = computed(() => route.path === '/canvases' ? String(route.
       <p v-else-if="!databases.length" class="px-2 py-2 text-sm text-muted">{{ archived ? 'Nothing archived.' : 'No databases yet.' }}</p>
       <ul v-else>
         <li v-for="database in databases" :key="database.id">
-          <LayoutNavRow :to="databasePath(database.id, archived)" :active="database.id === activeDatabaseId">
+          <LayoutNavRow :to="databasePath(database.id, archived, database.views[0]?.id)" :active="database.id === activeDatabaseId">
             <template #leading><UIcon name="i-ph-table" class="size-[18px] shrink-0 text-dimmed" /></template>
             {{ database.name }}
             <template #trailing><span v-if="database.itemCount" class="shrink-0 text-[11px] text-dimmed">{{ database.itemCount }}</span></template>
