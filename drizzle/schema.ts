@@ -620,7 +620,7 @@ export const databaseItems = sqliteTable('database_items', {
   check('database_items_version_check', sql`${table.version} > 0`),
 ])
 
-/** Rich-text documents are durable workspace data; live collaboration can layer on later. */
+/** Rich-text documents are durable workspace data. */
 export const documents = sqliteTable('documents', {
   id: text('id').primaryKey(),
   title: text('title').notNull(),
