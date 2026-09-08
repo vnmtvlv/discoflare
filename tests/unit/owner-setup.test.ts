@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { maskedOwnerEmail, ownerSetupTokenMatches, readOwnerSetupEnv } from '../../server/utils/owner-setup'
+import { maskedOwnerEmail, ownerSetupTokenMatches, readOwnerSetupEnv, verifiedOwnerSetupEmail } from '../../server/utils/owner-setup'
 
 describe('owner setup', () => {
   it('requires an intended owner and a strong installer claim', () => {
@@ -25,5 +25,16 @@ describe('owner setup', () => {
 
   it('does not expose the full owner email in public health', () => {
     expect(maskedOwnerEmail('owner@example.com')).toBe('o****@example.com')
+  })
+
+  it('reveals the owner email only to the private setup claim', () => {
+    const setup = readOwnerSetupEnv({
+      ADMIN_EMAIL: 'owner@example.com',
+      ADMIN_SETUP_TOKEN: 'x'.repeat(32),
+    })
+
+    expect(verifiedOwnerSetupEmail(setup, 'x'.repeat(32))).toBe('owner@example.com')
+    expect(verifiedOwnerSetupEmail(setup, 'y'.repeat(32))).toBeNull()
+    expect(verifiedOwnerSetupEmail(null, 'x'.repeat(32))).toBeNull()
   })
 })

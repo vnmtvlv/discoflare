@@ -27,6 +27,11 @@ export function ownerSetupTokenMatches(expected: string, actual: string): boolea
   return mismatch === 0
 }
 
+export function verifiedOwnerSetupEmail(setup: OwnerSetup | null, token: string): string | null {
+  if (!setup || !ownerSetupTokenMatches(setup.token, token)) return null
+  return setup.email
+}
+
 export function maskedOwnerEmail(email: string): string {
   const [local = '', domain = ''] = email.split('@')
   const visible = local.slice(0, 1)
