@@ -8,11 +8,7 @@ export type PrimaryMailProvision = {
   primary: true
 }
 
-/**
- * The first/base installer intentionally provisions mail on the workspace itself.
- * A later multi-workspace registry may add private routes to this same primary Worker;
- * it must never create an auxiliary routing Worker.
- */
+/** The first managed workspace on a zone owns that zone's mail bindings. */
 export async function ensurePrimaryMail(
   client: Cloudflare,
   _accessToken: string,

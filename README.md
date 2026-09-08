@@ -11,19 +11,14 @@ One workspace for humans and agents.
 | Discoflare provisions the server and required resources in your Cloudflare account. | You connect the source repository and configure the Cloudflare resources yourself. |
 | [![Create a server](https://img.shields.io/badge/Create_a_server-Discoflare-2563EB?style=for-the-badge)](https://discoflare.com/deploy) | [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare) |
 
-<p align="center">
-  <img src="docs/screenshots/design-review-thread.jpg" alt="Discoflare design review with an image, reactions, and a live thread" width="100%" />
-</p>
-
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
 ## Repositories
 
-Discoflare is developed across three independent repositories so each product surface can keep its own deployment and release lifecycle:
+Discoflare is developed across two public repositories with separate deployment lifecycles:
 
 - **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the core Nuxt application, API, and Cloudflare runtime.
 - **[discoflare.com](https://github.com/vnmtvlv/discoflare-com)** — The public website and guided Cloudflare installer.
-- **`discoflare-clients`** — The separately maintained iOS, macOS, and browser extension shells built from this repository's generated frontend.
 
 This repository remains the source of truth for the product runtime and shared frontend. `sandbox.discoflare.com` is a deployment of this repository, not a separate application.
 
@@ -177,9 +172,9 @@ pnpm db:seed
 
 See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.
 
-### Native clients
+### Static client build
 
-The separate MIT-licensed `discoflare-clients` repository packages native clients from this same frontend. This repository provides the static frontend build through `pnpm generate:native`.
+`pnpm generate:native` builds the static frontend artifact used by compatible client shells. Client packaging and release are outside this repository.
 
 ## Scripts
 
@@ -195,7 +190,7 @@ Development commands are listed above. Other common scripts:
 | `pnpm typecheck` | Check types with `nuxt typecheck`. |
 | `pnpm test` | Run unit tests. |
 | `pnpm build` | Build the Nuxt Worker. |
-| `pnpm generate:native` | Build the static frontend for native clients. |
+| `pnpm generate:native` | Build the static frontend for compatible client shells. |
 | `pnpm deploy` | Build, apply remote D1 migrations, and deploy the Worker. |
 
 ## License
