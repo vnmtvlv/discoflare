@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useWindowSize } from '@vueuse/core'
+import { discoflareReleaseUrl } from '~~/shared/releases'
 
 export type SettingsItem = {
   id: string
@@ -21,6 +22,7 @@ const open = defineModel<boolean>('open', { default: false })
 const section = defineModel<string>('section', { default: '' })
 
 const appConfig = useAppConfig()
+const releaseUrl = computed(() => discoflareReleaseUrl(appConfig.version))
 const { width } = useWindowSize()
 const isMobile = computed(() => width.value > 0 && width.value < 768)
 
@@ -161,7 +163,12 @@ defineShortcuts({
 
             <div class="mt-auto pt-8">
               <slot name="footer" />
-              <p class="px-2.5 pt-4 text-[11px] text-dimmed">Discoflare v{{ appConfig.version }}</p>
+              <a
+                :href="releaseUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="inline-block px-2.5 pt-4 text-[11px] text-dimmed hover:text-muted hover:underline"
+              >Discoflare v{{ appConfig.version }}</a>
             </div>
           </aside>
         </div>
