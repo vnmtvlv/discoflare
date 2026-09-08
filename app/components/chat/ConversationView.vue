@@ -6,6 +6,7 @@ import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
 import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 import { hasPermission, Permission } from '~~/shared/permissions'
+import { isSearchShortcut } from '~~/shared/shortcuts'
 
 const route = useRoute()
 const ui = useUiStore()
@@ -20,7 +21,7 @@ const channelId = computed(() => String(route.params.channel || route.params.cha
 watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
 
 onKeyStroke(
-  event => event.key.toLowerCase() === 'k' && (event.metaKey || event.ctrlKey),
+  isSearchShortcut,
   (event) => {
     event.preventDefault()
     ui.searchOpen = true
