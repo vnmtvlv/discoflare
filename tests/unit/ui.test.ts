@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { isLastChannel, useUiStore } from '../../app/stores/ui'
+import { isSearchShortcut } from '../../shared/shortcuts'
+
+describe('keyboard shortcuts', () => {
+  it('ignores key-like events without a string key', () => {
+    expect(isSearchShortcut({ metaKey: true })).toBe(false)
+    expect(isSearchShortcut({ key: 'K', metaKey: true })).toBe(true)
+    expect(isSearchShortcut({ key: 'k', ctrlKey: true })).toBe(true)
+  })
+})
 
 describe('last channel persistence', () => {
   it('rejects stale undefined route values', () => {
