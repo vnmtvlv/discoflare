@@ -31,3 +31,13 @@ worker-configuration.d.ts
 
 # Tests
 coverage
+
+# Bundled client output
+apps/mobile/www
+apps/desktop/www
+apps/extension/www
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target
+*.xcuserstate
+xcuserdata/
+DerivedData/

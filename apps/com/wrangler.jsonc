@@ -1,0 +1,26 @@
+{
+  "name": "discoflare-com",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./.output/public",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  },
+  "d1_databases": [
+    {
+      "binding": "TELEMETRY_DB",
+      "database_name": "discoflare-com-telemetry",
+      "database_id": "38991059-d080-4f3a-8332-3600a5438e6a",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "discoflare.com",
+      "custom_domain": true
+    }
+  ]
+}

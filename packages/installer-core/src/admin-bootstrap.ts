@@ -8,6 +8,7 @@ import type {
   DiscoflareAdminBootstrapResponse,
   DiscoflareAdminRelease,
   InstallerAssetsPayload,
+  ManagedAdminOAuthCredential,
 } from './types.js'
 
 export const adminInstallerMarker = 'discoflare.com/admin-v1'
@@ -94,6 +95,7 @@ async function uploadAdminWorker(
   access: { issuer: string, audience: string, applicationId: string },
   assetsJwt: string,
   existing: boolean,
+  managedOAuth?: ManagedAdminOAuthCredential,
 ) {
   const bindings: Array<Record<string, unknown>> = [
     { type: 'assets', name: 'ASSETS' },
@@ -108,6 +110,15 @@ async function uploadAdminWorker(
     { type: 'plain_text', name: 'CF_ACCESS_AUD', text: access.audience },
     { type: 'plain_text', name: 'CF_ACCESS_APP_ID', text: access.applicationId },
   ]
+  if (managedOAuth) {
+    bindings.push(
+      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_CREDENTIAL_MODE', text: 'managed-oauth' },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN', text: managedOAuth.accessToken },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN', text: managedOAuth.refreshToken },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID', text: managedOAuth.clientId },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT', text: String(managedOAuth.expiresAt) },
+    )
+  }
   const metadata: Record<string, unknown> = {
     main_module: 'discoflare-admin-worker.mjs',
     compatibility_date: release.manifest.compatibilityDate,
@@ -134,7 +145,7 @@ async function uploadAdminWorker(
 export async function bootstrapDiscoflareAdmin(
   accessToken: string,
   value: DiscoflareAdminBootstrapRequest,
-  options: { manifestUrl?: string } = {},
+  options: { manifestUrl?: string, managedOAuth?: ManagedAdminOAuthCredential } = {},
 ): Promise<DiscoflareAdminBootstrapResponse> {
   if (!accessToken.trim()) throw createError({ statusCode: 401, statusMessage: 'Cloudflare OAuth token is missing' })
   const request = validateRequest(value)
@@ -165,7 +176,8 @@ export async function bootstrapDiscoflareAdmin(
   const origin = `https://${await ensureWorkersHostname(client, request.accountId, request.workerName)}`
   const access = await ensureDiscoflareAdminAccess(client, request.accountId, workerId, request.email)
   const assetsJwt = await uploadAssets(accessToken, request.accountId, request.workerName, release.assets)
-  await uploadAdminWorker(accessToken, request, release, origin, access, assetsJwt, existing)
+  const managedOAuth = options.managedOAuth
+  await uploadAdminWorker(accessToken, request, release, origin, access, assetsJwt, existing, managedOAuth)
   await client.workers.scripts.subdomain.create(request.workerName, {
     account_id: request.accountId,
     enabled: true,
@@ -177,5 +189,16 @@ export async function bootstrapDiscoflareAdmin(
   if (textBinding(bindings, 'DISCOFLARE_ADMIN_VERSION') !== release.manifest.version) {
     throw createError({ statusCode: 502, statusMessage: 'Discoflare Admin deployment could not be verified' })
   }
-  return { origin, version: release.manifest.version, workerName: request.workerName, updated: existing }
+  const tokenConnected = bindings.some(binding => (
+    (binding.name === 'DISCOFLARE_ADMIN_TOKEN' || binding.name === 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN')
+    && binding.type === 'secret_text'
+  ))
+  return {
+    origin,
+    version: release.manifest.version,
+    workerName: request.workerName,
+    updated: existing,
+    managementMode: managedOAuth ? 'managed' : 'private',
+    tokenConnected,
+  }
 }

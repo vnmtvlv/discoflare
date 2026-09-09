@@ -1,6 +1,6 @@
 # Discoflare.com installer releases
 
-The installer on `discoflare.com/deploy` creates or repairs only `discoflare-admin`. That account-local Worker consumes Discoflare releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
+The managed installer on `discoflare.com/deploy` creates or repairs `discoflare-admin` and transfers a renewable OAuth grant into it. The private installer on `/deploy/private` creates the same Admin without transferring a persistent grant. That account-local Worker consumes Discoflare releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
 
 ## Publishing a release
 
@@ -14,7 +14,7 @@ Publishing a GitHub Release triggers `.github/workflows/publish-installer-releas
 
 Release tags may use either `v1.2.3` or `1.2.3`. The GitHub workflow publishes the matching public `ghcr.io/vnmtvlv/discoflare-computer:<version>` image before attaching the manifest.
 
-Discoflare Admin lives in `apps/admin` and is published from the same versioned GitHub Release as the workspace Worker. It remains a separate Worker bundle, static asset payload, and integrity manifest. Admin follows its own manifest and normally updates itself with its stored Account Admin Token while preserving its token and Access configuration. The temporary OAuth bootstrap on `discoflare.com` remains the repair path when Admin cannot update itself. Admin follows the workspace manifest from the same release, reports outdated Installations in its inventory, and applies a selected update in place while reusing the bound D1, R2, KV, Durable Object, Workflow, Container, domain, Access, and mail resources.
+Discoflare Admin lives in `apps/admin` and is published from the same versioned GitHub Release as the workspace Worker. It remains a separate Worker bundle, static asset payload, and integrity manifest. Admin follows its own manifest and normally updates itself with its stored Managed OAuth Grant or Account Admin Token while preserving credentials and Access configuration. Either setup route remains the repair path when Admin cannot update itself. Admin follows the workspace manifest from the same release, reports outdated Installations in its inventory, and applies a selected update in place while reusing the bound D1, R2, KV, Durable Object, Workflow, Container, domain, Access, and mail resources.
 
 Owners can check **Workspace Settings → Updates**, but infrastructure changes open Discoflare Admin. New installs carry a `DISCOFLARE_INSTALLATION` marker and `DISCOFLARE_MANAGEMENT_MODE=admin`. Adoption recognizes older marked installs, removes any legacy broad token or deployment-level RealtimeKit token, and adds the Admin service binding plus narrow capability. Admin refuses to overwrite unrelated Workers.
 

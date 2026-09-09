@@ -31,7 +31,22 @@
     "cf:types": "wrangler types",
     "admin:build": "pnpm --filter @discoflare/admin build",
     "admin:test": "pnpm --filter @discoflare/admin test",
-    "admin:typecheck": "pnpm --filter @discoflare/admin typecheck"
+    "admin:typecheck": "pnpm --filter @discoflare/admin typecheck",
+    "com:dev": "pnpm --filter @discoflare/com dev",
+    "com:build": "pnpm --filter @discoflare/com build",
+    "com:test": "pnpm --filter @discoflare/com test",
+    "com:typecheck": "pnpm --filter @discoflare/com typecheck",
+    "prepare:clients": "node scripts/prepare-clients.mjs all",
+    "prepare:clients:mobile": "node scripts/prepare-clients.mjs mobile",
+    "prepare:clients:desktop": "node scripts/prepare-clients.mjs desktop",
+    "prepare:clients:extension": "node scripts/prepare-clients.mjs extension",
+    "ios:sync": "pnpm prepare:clients:mobile && pnpm --filter @discoflare/mobile ios:sync",
+    "ios:open": "pnpm --filter @discoflare/mobile ios:open",
+    "ios:run": "pnpm ios:sync && pnpm --filter @discoflare/mobile ios:run",
+    "macos:dev": "pnpm prepare:clients:desktop && pnpm --filter @discoflare/desktop dev",
+    "macos:build": "pnpm prepare:clients:desktop && pnpm --filter @discoflare/desktop build",
+    "extension:build": "pnpm prepare:clients:extension",
+    "dev:simulator-proxy": "node scripts/simulator-proxy.mjs"
   },
   "cloudflare": {
     "bindings": {
@@ -182,6 +197,7 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
+      "better-sqlite3",
       "unrs-resolver",
       "vue-demi",
       "workerd"
