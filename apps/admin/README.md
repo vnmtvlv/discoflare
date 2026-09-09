@@ -22,3 +22,5 @@ Set local-only values in `.dev.vars` or `.env`; never commit Cloudflare credenti
 ## Releases
 
 Discoflare Admin is built from `apps/admin` and versioned with the workspace Worker. Each Discoflare GitHub Release publishes a separate Admin Worker bundle, static asset payload, and integrity manifest consumed by the temporary OAuth bootstrap on `discoflare.com`.
+
+Admin normally updates itself from that manifest with its stored Account Admin Token and preserves its token and Access configuration. The temporary OAuth installer remains the recovery path when Admin is unavailable, outdated beyond compatibility, or no longer has a working token.

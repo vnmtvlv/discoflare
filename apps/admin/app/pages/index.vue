@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { DeployRequest } from '@discoflare/installer-core'
 import type { AdminSession, InstallationList } from '../../shared/types'
+import { isNewerRelease } from '~~/shared/versions'
 import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
 import { readDeployStream } from '../utils/deploy-stream'
-import { waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
+import { waitForAdminVersion, waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
 import { verifyWorkspaceDeployment } from '../utils/deployment-health'
 
 const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
@@ -12,6 +13,7 @@ const inventory = ref<InstallationList | null>(null)
 const loadingInventory = ref(false)
 const connecting = ref(false)
 const disconnecting = ref(false)
+const updatingAdmin = ref(false)
 const mutating = ref<string | null>(null)
 const token = ref('')
 const error = ref('')
@@ -44,6 +46,10 @@ const latestVersion = computed(() => inventory.value?.latestVersion || session.v
 const updateCount = computed(() => latestVersion.value
   ? inventory.value?.installations.filter(item => item.version !== latestVersion.value).length || 0
   : 0)
+const adminUpdateAvailable = computed(() => isNewerRelease(
+  session.value?.version || null,
+  session.value?.latestAdminVersion || null,
+))
 const accountMenuItems = computed(() => [
   [
     {
@@ -151,6 +157,28 @@ async function disconnectToken() {
   }
 }
 
+async function updateAdmin() {
+  const targetVersion = session.value?.latestAdminVersion
+  if (!targetVersion) return
+  updatingAdmin.value = true
+  error.value = ''
+  try {
+    await $fetch('/api/update', { method: 'POST', body: { targetVersion } })
+    await waitForAdminVersion({
+      refresh: readFreshSession,
+      currentVersion: () => session.value?.version || null,
+      targetVersion,
+    })
+    toast.add({ title: `Discoflare Admin updated to ${targetVersion}`, color: 'success', icon: 'i-ph-check-circle' })
+  }
+  catch (cause) {
+    error.value = errorMessage(cause)
+  }
+  finally {
+    updatingAdmin.value = false
+  }
+}
+
 async function createInstallation() {
   mutating.value = 'create'
   error.value = ''
@@ -236,6 +264,17 @@ useSeoMeta({
 
         <UAlert v-if="sessionError || error" class="mt-6" color="error" variant="subtle" title="Operation stopped" :description="sessionError || error" />
 
+        <UAlert
+          v-if="session?.tokenConnected && adminUpdateAvailable"
+          class="mt-6"
+          color="primary"
+          variant="subtle"
+          icon="i-ph-arrow-circle-up"
+          :title="`Discoflare Admin ${session.latestAdminVersion} is available`"
+          :description="`This control plane is running ${session.version}. Installations remain online during the update.`"
+          :actions="[{ label: `Update Admin to ${session.latestAdminVersion}`, loading: updatingAdmin, onClick: updateAdmin }]"
+        />
+
         <UCard v-if="session && !session.tokenConnected" class="mt-8" :ui="{ body: 'p-6 sm:p-8' }">
           <div class="grid gap-8 lg:grid-cols-[1fr_0.9fr]">
             <div>
@@ -270,7 +309,7 @@ useSeoMeta({
 
           <UCard v-if="showCreate" class="mt-8" :ui="{ body: 'p-6 sm:p-8' }">
             <div class="flex items-start justify-between gap-4">
-              <div><h2 class="text-lg font-semibold text-highlighted">New installation</h2><p class="mt-1 text-sm text-muted">Live is enabled automatically. The first domain-backed installation also receives workspace email.</p></div>
+              <div><h2 class="text-lg font-semibold text-highlighted">New installation in {{ session.accountName }}</h2><p class="mt-1 text-sm text-muted">Live is enabled automatically. The first domain-backed installation also receives workspace email.</p></div>
               <UButton icon="i-ph-x" aria-label="Close" color="neutral" variant="ghost" @click="showCreate = false" />
             </div>
             <form class="mt-6 grid gap-5 sm:grid-cols-2" @submit.prevent="createInstallation">
@@ -297,7 +336,7 @@ useSeoMeta({
                 <div class="min-w-0">
                   <div class="flex flex-wrap items-center gap-2">
                     <h2 class="font-semibold text-highlighted">{{ installation.configuration.appName }}</h2>
-                    <UBadge v-if="installation.resources.primary" label="Primary" color="neutral" variant="subtle" />
+                    <UBadge v-if="installation.resources.primary" label="Mail primary" color="neutral" variant="subtle" />
                     <UBadge :label="installation.configuration.managementMode === 'admin' ? 'Managed by Admin' : 'Not connected to Admin'" :color="installation.configuration.managementMode === 'admin' ? 'success' : 'warning'" variant="subtle" />
                   </div>
                   <a :href="installation.origin" target="_blank" class="mt-1 block truncate text-sm text-primary hover:underline">{{ installation.origin.replace(/^https:\/\//, '') }}</a>

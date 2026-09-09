@@ -41,3 +41,11 @@ export function waitForDisconnectedSession(options: Omit<WaitForSessionStateOpti
     timeoutMessage: 'The account token was removed, but the updated Admin Worker is still activating. Reload this page to continue.',
   })
 }
+
+export function waitForAdminVersion(options: Omit<WaitForSessionStateOptions, 'isReady' | 'timeoutMessage'> & { currentVersion: () => string | null, targetVersion: string }) {
+  return waitForSessionState({
+    ...options,
+    isReady: () => options.currentVersion() === options.targetVersion,
+    timeoutMessage: `Discoflare Admin ${options.targetVersion} was uploaded, but the updated Worker is still activating. Reload this page to continue.`,
+  })
+}
