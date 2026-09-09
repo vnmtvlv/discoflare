@@ -10,6 +10,7 @@ export type InstallDiscoflareOptions = {
   manifestUrl?: string
   report?: DeployProgressReporter
   managedCredential?: InstanceAdminCredential
+  verification?: 'server' | 'client'
 }
 
 /** Complete install/update operation. Credential acquisition and UI stay in the caller. */
@@ -47,7 +48,18 @@ export async function installDiscoflare(
   }
   await progress('release', 'complete', `Discoflare ${release.manifest.version}`)
 
-  const deployed = await deployDiscoflare(client, accessToken, request, release, options.report, options.managedCredential)
+  if (options.verification === 'client' && request.managementMode !== 'admin') {
+    throw createError({ statusCode: 400, statusMessage: 'Client health verification is reserved for Discoflare Admin' })
+  }
+  const deployed = await deployDiscoflare(
+    client,
+    accessToken,
+    request,
+    release,
+    options.report,
+    options.managedCredential,
+    options.verification,
+  )
   const { telemetry: _telemetry, ...response } = deployed
   return response
 }
