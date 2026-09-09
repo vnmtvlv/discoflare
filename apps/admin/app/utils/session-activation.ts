@@ -1,25 +1,43 @@
-interface WaitForConnectedSessionOptions {
+interface WaitForSessionStateOptions {
   refresh: () => Promise<unknown>
-  isConnected: () => boolean
+  isReady: () => boolean
   wait?: (delayMs: number) => Promise<void>
   attempts?: number
   delayMs?: number
+  timeoutMessage: string
 }
 
 const defaultWait = (delayMs: number) => new Promise<void>(resolve => setTimeout(resolve, delayMs))
 
-export async function waitForConnectedSession({
+export async function waitForSessionState({
   refresh,
-  isConnected,
+  isReady,
   wait = defaultWait,
-  attempts = 15,
-  delayMs = 800,
-}: WaitForConnectedSessionOptions) {
+  attempts = 45,
+  delayMs = 1_000,
+  timeoutMessage,
+}: WaitForSessionStateOptions) {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     await refresh()
-    if (isConnected()) return
+    if (isReady()) return
     if (attempt < attempts - 1) await wait(delayMs)
   }
 
-  throw new Error('The account token was saved, but the updated Admin Worker is still activating. Reload this page to continue.')
+  throw new Error(timeoutMessage)
+}
+
+export function waitForConnectedSession(options: Omit<WaitForSessionStateOptions, 'isReady' | 'timeoutMessage'> & { isConnected: () => boolean }) {
+  return waitForSessionState({
+    ...options,
+    isReady: options.isConnected,
+    timeoutMessage: 'The account token was saved, but the updated Admin Worker is still activating. Reload this page to continue.',
+  })
+}
+
+export function waitForDisconnectedSession(options: Omit<WaitForSessionStateOptions, 'isReady' | 'timeoutMessage'> & { isConnected: () => boolean }) {
+  return waitForSessionState({
+    ...options,
+    isReady: () => !options.isConnected(),
+    timeoutMessage: 'The account token was removed, but the updated Admin Worker is still activating. Reload this page to continue.',
+  })
 }

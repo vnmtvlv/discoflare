@@ -1,16 +1,21 @@
 <script setup lang="ts">
 import type { DeployRequest, DeployResponse } from '@discoflare/installer-core'
 import type { AdminSession, InstallationList } from '../../shared/types'
-import { waitForConnectedSession } from '../utils/session-activation'
+import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
+import { waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
 
-const { data: session, error: sessionFailure, refresh: refreshSession } = await useFetch<AdminSession>('/api/session')
+const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
+const toast = useToast()
 const inventory = ref<InstallationList | null>(null)
 const loadingInventory = ref(false)
 const connecting = ref(false)
+const disconnecting = ref(false)
 const mutating = ref<string | null>(null)
 const token = ref('')
 const error = ref('')
 const showCreate = ref(false)
+const tokenDialogOpen = ref(false)
+const disconnectDialogOpen = ref(false)
 
 const form = reactive<DeployRequest>({
   accountId: '',
@@ -37,6 +42,25 @@ const latestVersion = computed(() => inventory.value?.latestVersion || session.v
 const updateCount = computed(() => latestVersion.value
   ? inventory.value?.installations.filter(item => item.version !== latestVersion.value).length || 0
   : 0)
+const accountMenuItems = computed(() => [
+  [
+    {
+      label: 'GitHub releases',
+      icon: 'i-ph-github-logo',
+      to: GITHUB_RELEASES_URL,
+      target: '_blank',
+    },
+    ...(session.value?.tokenConnected
+      ? [{ label: 'Replace account token', icon: 'i-ph-key', onSelect: () => { tokenDialogOpen.value = true } }]
+      : []),
+  ],
+  [
+    ...(session.value?.tokenConnected
+      ? [{ label: 'Disconnect account token', icon: 'i-ph-plugs-connected', color: 'error' as const, onSelect: () => { disconnectDialogOpen.value = true } }]
+      : []),
+    { label: 'Log out', icon: 'i-ph-sign-out', onSelect: () => navigateTo(ACCESS_LOGOUT_PATH, { external: true }) },
+  ],
+])
 
 watch(() => form.workerName, (value, previous) => {
   if (!form.appSubdomain || form.appSubdomain === previous) form.appSubdomain = value
@@ -56,6 +80,12 @@ function errorMessage(cause: unknown) {
 
 const sessionError = computed(() => sessionFailure.value ? errorMessage(sessionFailure.value) : '')
 
+async function readFreshSession() {
+  session.value = await $fetch<AdminSession>('/api/session', {
+    query: { activation: Date.now() },
+  })
+}
+
 async function loadInventory() {
   if (!session.value?.tokenConnected) return
   loadingInventory.value = true
@@ -72,23 +102,50 @@ async function loadInventory() {
   }
 }
 
-async function connectToken() {
+async function connectToken(closeDialog = false) {
+  const wasConnected = Boolean(session.value?.tokenConnected)
   connecting.value = true
   error.value = ''
   try {
     await $fetch('/api/token', { method: 'POST', body: { token: token.value } })
     token.value = ''
-    await waitForConnectedSession({
-      refresh: refreshSession,
-      isConnected: () => Boolean(session.value?.tokenConnected),
-    })
+    if (wasConnected) await readFreshSession()
+    else {
+      await waitForConnectedSession({
+        refresh: readFreshSession,
+        isConnected: () => Boolean(session.value?.tokenConnected),
+      })
+    }
     await loadInventory()
+    if (closeDialog) tokenDialogOpen.value = false
+    toast.add({ title: wasConnected ? 'Account token replaced' : 'Cloudflare account connected', color: 'success', icon: 'i-ph-check-circle' })
   }
   catch (cause) {
     error.value = errorMessage(cause)
   }
   finally {
     connecting.value = false
+  }
+}
+
+async function disconnectToken() {
+  disconnecting.value = true
+  error.value = ''
+  try {
+    await $fetch('/api/token', { method: 'DELETE' })
+    await waitForDisconnectedSession({
+      refresh: readFreshSession,
+      isConnected: () => Boolean(session.value?.tokenConnected),
+    })
+    inventory.value = null
+    disconnectDialogOpen.value = false
+    toast.add({ title: 'Account token disconnected', color: 'success', icon: 'i-ph-check-circle' })
+  }
+  catch (cause) {
+    error.value = errorMessage(cause)
+  }
+  finally {
+    disconnecting.value = false
   }
 }
 
@@ -142,10 +199,14 @@ useSeoMeta({
     <header class="relative border-b border-muted bg-default/80 backdrop-blur">
       <UContainer class="flex h-20 items-center justify-between gap-4">
         <AdminBrand />
-        <div v-if="session" class="text-right">
-          <p class="text-sm font-medium text-highlighted">{{ session.accountName }}</p>
-          <p class="text-xs text-muted">{{ session.email }}</p>
-        </div>
+        <UDropdownMenu v-if="session" :items="accountMenuItems" :content="{ align: 'end' }">
+          <UButton color="neutral" variant="ghost" trailing-icon="i-ph-caret-down" class="-mr-3">
+            <span class="text-right">
+              <span class="block text-sm font-medium text-highlighted">{{ session.accountName }}</span>
+              <span class="block text-xs font-normal text-muted">{{ session.email }}</span>
+            </span>
+          </UButton>
+        </UDropdownMenu>
       </UContainer>
     </header>
 
@@ -172,7 +233,7 @@ useSeoMeta({
               <p class="mt-2 text-sm leading-6 text-muted">Create one Account Admin Token in Cloudflare, then paste it here. It goes directly to this Worker and never through discoflare.com.</p>
               <UAlert class="mt-5" color="warning" variant="subtle" icon="i-ph-warning" title="Account-wide authority" description="Use a dedicated Cloudflare account for the strongest isolation. This Worker can exercise every permission granted to the token." />
             </div>
-            <form class="space-y-4 rounded-xl border border-default bg-elevated p-5" @submit.prevent="connectToken">
+            <form class="space-y-4 rounded-xl border border-default bg-elevated p-5" @submit.prevent="connectToken(false)">
               <UButton :to="session.tokenTemplateUrl" target="_blank" external block color="neutral" variant="outline" label="Create Account Admin Token" trailing-icon="i-ph-arrow-up-right" />
               <UFormField label="Account Admin Token" required hint="Stored only as this Worker's encrypted secret.">
                 <UInput v-model="token" type="password" autocomplete="off" class="w-full" />
@@ -191,6 +252,7 @@ useSeoMeta({
             icon="i-ph-arrow-circle-up"
             :title="`${updateCount} ${updateCount === 1 ? 'installation has' : 'installations have'} an update`"
             :description="latestVersion ? `Discoflare ${latestVersion} is available.` : undefined"
+            :actions="[{ label: 'GitHub release', to: GITHUB_RELEASES_URL, target: '_blank', color: 'neutral', variant: 'outline' }]"
           />
 
           <UCard v-if="showCreate" class="mt-8" :ui="{ body: 'p-6 sm:p-8' }">
@@ -246,5 +308,27 @@ useSeoMeta({
         </template>
       </UContainer>
     </main>
+
+    <UModal v-model:open="tokenDialogOpen" title="Replace Account Admin Token" description="The new token replaces the encrypted secret stored in this Worker.">
+      <template #body>
+        <form id="replace-token-form" class="space-y-4" @submit.prevent="connectToken(true)">
+          <UButton :to="session?.tokenTemplateUrl" target="_blank" external block color="neutral" variant="outline" label="Create Account Admin Token" trailing-icon="i-ph-arrow-up-right" />
+          <UFormField label="Account Admin Token" required>
+            <UInput v-model="token" type="password" autocomplete="off" autofocus class="w-full" />
+          </UFormField>
+        </form>
+      </template>
+      <template #footer="{ close }">
+        <UButton label="Cancel" color="neutral" variant="outline" @click="close" />
+        <UButton type="submit" form="replace-token-form" label="Replace token" :loading="connecting" :disabled="!token.trim()" />
+      </template>
+    </UModal>
+
+    <UModal v-model:open="disconnectDialogOpen" title="Disconnect account token" description="Admin will stop managing installations until another token is connected.">
+      <template #footer="{ close }">
+        <UButton label="Cancel" color="neutral" variant="outline" @click="close" />
+        <UButton label="Disconnect" color="error" :loading="disconnecting" @click="disconnectToken" />
+      </template>
+    </UModal>
   </div>
 </template>
