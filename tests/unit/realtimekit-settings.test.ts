@@ -129,6 +129,21 @@ describe('RealtimeKit settings', () => {
     expect(realtimekitSettingsAdminDto(config)).not.toHaveProperty('apiKey')
   })
 
+  it('uses the single instance admin token for managed Huddles', async () => {
+    const env = {
+      DB: { prepare: () => { throw new Error('D1 should not be read') } },
+      REALTIMEKIT_ACCOUNT_ID: 'account',
+      REALTIMEKIT_APP_ID: 'app',
+      DISCOFLARE_ADMIN_TOKEN: 'instance-admin-token',
+    } as unknown as DiscoflareEnv
+
+    await expect(loadRealtimeKitConfig(env)).resolves.toMatchObject({
+      apiKey: 'instance-admin-token',
+      source: 'deployment',
+      apiTokenConfigured: true,
+    })
+  })
+
   it('reports an unreadable saved token after AUTH_SECRET changes', async () => {
     const encrypted = await encryptSecret('original installation secret', REALTIMEKIT_SECRET_SCOPE, 'cloudflare-token')
     const config = await loadRealtimeKitConfig(envWithRow({

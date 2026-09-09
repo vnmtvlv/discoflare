@@ -13,6 +13,32 @@ const updateQ = useQuery({
 
 const status = computed(() => updateQ.data.value)
 const releaseLabel = computed(() => status.value?.releasesBehind === 1 ? 'release' : 'releases')
+const updating = ref(false)
+const updateError = ref('')
+const updateComplete = ref(false)
+
+async function installManagedUpdate() {
+  const targetVersion = status.value?.latestRelease?.tagName
+  if (!targetVersion) return
+  updating.value = true
+  updateError.value = ''
+  updateComplete.value = false
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/updates`, {
+      method: 'POST',
+      body: { targetVersion },
+    })
+    updateComplete.value = true
+    await updateQ.refetch()
+  }
+  catch (cause) {
+    const error = cause as { data?: { statusMessage?: string }, statusMessage?: string, message?: string }
+    updateError.value = error.data?.statusMessage || error.statusMessage || error.message || 'Managed update failed.'
+  }
+  finally {
+    updating.value = false
+  }
+}
 </script>
 
 <template>
@@ -60,7 +86,7 @@ const releaseLabel = computed(() => status.value?.releasesBehind === 1 ? 'releas
             <p v-else class="mt-1 text-sm text-success">Up to date</p>
           </div>
           <UBadge
-            :label="status.installationKind === 'guided' ? 'Managed installer' : 'Manual deployment'"
+            :label="status.managementMode === 'managed' ? 'Managed installation' : 'Manual management'"
             color="neutral"
             variant="subtle"
           />
@@ -78,6 +104,13 @@ const releaseLabel = computed(() => status.value?.releasesBehind === 1 ? 'releas
         </div>
 
         <div class="mt-6 flex flex-wrap gap-2">
+          <UButton
+            v-if="status.managementMode === 'managed' && status.updateAvailable"
+            :label="`Install ${status.latestRelease?.tagName.replace(/^v/, '')}`"
+            :loading="updating"
+            icon="i-ph-download-simple"
+            @click="installManagedUpdate"
+          />
           <UButton
             v-if="status.upgradeUrl"
             :to="status.upgradeUrl"
@@ -100,7 +133,16 @@ const releaseLabel = computed(() => status.value?.releasesBehind === 1 ? 'releas
       </div>
 
       <UAlert
-        v-if="status.updateAvailable && status.installationKind === 'manual'"
+        v-if="updateComplete"
+        class="mt-4"
+        color="success"
+        title="Discoflare was updated"
+        description="Reload the workspace to use the new release."
+      />
+      <UAlert v-if="updateError" class="mt-4" color="error" title="Update failed" :description="updateError" />
+
+      <UAlert
+        v-if="status.updateAvailable && status.managementMode === 'manual' && status.installationKind === 'manual'"
         class="mt-4"
         color="neutral"
         title="Manual deployment"

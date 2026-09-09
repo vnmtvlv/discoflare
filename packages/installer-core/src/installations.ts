@@ -45,15 +45,23 @@ function installationConfiguration(
   const mailEnabled = Boolean(mailDomain && mailZoneId && mailSubdomain)
   const registration = textBinding(bindings, 'AUTH_REGISTRATION_MODE')
   const mode = textBinding(bindings, 'AUTH_MODE') === 'access' ? 'access' : 'builtin'
+  const managementMode = textBinding(bindings, 'DISCOFLARE_MANAGEMENT_MODE') === 'managed'
+    && bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
+    ? 'managed'
+    : 'manual'
   const realtimekitEnabled = Boolean(
     textBinding(bindings, 'REALTIMEKIT_ACCOUNT_ID')
     && textBinding(bindings, 'REALTIMEKIT_APP_ID')
-    && bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text'),
+    && (
+      bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text')
+      || managementMode === 'managed'
+    ),
   )
 
   return {
     accountId,
     workerName,
+    managementMode,
     adminEmail: '',
     allowedEmails: [],
     appName: textBinding(bindings, 'APP_NAME') || textBinding(bindings, 'ADMIN_WORKSPACE') || 'Discoflare',
@@ -117,6 +125,8 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           accessApplicationId: textBinding(bindings, 'CF_ACCESS_APP_ID') || null,
           accessHealthApplicationId: textBinding(bindings, 'CF_ACCESS_HEALTH_APP_ID') || null,
           accessDeletionApplicationId: textBinding(bindings, 'CF_ACCESS_DELETION_APP_ID') || null,
+          adminTokenId: textBinding(bindings, 'DISCOFLARE_ADMIN_TOKEN_ID') || null,
+          adminTokenConfigured: bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text'),
           realtimekitAppId: textBinding(bindings, 'REALTIMEKIT_APP_ID') || null,
           realtimekitManaged: textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED') === 'true',
         },

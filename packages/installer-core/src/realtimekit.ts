@@ -173,6 +173,7 @@ export async function ensureManagedRealtimeKit(
   accountId: string,
   workerName: string,
   existing: { appId?: string } = {},
+  managed = true,
 ): Promise<ManagedRealtimeKit> {
   const client = cloudflareClient(apiToken)
   const appId = await ensureApp(client, accountId, workerName, existing.appId)
@@ -184,6 +185,6 @@ export async function ensureManagedRealtimeKit(
     apiToken,
     voicePreset: realtimeKitVoicePreset,
     avPreset: realtimeKitAvPreset,
-    managed: true,
+    managed,
   }
 }

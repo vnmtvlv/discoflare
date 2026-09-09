@@ -13,6 +13,9 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
   const { env } = cf(event)
   const installedVersion = env.DISCOFLARE_VERSION?.trim() || packageVersion
   const installationKind = env.DISCOFLARE_INSTALLATION === 'discoflare.com/v1' ? 'guided' : 'manual'
+  const managementMode = env.DISCOFLARE_MANAGEMENT_MODE === 'managed' && env.DISCOFLARE_ADMIN_TOKEN && env.DISCOFLARE_ADMIN_TOKEN_ID
+    ? 'managed'
+    : 'manual'
   const checkedAt = new Date().toISOString()
 
   try {
@@ -31,10 +34,11 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
     return {
       installedVersion,
       installationKind,
+      managementMode,
       latestRelease,
       releasesBehind: newer.length,
       updateAvailable: newer.length > 0,
-      upgradeUrl: installationKind === 'guided' && newer.length ? upgrade.toString() : null,
+      upgradeUrl: managementMode === 'manual' && installationKind === 'guided' && newer.length ? upgrade.toString() : null,
       checkedAt,
       checkFailed: false,
     }
@@ -43,6 +47,7 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
     return {
       installedVersion,
       installationKind,
+      managementMode,
       latestRelease: null,
       releasesBehind: 0,
       updateAvailable: false,

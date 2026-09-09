@@ -81,12 +81,12 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 
 ### Managed server creation
 
-1. Open the [Discoflare installer](https://discoflare.com/deploy), connect Cloudflare, and optionally enable managed Huddles.
+1. Open the [Discoflare installer](https://discoflare.com/deploy), connect Cloudflare, and choose Manual or Managed installation management. Managed mode opens a pre-filled Cloudflare Account API Token form; create the token there and paste it back once.
 2. Enter the intended Owner email and choose Discoflare accounts or the advanced Cloudflare Access mode.
 3. Keep the generated `workers.dev` URL or add a custom domain; independently choose whether to provision workspace mail.
 4. Open the private setup link and create the first Owner password. If Cloudflare Access was explicitly selected, open the workspace and use the one-time code sent by Cloudflare instead.
 
-The installer uses a temporary OAuth grant; the deployed Worker does not retain the Cloudflare API token. The downloadable CLI uses an explicit `CLOUDFLARE_API_TOKEN` and the same open-source installer core, so installation and recovery do not depend on `discoflare.com` remaining online. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
+Manual management uses a temporary OAuth grant and retains no Cloudflare deployment credential. Managed operation asks Cloudflare to create one account-owned Instance Admin Token from an explicit template, verifies the pasted value, stores it only as a Worker secret, enables Huddles by default, and lets the Owner install later releases from Workspace Settings. The raw value passes transiently through the installer request but is not retained by `discoflare.com`. That token also supplies RealtimeKit and future email-infrastructure maintenance; it is not available to D1, browser code, MCP clients, Members, Agents, or Agent Computers. Cloudflare scopes these permissions to an account and its zones, so use a dedicated Cloudflare account when installation-level isolation matters. The downloadable CLI uses an explicit `CLOUDFLARE_API_TOKEN` and the same open-source installer core, so installation and recovery do not depend on `discoflare.com` remaining online. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
 
 ### Manual deployment
 
