@@ -43,7 +43,7 @@ function blankConfig(env: DiscoflareEnv): RealtimeKitRuntimeConfig {
 export async function loadRealtimeKitConfig(env: DiscoflareEnv): Promise<RealtimeKitRuntimeConfig> {
   const accountId = env.REALTIMEKIT_ACCOUNT_ID?.trim() || ''
   const appId = env.REALTIMEKIT_APP_ID?.trim() || ''
-  const apiKey = env.REALTIMEKIT_API_KEY?.trim() || ''
+  const apiKey = env.REALTIMEKIT_API_KEY?.trim() || env.DISCOFLARE_ADMIN_TOKEN?.trim() || ''
   const apiSecret = env.REALTIMEKIT_API_SECRET?.trim() || ''
   if (appId && apiKey && (accountId || apiSecret)) {
     return {

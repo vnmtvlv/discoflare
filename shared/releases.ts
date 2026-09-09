@@ -9,6 +9,7 @@ export type PublishedRelease = {
 export type UpdateStatusDTO = {
   installedVersion: string
   installationKind: 'guided' | 'manual'
+  managementMode: 'manual' | 'managed'
   latestRelease: PublishedRelease | null
   releasesBehind: number
   updateAvailable: boolean

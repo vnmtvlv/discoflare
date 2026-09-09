@@ -4,10 +4,12 @@ import { createError } from './errors.js'
 import { loadDiscoflareRelease, releaseManifestUrl } from './release.js'
 import { parseDeployRequest } from './request.js'
 import type { DeployProgressReporter, DeployProgressStep, DeployResponse } from './types.js'
+import type { InstanceAdminCredential } from './instance-admin.js'
 
 export type InstallDiscoflareOptions = {
   manifestUrl?: string
   report?: DeployProgressReporter
+  managedCredential?: InstanceAdminCredential
 }
 
 /** Complete install/update operation. Credential acquisition and UI stay in the caller. */
@@ -45,7 +47,7 @@ export async function installDiscoflare(
   }
   await progress('release', 'complete', `Discoflare ${release.manifest.version}`)
 
-  const deployed = await deployDiscoflare(client, accessToken, request, release, options.report)
+  const deployed = await deployDiscoflare(client, accessToken, request, release, options.report, options.managedCredential)
   const { telemetry: _telemetry, ...response } = deployed
   return response
 }

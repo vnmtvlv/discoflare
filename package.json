@@ -94,6 +94,9 @@
       "REALTIMEKIT_API_KEY": {
         "description": "Optional Cloudflare API token with Realtime permissions. Store this as a secret."
       },
+      "DISCOFLARE_ADMIN_TOKEN": {
+        "description": "Optional account-owned token used by a managed installation for updates, RealtimeKit, and Cloudflare infrastructure. Store this as a secret."
+      },
       "VAPID_SUBJECT": {
         "description": "Web Push contact URI, normally mailto:admin@example.com."
       },

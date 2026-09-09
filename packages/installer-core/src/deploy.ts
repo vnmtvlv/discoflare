@@ -8,6 +8,7 @@ import { ensureCloudflareAccess, ensureWorkersHostname } from './access.js'
 import { ensurePrimaryMail } from './primary-mail.js'
 import { ensureTenantContainerImage } from './container-registry.js'
 import { ensureManagedRealtimeKit, realtimeKitCapability, type ManagedRealtimeKit } from './realtimekit.js'
+import { instanceAdminCapability, verifyInstanceAdminCredential, type InstanceAdminCredential } from './instance-admin.js'
 
 type WorkerUploadResult = {
   deployment_id?: string
@@ -56,6 +57,9 @@ type ExistingWorker = {
   accessHealthApplicationId?: string
   accessDeletionApplicationId?: string
   primary?: boolean
+  managementMode?: 'manual' | 'managed'
+  adminTokenId?: string
+  adminTokenConfigured?: boolean
   realtimekitAccountId?: string
   realtimekitAppId?: string
   realtimekitVoicePreset?: string
@@ -71,6 +75,16 @@ type SendingSubdomain = { name: string; enabled: boolean }
 type WorkerDomain = { hostname: string; service: string }
 type WorkerSearchResult = { id?: string, script_name?: string }
 type DeploymentHealth = { version?: string; ok?: boolean; ready?: boolean; migrated?: boolean; realtimekit?: boolean }
+
+async function deleteWorkerSecret(client: Cloudflare, accountId: string, workerName: string, secretName: string) {
+  await client.workers.scripts.secrets.delete(secretName, {
+    account_id: accountId,
+    script_name: workerName,
+  }).catch((error: unknown) => {
+    const status = error && typeof error === 'object' && 'status' in error ? Number(error.status) : 0
+    if (status !== 404) throw error
+  })
+}
 
 export const installerMarker = 'discoflare.com/v1'
 const bootstrapMarker = 'discoflare.com/bootstrap/v1'
@@ -135,6 +149,9 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       accessHealthApplicationId: text('CF_ACCESS_HEALTH_APP_ID'),
       accessDeletionApplicationId: text('CF_ACCESS_DELETION_APP_ID'),
       primary: text('DISCOFLARE_PRIMARY') === 'true',
+      managementMode: text('DISCOFLARE_MANAGEMENT_MODE') === 'managed' ? 'managed' : 'manual',
+      adminTokenId: text('DISCOFLARE_ADMIN_TOKEN_ID'),
+      adminTokenConfigured: bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text'),
       realtimekitAccountId: text('REALTIMEKIT_ACCOUNT_ID'),
       realtimekitAppId: text('REALTIMEKIT_APP_ID'),
       realtimekitVoicePreset: text('REALTIMEKIT_PRESET_VOICE'),
@@ -382,6 +399,7 @@ async function uploadWorker(
   telemetry: { installationId: string, token: string },
   access: { issuer: string, audience: string, applicationId: string, healthApplicationId: string, deletionApplicationId: string } | null,
   primary: boolean,
+  management: { mode: 'manual' | 'managed', credential?: InstanceAdminCredential },
   realtimekit: ManagedRealtimeKit | null,
 ) {
   const hostname = new URL(resources.origin).hostname
@@ -401,6 +419,10 @@ async function uploadWorker(
     { type: 'plain_text', name: 'AUTH_MODE', text: request.authMode },
     { type: 'plain_text', name: 'AGENT_MODEL', text: '@cf/moonshotai/kimi-k2.7-code' },
     { type: 'plain_text', name: 'DISCOFLARE_APP_HOSTNAME', text: hostname },
+    { type: 'plain_text', name: 'DISCOFLARE_ACCOUNT_ID', text: accountId },
+    { type: 'plain_text', name: 'DISCOFLARE_WORKER_NAME', text: request.workerName },
+    { type: 'plain_text', name: 'DISCOFLARE_MANAGEMENT_MODE', text: management.mode },
+    { type: 'plain_text', name: 'DISCOFLARE_CUSTOM_DOMAIN', text: request.customDomainEnabled ? 'true' : 'false' },
     { type: 'plain_text', name: 'DISCOFLARE_INSTALLATION', text: installerMarker },
     { type: 'plain_text', name: 'DISCOFLARE_VERSION', text: manifest.version },
     { type: 'plain_text', name: 'DISCOFLARE_TELEMETRY_ID', text: telemetry.installationId },
@@ -408,6 +430,21 @@ async function uploadWorker(
     { type: 'secret_text', name: 'DISCOFLARE_TELEMETRY_TOKEN', text: telemetry.token },
     ...manifest.durableObjects.map(item => ({ type: 'durable_object_namespace', name: item.binding, class_name: item.className })),
   ]
+  if (request.customDomainEnabled || request.mailEnabled) {
+    bindings.push(
+      { type: 'plain_text', name: 'DISCOFLARE_ZONE_ID', text: request.zoneId },
+      { type: 'plain_text', name: 'DISCOFLARE_ZONE_NAME', text: request.zoneName },
+      { type: 'plain_text', name: 'DISCOFLARE_APP_SUBDOMAIN', text: request.appSubdomain },
+    )
+  }
+  if (management.mode === 'managed') {
+    const tokenId = management.credential?.id || existing.adminTokenId
+    if (!tokenId) throw createError({ statusCode: 409, statusMessage: 'Managed installation token metadata is incomplete' })
+    bindings.push({ type: 'plain_text', name: 'DISCOFLARE_ADMIN_TOKEN_ID', text: tokenId })
+    if (management.credential?.value) {
+      bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_TOKEN', text: management.credential.value })
+    }
+  }
   if (primary) bindings.push({ type: 'plain_text', name: 'DISCOFLARE_PRIMARY', text: 'true' })
   if (access) {
     bindings.push(
@@ -585,6 +622,7 @@ export async function deployDiscoflare(
   request: DeployRequest,
   release: { manifest: InstallerReleaseManifest, worker: ArrayBuffer, assets: InstallerAssetsPayload },
   report?: DeployProgressReporter,
+  managedCredential?: InstanceAdminCredential,
 ) {
   const progress = async (step: DeployProgressStep, state: 'active' | 'complete', detail?: string) => {
     await report?.({ type: 'progress', step, state, detail })
@@ -596,6 +634,9 @@ export async function deployDiscoflare(
   }
   if (request.realtimekitEnabled && !release.manifest.capabilities?.includes(realtimeKitCapability)) {
     throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support managed RealtimeKit` })
+  }
+  if (request.managementMode === 'managed' && !release.manifest.capabilities?.includes(instanceAdminCapability)) {
+    throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support managed installation tokens` })
   }
   const existing = await inspectWorker(client, request.accountId, request.workerName)
   const existingPrimary = await primaryWorker(client, request.accountId)
@@ -689,31 +730,61 @@ export async function deployDiscoflare(
   }
   await progress('access', 'complete', request.authMode === 'access' ? 'Email code sign-in ready' : 'Using Discoflare accounts')
 
+  await progress('management', 'active')
+  let instanceAdmin: InstanceAdminCredential | undefined
+  if (request.managementMode === 'managed') {
+    if (managedCredential) {
+      if (managedCredential.value !== accessToken) {
+        throw createError({ statusCode: 403, statusMessage: 'Managed self-update credential does not match the Cloudflare API token' })
+      }
+      if (existing.adminTokenId && existing.adminTokenId !== managedCredential.id) {
+        throw createError({ statusCode: 409, statusMessage: 'Managed installation token identity changed' })
+      }
+      instanceAdmin = managedCredential
+      await progress('management', 'complete', 'Instance admin token reused')
+    }
+    else {
+      instanceAdmin = await verifyInstanceAdminCredential(request.instanceAdminToken || '', request.accountId)
+      await progress('management', 'complete', existing.adminTokenId === instanceAdmin.id ? 'Instance admin token verified' : 'Instance admin token configured')
+    }
+  }
+  else {
+    await progress('management', 'complete', 'Manual management')
+  }
+
   let realtimekit: ManagedRealtimeKit | null = null
   await progress('realtimekit', 'active')
   const existingRealtimeKit = Boolean(
     existing.realtimekitAccountId
     && existing.realtimekitAppId
-    && existing.realtimekitApiTokenConfigured,
+    && (existing.realtimekitApiTokenConfigured || (existing.managementMode === 'managed' && existing.adminTokenConfigured)),
   )
-  if (existingRealtimeKit) {
+  if (request.realtimekitEnabled && request.managementMode === 'managed') {
+    if (!instanceAdmin) throw createError({ statusCode: 409, statusMessage: 'Managed Huddles require the instance admin token' })
+    const provisioned = await ensureManagedRealtimeKit(instanceAdmin.value, request.accountId, request.workerName, {
+      appId: existing.realtimekitAppId,
+    })
+    realtimekit = { ...provisioned, apiToken: undefined, managed: true }
+    await progress('realtimekit', 'complete', existingRealtimeKit ? 'Huddles verified with the instance admin token' : 'Huddles enabled with the instance admin token')
+  }
+  else if (request.realtimekitEnabled && existingRealtimeKit && existing.managementMode !== 'managed' && !request.realtimekitApiToken) {
     realtimekit = {
       accountId: existing.realtimekitAccountId!,
       appId: existing.realtimekitAppId!,
       voicePreset: existing.realtimekitVoicePreset || 'voice',
       avPreset: existing.realtimekitAvPreset || existing.realtimekitVoicePreset || 'group_call_host',
-      managed: existing.realtimekitManaged === true,
+      managed: false,
     }
-    await progress('realtimekit', 'complete', existing.realtimekitManaged ? 'Managed credentials reused' : 'Existing credentials preserved')
+    await progress('realtimekit', 'complete', 'Manual Realtime token preserved')
   }
   else if (request.realtimekitEnabled) {
     if (!request.realtimekitApiToken) {
-      throw createError({ statusCode: 400, statusMessage: 'Create and paste a Cloudflare Realtime API token to enable Huddles' })
+      throw createError({ statusCode: 400, statusMessage: 'Paste a Cloudflare Realtime API token to keep Huddles in manual management mode' })
     }
     realtimekit = await ensureManagedRealtimeKit(request.realtimekitApiToken, request.accountId, request.workerName, {
       appId: existing.realtimekitAppId,
-    })
-    await progress('realtimekit', 'complete', 'App, presets, and runtime token verified')
+    }, false)
+    await progress('realtimekit', 'complete', 'Manual Realtime token verified')
   }
   else {
     await progress('realtimekit', 'complete', 'Skipped')
@@ -727,15 +798,24 @@ export async function deployDiscoflare(
         request,
       )
     : null
-  const uploaded = await uploadWorker(accessToken, request.accountId, request, release.manifest, release.worker, {
+  const uploaded: WorkerUploadResult = await uploadWorker(accessToken, request.accountId, request, release.manifest, release.worker, {
     databaseId,
     bucketName,
     kvId,
     assetsJwt,
     origin,
-  }, existing, ownerSetupToken, telemetry, access, primary, realtimekit)
+  }, existing, ownerSetupToken, telemetry, access, primary, {
+    mode: request.managementMode,
+    credential: instanceAdmin,
+  }, realtimekit)
   await progress('worker', 'complete', `Discoflare ${release.manifest.version}`)
 
+  if (existing.realtimekitApiTokenConfigured && (request.managementMode === 'managed' || !request.realtimekitEnabled)) {
+    await deleteWorkerSecret(client, request.accountId, request.workerName, 'REALTIMEKIT_API_KEY')
+  }
+  if (existing.adminTokenConfigured && request.managementMode === 'manual') {
+    await deleteWorkerSecret(client, request.accountId, request.workerName, 'DISCOFLARE_ADMIN_TOKEN')
+  }
   await progress('domain', 'active')
   await client.workers.scripts.subdomain.create(request.workerName, {
     account_id: request.accountId,
@@ -781,6 +861,7 @@ export async function deployDiscoflare(
     url: origin,
     setupUrl: ownerSetupToken ? `${origin}/setup#claim=${encodeURIComponent(ownerSetupToken)}` : undefined,
     version: release.manifest.version,
+    managementMode: request.managementMode,
     updated: existing.exists,
     appliedMigrations,
     verified: true,

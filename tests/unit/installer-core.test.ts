@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   durableObjectMigrations,
   InstallerError,
+  instanceAdminPermissionTemplate,
+  instanceAdminTokenTemplateUrl,
   parseDeployRequest,
   requiresInitialInfrastructureProvisioning,
   realtimeKitAvPreset,
@@ -12,6 +14,7 @@ import type { InstallerReleaseManifest } from '../../packages/installer-core/src
 const request = {
   accountId: 'a'.repeat(32),
   workerName: 'discoflare-hq',
+  managementMode: 'manual',
   adminEmail: 'owner@example.com',
   allowedEmails: [],
   appName: 'Discoflare HQ',
@@ -62,6 +65,19 @@ describe('installer-core', () => {
     expect(parseDeployRequest({ ...request, realtimekitEnabled: 'yes' }).realtimekitEnabled).toBe(false)
   })
 
+  it('defaults older installer requests to manual management', () => {
+    const { managementMode: _managementMode, ...legacyRequest } = request
+    expect(parseDeployRequest(legacyRequest).managementMode).toBe('manual')
+  })
+
+  it('accepts managed installation ownership explicitly', () => {
+    expect(parseDeployRequest({ ...request, managementMode: 'managed', instanceAdminToken: '  secret-token  ' })).toMatchObject({
+      managementMode: 'managed',
+      instanceAdminToken: 'secret-token',
+    })
+    expect(() => parseDeployRequest({ ...request, managementMode: 'automatic' })).toThrow(InstallerError)
+  })
+
   it('creates a huddle preset without recording or RealtimeKit chat', () => {
     const preset = realtimeKitPreset(realtimeKitAvPreset, true)
     expect(preset.config.view_type).toBe('GROUP_CALL')
@@ -70,6 +86,14 @@ describe('installer-core', () => {
     expect(preset.permissions.can_record).toBe(false)
     expect(preset.permissions.transcription_enabled).toBe(false)
     expect(preset.permissions.chat.public.can_send).toBe(false)
+  })
+
+  it('builds an account-token template from an explicit permission allowlist', () => {
+    const url = new URL(instanceAdminTokenTemplateUrl(request.workerName))
+    expect(url.origin).toBe('https://dash.cloudflare.com')
+    expect(url.searchParams.get('to')).toBe('/:account/api-tokens')
+    expect(JSON.parse(url.searchParams.get('permissionGroupKeys')!)).toEqual(instanceAdminPermissionTemplate)
+    expect(instanceAdminPermissionTemplate.some(permission => permission.key === 'billing')).toBe(false)
   })
 
   it('groups fresh Durable Object migrations in release order', () => {

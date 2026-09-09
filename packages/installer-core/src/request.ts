@@ -6,6 +6,9 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   if (!body || typeof body !== 'object') installerError(400, 'Invalid deploy request')
   const accountId = String(body.accountId || '').trim()
   const workerName = String(body.workerName || '').trim().toLowerCase()
+  const managementMode = body.managementMode === undefined ? 'manual' : body.managementMode
+  if (managementMode !== 'manual' && managementMode !== 'managed') installerError(400, 'Select an installation management mode')
+  const instanceAdminToken = typeof body.instanceAdminToken === 'string' ? body.instanceAdminToken.trim() : undefined
   const appName = String(body.appName || '').trim()
   const authMode = body.authMode === undefined ? 'builtin' : body.authMode
   if (authMode !== 'builtin' && authMode !== 'access') installerError(400, 'Select a sign-in mode')
@@ -42,6 +45,8 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   return {
     accountId,
     workerName,
+    managementMode,
+    instanceAdminToken,
     appName,
     authMode,
     registrationMode: authMode === 'access' ? 'open' : registrationMode,

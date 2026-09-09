@@ -14,6 +14,8 @@ export type CloudflareZone = {
 export type DeployRequest = {
   accountId: string
   workerName: string
+  managementMode: 'manual' | 'managed'
+  instanceAdminToken?: string
   adminEmail: string
   allowedEmails: string[]
   appName: string
@@ -35,6 +37,7 @@ export type DeployResponse = {
   url: string
   setupUrl?: string
   version: string
+  managementMode: 'manual' | 'managed'
   updated: boolean
   appliedMigrations: string[]
   verified: boolean
@@ -58,6 +61,8 @@ export type CloudflareInstallation = {
     accessApplicationId: string | null
     accessHealthApplicationId: string | null
     accessDeletionApplicationId: string | null
+    adminTokenId: string | null
+    adminTokenConfigured: boolean
     realtimekitAppId: string | null
     realtimekitManaged: boolean
   }
@@ -67,6 +72,7 @@ export type DeployProgressStep =
   | 'account'
   | 'release'
   | 'installation'
+  | 'management'
   | 'storage'
   | 'database'
   | 'assets'
