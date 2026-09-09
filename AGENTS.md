@@ -16,7 +16,7 @@ Repository invariants:
 - One installation and URL contain one workspace. The web app does not select among multiple workspaces.
 - One workspace installation remains one Nuxt/Nitro Worker at the repository root. The account-local control plane is a separate Worker built from `apps/admin`.
 - Direct Messages, threads, reactions, attachments, roles, and optional RealtimeKit huddles are part of the current product.
-- The marketing site is a separate `discoflare-com` project. `sandbox.discoflare.com` is a deployment of this repository, not a fork.
+- The marketing site and hosted installer live in `apps/com`. `sandbox.discoflare.com` is a deployment of the root workspace app, not a fork.
 - Personal development targets belong in ignored env files or local deployment configs. Use the generic `dev:remote` command; never add personal hostnames, accounts, or per-installation commands to tracked code, tests, or documentation.
 - Land focused feature and fix branches through squash-merged PRs directly to protected `main`. Keep `main` releasable; published releases are immutable version tags and GitHub Releases, so `main` may be ahead of the latest release.
 - Keep changes within the shipped product and documented runtime boundaries unless explicitly requested.

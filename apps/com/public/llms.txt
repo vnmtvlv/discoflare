@@ -1,0 +1,31 @@
+# Discoflare
+
+> Open-source, self-hosted workspace combining chat, shared domain mail, structured databases, task boards, and AI agents, running in the workspace owner's Cloudflare account.
+
+Discoflare is MIT-licensed software with no seat, member, message-retention, mailbox, or record limits imposed by the product; the practical ceiling is the owner's Cloudflare plan. Each deployment creates one workspace without a separate origin server. The workspace owner controls the deployment, configuration, and data. There is no Discoflare subscription; Cloudflare infrastructure usage, including Workers AI inference, is billed separately by Cloudflare.
+
+## Product
+
+- [Product overview](https://discoflare.com/index.md): Concise product capabilities, architecture, deployment, and availability information.
+- [Source repository](https://github.com/vnmtvlv/discoflare): Source code, software documentation, license, and issue tracking.
+
+## Documentation
+
+- [Discoflare documentation](https://discoflare.com/docs): Product guides, guided and manual deployment, configuration, verification, and operations.
+- [Apps guide](https://discoflare.com/docs/product-guide/apps): Released Chat, Tasks, Mail, and Databases surfaces and how they share the workspace.
+- [Agents guide](https://discoflare.com/docs/product-guide/agents): Agent profiles, Chat behavior, memory, Sandboxes, permissions, and approvals.
+- [Tasks guide](https://discoflare.com/docs/product-guide/tasks): Boards, assignment, durable Agent runs, results, cancellation, and recovery.
+- [Architecture source](https://github.com/vnmtvlv/discoflare/blob/main/docs/architecture.md): Runtime topology, Cloudflare services, data ownership, and request flows.
+- [Deployment source](https://github.com/vnmtvlv/discoflare/blob/main/docs/deployment.md): Maintainer-level deployment details and release procedures.
+
+## Policies
+
+- [Trust and security](https://discoflare.com/trust.md): Installer OAuth scopes, deployment telemetry fields, Agent boundaries, compliance posture, and subprocessors.
+- [Privacy policy](https://discoflare.com/privacy.md): How the Discoflare marketing site handles information.
+- [Terms of use](https://discoflare.com/terms.md): Terms governing use of the Discoflare marketing site.
+
+## Optional
+
+- [Human-readable website](https://discoflare.com/): The canonical Discoflare product website.
+- [Public sandbox](https://sandbox.discoflare.com): A hosted workspace for trying Discoflare before deploying it.
+- [Deploy with GitHub](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare): Source-based deployment that requires manual Cloudflare resource and account configuration.

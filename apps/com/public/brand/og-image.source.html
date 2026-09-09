@@ -1,0 +1,96 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 1200px; height: 630px; }
+  body {
+    background: oklch(0.205 0 none);
+    font-family: -apple-system, "system-ui", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    color: #fff;
+    position: relative;
+    overflow: hidden;
+  }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(to right, rgba(255,255,255,0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255,255,255,0.055) 1px, transparent 1px);
+    background-size: 64px 64px;
+    -webkit-mask-image: linear-gradient(to bottom, black 10%, transparent 88%);
+  }
+  .glow {
+    position: absolute;
+    left: 46%; top: -300px;
+    width: 1500px; height: 900px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, rgba(246,130,31,0.20), rgba(246,130,31,0.06) 45%, transparent 70%);
+    filter: blur(70px);
+  }
+  .wrap {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 0 88px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 40px;
+  }
+  .brand img { width: 52px; height: 52px; }
+  .brand span {
+    font-size: 34px; font-weight: 600; letter-spacing: -0.035em;
+  }
+  h1 {
+    font-size: 82px;
+    font-weight: 600;
+    line-height: 1.03;
+    letter-spacing: -0.055em;
+    max-width: 990px;
+  }
+  h1 .accent { color: #f6821f; }
+  .stats {
+    display: flex;
+    gap: 56px;
+    margin-top: 44px;
+    padding-top: 34px;
+    border-top: 1px solid rgba(255,255,255,0.12);
+  }
+  .stat .v {
+    font-size: 30px; font-weight: 600; letter-spacing: -0.04em;
+  }
+  .stat .l {
+    font-size: 19px; color: oklch(0.708 0 none); margin-top: 5px;
+  }
+  .badge {
+    position: absolute;
+    right: 88px; bottom: 54px;
+    font-size: 19px;
+    color: oklch(0.708 0 none);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 999px;
+    padding: 9px 20px;
+  }
+</style>
+</head>
+<body>
+  <div class="grid"></div>
+  <div class="glow"></div>
+  <div class="wrap">
+    <div class="brand">
+      <img src="logo-256.png" alt="">
+      <span>Discoflare</span>
+    </div>
+    <h1>Chat, mail, databases,<br>tasks, and agents.<br><span class="accent">$0 per seat.</span></h1>
+    <div class="stats">
+      <div class="stat"><div class="v">Unlimited</div><div class="l">message history</div></div>
+      <div class="stat"><div class="v">Unlimited</div><div class="l">mailboxes &amp; records</div></div>
+      <div class="stat"><div class="v">Self-hosted</div><div class="l">on your Cloudflare</div></div>
+    </div>
+  </div>
+  <div class="badge">Open source · MIT</div>
+</body>
+</html>

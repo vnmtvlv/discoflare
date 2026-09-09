@@ -16,5 +16,14 @@ export default defineEventHandler(async (event): Promise<{ connected: true }> =>
     text: value,
     type: 'secret_text',
   })
+  const secrets = cloudflareClient(value).workers.scripts.secrets
+  for (const name of [
+    'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN',
+    'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT',
+    'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN',
+    'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID',
+  ]) {
+    await secrets.delete(name, { account_id: accountId, script_name: workerName }).catch(() => undefined)
+  }
   return { connected: true }
 })

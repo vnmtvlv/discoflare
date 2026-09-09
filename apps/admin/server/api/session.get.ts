@@ -1,6 +1,6 @@
 import { accountAdminTokenTemplateUrl, cloudflareClient } from '@discoflare/installer-core'
 import type { AdminSession } from '../../shared/types'
-import { requireAdminConfig } from '../utils/cloudflare'
+import { adminCredentialMode, requireAdminConfig } from '../utils/cloudflare'
 import { latestAdminVersion, latestWorkspaceVersion } from '../utils/releases'
 import { requireAdminIdentity } from '../utils/security'
 
@@ -9,6 +9,7 @@ export default defineEventHandler(async (event): Promise<AdminSession> => {
   const { env, accountId, accountName: configuredAccountName } = requireAdminConfig(event)
   let accountName = configuredAccountName
   const token = env.DISCOFLARE_ADMIN_TOKEN?.trim()
+  const credentialMode = adminCredentialMode(env)
   const [latestVersion, newestAdminVersion] = await Promise.all([
     latestWorkspaceVersion(event),
     latestAdminVersion(event),
@@ -21,7 +22,8 @@ export default defineEventHandler(async (event): Promise<AdminSession> => {
     accountId,
     accountName,
     email: identity.email,
-    tokenConnected: Boolean(token),
+    tokenConnected: credentialMode !== 'none',
+    credentialMode,
     tokenTemplateUrl: accountAdminTokenTemplateUrl(),
     version: env.DISCOFLARE_ADMIN_VERSION?.trim() || null,
     latestAdminVersion: newestAdminVersion,

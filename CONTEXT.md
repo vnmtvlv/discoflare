@@ -143,16 +143,20 @@ The single small, Cloudflare Access-protected Worker that discovers and operates
 _Avoid_: Management mode, installer workspace, admin instance
 
 **Account Admin Token**:
-The single account-owned Cloudflare credential held only by Discoflare Admin. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account; it is never stored in an Installation, discoflare.com, D1, browser code, a Member, an Agent, or an Agent Computer.
+The account-owned Cloudflare credential manually created for a Private Admin. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account and is stored only as an Admin Worker secret.
 _Avoid_: Instance Admin Token, installer token, workspace token
+
+**Managed OAuth Grant**:
+The renewable Cloudflare OAuth credential transferred by the Managed Installer into Discoflare Admin. Admin refreshes it locally and uses it for the same fixed account operations as an Account Admin Token. Discoflare.com discards its copy after bootstrap.
+_Avoid_: Hosted runtime token, workspace OAuth, discoflare.com admin token
 
 **Installation Capability**:
 A narrow per-Installation secret derived by Discoflare Admin and stored in that workspace Worker. It authenticates only the fixed internal operations exposed through the Admin service binding and is not general Cloudflare API authority.
 _Avoid_: Account Admin Token, Member Grant, MCP Access Token
 
 **Bootstrap Installer**:
-The temporary OAuth flow on discoflare.com that creates or repairs Discoflare Admin, protects it with Cloudflare Access, and then relinquishes Cloudflare authority. It does not create workspaces.
-_Avoid_: Hosted control plane, workspace installer
+The flow on discoflare.com that creates or repairs Discoflare Admin and protects it with Cloudflare Access. Managed Setup transfers a renewable OAuth grant into Admin; Private Setup uses temporary OAuth and leaves credential connection to the operator. Neither flow creates a workspace.
+_Avoid_: Hosted control plane, workspace installer, runtime proxy
 
 **Login Method**:
 An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.

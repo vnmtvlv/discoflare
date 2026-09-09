@@ -6,7 +6,7 @@ import { requireAdminIdentity } from '../../utils/security'
 
 export default defineEventHandler(async (event): Promise<InstallationList> => {
   await requireAdminIdentity(event)
-  const token = requireAccountToken(event)
+  const token = await requireAccountToken(event)
   const { accountId } = requireAdminConfig(event)
   const client = cloudflareClient(token)
   const zones: CloudflareZone[] = []

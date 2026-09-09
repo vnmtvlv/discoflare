@@ -13,14 +13,17 @@ One workspace for humans and agents.
 
 Discoflare gives a team one private, real-time workspace without an origin server or hosted application database. The Worker, data, files, and live connections stay in the Cloudflare account you control.
 
-## Repositories
+## Monorepo
 
-Discoflare is developed across two public repositories with separate deployment lifecycles:
+This repository is the source of truth for the complete product while each deployable keeps its own release lifecycle:
 
-- **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the workspace Worker, the account-local Admin Worker in `apps/admin`, and their shared installer packages.
-- **[discoflare.com](https://github.com/vnmtvlv/discoflare-com)** — The public website and guided Cloudflare installer.
+- the root Nuxt app is the workspace Worker and shared frontend;
+- `apps/admin` is the account-local control plane;
+- `apps/com` is the public website and hosted installer;
+- `apps/desktop`, `apps/mobile`, and `apps/extension` package the shared frontend; and
+- `packages/installer-core` and `packages/cli` provide the shared provisioning contract and recovery CLI.
 
-This repository remains the source of truth for the product runtime and shared frontend. `sandbox.discoflare.com` is a deployment of this repository, not a separate application.
+`sandbox.discoflare.com` is a deployment of the root workspace app, not a separate application. Website changes do not version or redeploy workspace installations, and client releases use their own platform tags.
 
 ## What you can do
 
@@ -81,12 +84,11 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 
 ### Guided installation
 
-1. Open the [Discoflare installer](https://discoflare.com/deploy), connect Cloudflare temporarily, choose the account, and enter the email allowed into its Admin.
-2. The installer creates or repairs the small `discoflare-admin` Worker and protects it with Cloudflare Access.
-3. Open Discoflare Admin, create the account-owned Account Admin Token from its template, and paste it on that private Worker origin.
-4. Create, adopt, update, and repair all Discoflare workspace Installations from Admin. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
+1. Open the [managed installer](https://discoflare.com/deploy), choose the account, and enter the email allowed into Admin.
+2. Cloudflare OAuth creates or repairs `discoflare-admin`, protects it with Cloudflare Access, and transfers the renewable grant into that Worker as encrypted secrets.
+3. The installer discards its copy. Open your account-local Admin to create, adopt, update, and repair workspace Installations. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
 
-The broad Account Admin Token is stored only as the Discoflare Admin Worker secret. It never passes through `discoflare.com` and is never stored in a workspace Worker, D1, browser code, MCP client, Member, Agent, or Agent Computer. Each workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Cloudflare scopes the broad permissions to an account and its zones, so use a dedicated Cloudflare account when installation-level isolation matters. The downloadable CLI remains the source-level recovery path and does not require `discoflare.com`.
+The OAuth grant stays in Discoflare Admin and refreshes there; `discoflare.com` is not in the runtime path. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without transferring OAuth, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
 
 ### Manual deployment
 

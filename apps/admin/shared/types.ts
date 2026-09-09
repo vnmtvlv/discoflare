@@ -5,6 +5,7 @@ export type AdminSession = {
   accountName: string
   email: string
   tokenConnected: boolean
+  credentialMode: 'managed-oauth' | 'account-token' | 'none'
   tokenTemplateUrl: string
   version: string | null
   latestAdminVersion: string | null

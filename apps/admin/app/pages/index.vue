@@ -58,13 +58,13 @@ const accountMenuItems = computed(() => [
       to: GITHUB_RELEASES_URL,
       target: '_blank',
     },
-    ...(session.value?.tokenConnected
+    ...(session.value?.credentialMode === 'account-token'
       ? [{ label: 'Replace account token', icon: 'i-ph-key', onSelect: () => { tokenDialogOpen.value = true } }]
       : []),
   ],
   [
     ...(session.value?.tokenConnected
-      ? [{ label: 'Disconnect account token', icon: 'i-ph-plugs-connected', color: 'error' as const, onSelect: () => { disconnectDialogOpen.value = true } }]
+      ? [{ label: session.value?.credentialMode === 'managed-oauth' ? 'Disconnect managed access' : 'Disconnect account token', icon: 'i-ph-plugs-connected', color: 'error' as const, onSelect: () => { disconnectDialogOpen.value = true } }]
       : []),
     { label: 'Log out', icon: 'i-ph-sign-out', onSelect: () => navigateTo(ACCESS_LOGOUT_PATH, { external: true }) },
   ],
@@ -147,7 +147,7 @@ async function disconnectToken() {
     })
     inventory.value = null
     disconnectDialogOpen.value = false
-    toast.add({ title: 'Account token disconnected', color: 'success', icon: 'i-ph-check-circle' })
+    toast.add({ title: 'Cloudflare account disconnected', color: 'success', icon: 'i-ph-check-circle' })
   }
   catch (cause) {
     error.value = errorMessage(cause)
@@ -376,7 +376,7 @@ useSeoMeta({
       </template>
     </UModal>
 
-    <UModal v-model:open="disconnectDialogOpen" title="Disconnect account token" description="Admin will stop managing installations until another token is connected.">
+    <UModal v-model:open="disconnectDialogOpen" title="Disconnect Cloudflare account" description="Admin will stop managing installations until Cloudflare access is connected again.">
       <template #footer="{ close }">
         <UButton label="Cancel" color="neutral" variant="outline" @click="close" />
         <UButton label="Disconnect" color="error" :loading="disconnecting" @click="disconnectToken" />

@@ -50,13 +50,29 @@ jobs:
         if: matrix.check == 'typecheck'
         run: pnpm admin:typecheck
 
+      - name: Check website and client types
+        if: matrix.check == 'typecheck'
+        run: >-
+          pnpm com:typecheck &&
+          pnpm --filter @discoflare/mobile typecheck &&
+          pnpm --filter @discoflare/desktop typecheck &&
+          pnpm --filter @discoflare/extension typecheck
+
       - name: Test Admin
         if: matrix.check == 'test'
         run: pnpm admin:test
 
+      - name: Test website
+        if: matrix.check == 'test'
+        run: pnpm com:test
+
       - name: Build Admin
         if: matrix.check == 'build'
         run: pnpm admin:build
+
+      - name: Build website
+        if: matrix.check == 'build'
+        run: pnpm com:build
 
       # Keep test output in the log: the GitHub annotations reporter crashes
       # the runner with a Unicode EncoderFallbackException on this suite.

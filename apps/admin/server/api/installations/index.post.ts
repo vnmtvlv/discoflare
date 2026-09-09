@@ -7,7 +7,7 @@ import { assertAdminMutation, requireAdminIdentity } from '../../utils/security'
 export default defineEventHandler(async (event) => {
   assertAdminMutation(event)
   await requireAdminIdentity(event)
-  const token = requireAccountToken(event)
+  const token = await requireAccountToken(event)
   const { accountId, origin, workerName: adminWorkerName } = requireAdminConfig(event)
   const existing = await listDiscoflareInstallations(token, accountId)
   const body = await readBody(event)

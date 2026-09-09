@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   assertAdminMutation(event)
   await requireAdminIdentity(event)
   const { accountId, accountName, email, env, workerName } = requireAdminConfig(event)
-  const token = requireAccountToken(event)
+  const token = await requireAccountToken(event)
   const latestVersion = await latestAdminVersion(event)
   if (!latestVersion) throw createError({ statusCode: 503, statusMessage: 'The latest Discoflare Admin release is unavailable' })
 
