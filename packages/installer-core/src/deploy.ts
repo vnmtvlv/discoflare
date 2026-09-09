@@ -619,8 +619,25 @@ async function deployContainer(
   })
 }
 
-async function verifyDeployment(origin: string, version: string, expectReady: boolean, expectRealtimeKit: boolean, report?: DeployProgressReporter) {
-  const attempts = 10
+export type DeploymentHealthVerificationOptions = {
+  attempts?: number
+  delayMs?: number
+  fetch?: (input: string, init: RequestInit) => Promise<Response>
+  wait?: (delayMs: number) => Promise<void>
+}
+
+export async function verifyDeployment(
+  origin: string,
+  version: string,
+  expectReady: boolean,
+  expectRealtimeKit: boolean,
+  report?: DeployProgressReporter,
+  options: DeploymentHealthVerificationOptions = {},
+) {
+  const attempts = options.attempts ?? 30
+  const delayMs = options.delayMs ?? 3_000
+  const fetchHealth = options.fetch ?? fetch
+  const wait = options.wait ?? (duration => new Promise(resolve => setTimeout(resolve, duration)))
   let lastStatus = 0
   let lastFailure = ''
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -630,9 +647,9 @@ async function verifyDeployment(origin: string, version: string, expectReady: bo
       state: 'active',
       detail: `Attempt ${attempt + 1} of ${attempts}`,
     })
-    if (attempt) await new Promise(resolve => setTimeout(resolve, 3_000))
+    if (attempt) await wait(delayMs)
     try {
-      const response = await fetch(`${origin}/api/setup/health`, {
+      const response = await fetchHealth(`${origin}/api/setup/health`, {
         headers: { Accept: 'application/json' },
         redirect: 'manual',
         cache: 'no-store',

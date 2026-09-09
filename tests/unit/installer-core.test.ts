@@ -13,6 +13,7 @@ import {
   requiresInitialInfrastructureProvisioning,
   realtimeKitAvPreset,
   realtimeKitPreset,
+  verifyDeployment,
 } from '../../packages/installer-core/src/index'
 import type { InstallerReleaseManifest } from '../../packages/installer-core/src/index'
 
@@ -185,5 +186,26 @@ describe('installer-core', () => {
     })).toBe(true)
     expect(requiresReadyVerification(true, 'builtin', null)).toBe(true)
     expect(requiresReadyVerification(true, 'access', null)).toBe(false)
+  })
+
+  it('keeps retrying while a newly activated Worker temporarily returns 404', async () => {
+    let calls = 0
+    const fetchHealth = async () => {
+      calls += 1
+      if (calls <= 15) return new Response(null, { status: 404 })
+      return Response.json({
+        version: '0.7.4',
+        ok: true,
+        ready: false,
+        migrated: true,
+        realtimekit: true,
+      })
+    }
+
+    await expect(verifyDeployment('https://workspace.example.com', '0.7.4', false, true, undefined, {
+      fetch: fetchHealth,
+      wait: async () => {},
+    })).resolves.toBe(true)
+    expect(calls).toBe(16)
   })
 })
