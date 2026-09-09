@@ -142,14 +142,26 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     const huddle = await this.getHuddle()
     const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
     if (cleanupAt && cleanupAt <= now) {
-      await this.ctx.storage.delete('huddleCleanupAt')
       if (huddle.active && huddle.participantIds.length === 0) {
-        if (huddle.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
+        if (huddle.meetingId) {
+          try {
+            await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
+          }
+          catch {
+            await this.scheduleCleanup(60_000)
+            await this.refreshAlarm()
+            return
+          }
+        }
+        await this.ctx.storage.delete('huddleCleanupAt')
         await this.setHuddle(emptyHuddle())
         await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
         this.broadcast({ t: 'huddle', huddle: emptyHuddle() })
         this.broadcast({ t: 'voice', voice: emptyHuddle() })
         this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), emptyHuddle()))
+      }
+      else {
+        await this.ctx.storage.delete('huddleCleanupAt')
       }
     }
     await this.expireHuddleParticipants(now)

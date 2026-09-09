@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { encryptSecret } from '../../shared/encrypted-secret'
 import type { DiscoflareEnv } from '../../workers/env'
 import {
+  endMeeting,
   loadRealtimeKitConfig,
   REALTIMEKIT_SECRET_SCOPE,
   realtimekitConfigured,
@@ -9,6 +10,18 @@ import {
   testRealtimeKitConnection,
   type RealtimeKitRuntimeConfig,
 } from '../../workers/realtimekit'
+
+const managedConfig = {
+  accountId: 'account',
+  appId: 'app',
+  apiKey: 'token',
+  apiSecret: '',
+  voicePreset: 'voice',
+  avPreset: 'group_call_host',
+  source: 'database',
+  apiTokenConfigured: true,
+  secretReadable: true,
+} satisfies RealtimeKitRuntimeConfig
 
 function envWithRow(row: Record<string, unknown> | null, extra: Partial<DiscoflareEnv> = {}): DiscoflareEnv {
   return {
@@ -20,6 +33,59 @@ function envWithRow(row: Record<string, unknown> | null, extra: Partial<Discofla
 }
 
 describe('RealtimeKit settings', () => {
+  it('ends the active provider session before deactivating its meeting', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+      success: true,
+      data: {},
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+
+    try {
+      await endMeeting(managedConfig, 'meeting')
+
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        1,
+        'https://api.cloudflare.com/client/v4/accounts/account/realtime/kit/app/meetings/meeting/active-session/kick-all',
+        expect.objectContaining({ method: 'POST' }),
+      )
+      expect(fetchMock).toHaveBeenNthCalledWith(
+        2,
+        'https://api.cloudflare.com/client/v4/accounts/account/realtime/kit/app/meetings/meeting',
+        expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ status: 'INACTIVE' }) }),
+      )
+    }
+    finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('still deactivates a meeting whose active session has already ended', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: false }), { status: 404 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, data: {} }), { status: 200 }))
+
+    try {
+      await expect(endMeeting(managedConfig, 'meeting')).resolves.toBeUndefined()
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+    }
+    finally {
+      fetchMock.mockRestore()
+    }
+  })
+
+  it('does not clear provider failures as successful cleanup', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({
+      success: false,
+    }), { status: 403 }))
+
+    try {
+      await expect(endMeeting(managedConfig, 'meeting')).rejects.toThrow('RealtimeKit HTTP 403')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+    }
+    finally {
+      fetchMock.mockRestore()
+    }
+  })
+
   it('prefers complete deployment credentials without reading D1', async () => {
     const env = {
       DB: { prepare: () => { throw new Error('D1 should not be read') } },

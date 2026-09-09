@@ -122,6 +122,12 @@ type MeetingCreateResult = { id: string }
 type ParticipantResult = { token: string }
 export type RealtimeKitConnectionTestResult = { presets: string[] }
 
+class RealtimeKitHttpError extends Error {
+  constructor(readonly status: number) {
+    super(`RealtimeKit HTTP ${status}`)
+  }
+}
+
 export async function testRealtimeKitConnection(config: RealtimeKitRuntimeConfig): Promise<RealtimeKitConnectionTestResult> {
   if (!realtimekitConfigured(config)) throw new Error('RealtimeKit credentials missing')
   const data = await kitFetch(config, 'GET', '/presets')
@@ -157,11 +163,14 @@ export async function addParticipant(
 
 export async function endMeeting(config: RealtimeKitRuntimeConfig, meetingId: string): Promise<void> {
   try {
-    await kitFetch(config, 'PATCH', `/meetings/${meetingId}`, { status: 'INACTIVE' })
+    await kitFetch(config, 'POST', `/meetings/${meetingId}/active-session/kick-all`)
   }
-  catch {
-    // best-effort
+  catch (error) {
+    // An already-ended session has nothing left to kick, but its meeting must
+    // still be made inactive so a participant cannot create another session.
+    if (!(error instanceof RealtimeKitHttpError) || error.status !== 404) throw error
   }
+  await kitFetch(config, 'PATCH', `/meetings/${meetingId}`, { status: 'INACTIVE' })
 }
 
 async function kitFetch(config: RealtimeKitRuntimeConfig, method: string, path: string, body?: unknown): Promise<unknown> {
@@ -176,7 +185,7 @@ async function kitFetch(config: RealtimeKitRuntimeConfig, method: string, path: 
       body: body === undefined ? undefined : JSON.stringify(body),
     })
     const json = await res.json() as { success?: boolean, result?: unknown, data?: unknown }
-    if (!res.ok) throw new Error(`RealtimeKit HTTP ${res.status}`)
+    if (!res.ok) throw new RealtimeKitHttpError(res.status)
     return json.result ?? json.data ?? json
   }
 
@@ -192,7 +201,7 @@ async function kitFetch(config: RealtimeKitRuntimeConfig, method: string, path: 
       body: body === undefined ? undefined : JSON.stringify(body),
     })
     const json = await res.json() as { success?: boolean, data?: unknown }
-    if (!res.ok) throw new Error(`RealtimeKit HTTP ${res.status}`)
+    if (!res.ok) throw new RealtimeKitHttpError(res.status)
     return json.data ?? json
   }
 
