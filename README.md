@@ -17,7 +17,7 @@ Discoflare gives a team one private, real-time workspace without an origin serve
 
 Discoflare is developed across two public repositories with separate deployment lifecycles:
 
-- **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the core Nuxt application, API, and Cloudflare runtime.
+- **[discoflare](https://github.com/vnmtvlv/discoflare)** — This repository: the workspace Worker, the account-local Admin Worker in `apps/admin`, and their shared installer packages.
 - **[discoflare.com](https://github.com/vnmtvlv/discoflare-com)** — The public website and guided Cloudflare installer.
 
 This repository remains the source of truth for the product runtime and shared frontend. `sandbox.discoflare.com` is a deployment of this repository, not a separate application.

@@ -1,0 +1,10 @@
+.nuxt
+.output
+.admin-release
+.playwright-cli
+.data
+.wrangler
+node_modules
+.env
+.dev.vars
+*.tgz

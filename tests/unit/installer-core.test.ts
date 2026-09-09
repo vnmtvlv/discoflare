@@ -130,9 +130,9 @@ describe('installer-core', () => {
       .not.toBe(await deriveAdminCapability('account-token', request.accountId, 'workspace-b'))
   })
 
-  it('resolves Discoflare Admin releases independently from workspace releases', () => {
-    expect(adminReleaseManifestUrl()).toBe('https://github.com/vnmtvlv/discoflare-admin/releases/latest/download/discoflare-admin-cloudflare-manifest.json')
-    expect(adminReleaseManifestUrl('v0.1.0')).toContain('/discoflare-admin/releases/download/v0.1.0/')
+  it('resolves Discoflare Admin from the same versioned release as the workspace', () => {
+    expect(adminReleaseManifestUrl()).toBe('https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-admin-cloudflare-manifest.json')
+    expect(adminReleaseManifestUrl('v0.7.1')).toContain('/discoflare/releases/download/v0.7.1/')
   })
 
   it('rejects RealtimeKit operations outside the Admin allowlist before provider access', async () => {
