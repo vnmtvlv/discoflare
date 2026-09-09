@@ -139,11 +139,11 @@ The private, deployment-issued permission for the intended Owner email to create
 _Avoid_: First user wins, installer password, permanent setup token
 
 **Management Mode**:
-The installation-level choice between Manual management, which requires fresh operator authorization for Cloudflare changes, and Managed operation, in which the installation may maintain its own Cloudflare resources.
+The Owner-controlled state between Manual management, which requires fresh operator authorization for Cloudflare changes, and Managed operation, in which the installed workspace may maintain its own Cloudflare resources.
 _Avoid_: Installer type, with-token mode, automatic mode
 
 **Instance Admin Token**:
-The single account-owned Cloudflare credential held by a Managed installation. It is deployment authority for that installation, never a workspace login, Member Grant, Agent credential, or MCP Access Token.
+The single account-owned Cloudflare credential connected by the Owner on the installed workspace origin and held by a Managed installation. It is deployment authority for that installation, never an installer credential, workspace login, Member Grant, Agent credential, or MCP Access Token.
 _Avoid_: Installer OAuth token, RealtimeKit token, workspace API token
 
 **Login Method**:

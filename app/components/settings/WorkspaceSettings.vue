@@ -90,6 +90,7 @@ const workspaceNav = computed(() => [
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication', icon: 'i-ph-key', keywords: ['login', 'signup', 'oauth', 'github', 'sso', 'registration'] }] : []),
   ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),
   ...(isOwner.value ? [{ id: 'mcp' as const, label: 'MCP', icon: 'i-ph-plugs-connected', keywords: ['agent', 'access token', 'api', 'codex'] }] : []),
+  ...(isOwner.value ? [{ id: 'cloudflare' as const, label: 'Cloudflare', icon: 'i-ph-cloud', keywords: ['management', 'instance token', 'managed', 'manual', 'deployment'] }] : []),
   ...(isOwner.value ? [{ id: 'backups' as const, label: 'Backups', icon: 'i-ph-archive', keywords: ['backup', 'download', 'export', 'restore', 'd1', 'r2'] }] : []),
   ...(isOwner.value ? [{
     id: 'updates' as const,
@@ -847,6 +848,10 @@ function roleLabel(name: string) {
 
     <template v-else-if="section === 'mcp'">
       <SettingsMcpSettings :workspace-id="workspaceId" />
+    </template>
+
+    <template v-else-if="section === 'cloudflare'">
+      <SettingsCloudflareSettings :workspace-id="workspaceId" />
     </template>
 
     <template v-else-if="section === 'updates'">

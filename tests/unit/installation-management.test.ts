@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { emptyLiveFiles, managedInstallationOrigin, managedUninstallUrl, managedUpdateRequest } from '../../server/utils/installation-management'
+import { emptyLiveFiles, managedActivationRequest, managedInstallationOrigin, managedUninstallUrl, managedUpdateRequest, manualManagementRequest } from '../../server/utils/installation-management'
 import type { DiscoflareEnv } from '../../workers/env'
 
 describe('managed installation links', () => {
@@ -45,6 +45,64 @@ describe('managed installation links', () => {
     })
     expect(request.realtimekitApiToken).toBe('')
     expect(request).not.toHaveProperty('adminToken')
+  })
+
+  it('connects Huddles and mail for a primary installation with a selected domain', () => {
+    const request = managedActivationRequest({
+      DISCOFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      DISCOFLARE_WORKER_NAME: 'discoflare-managed',
+      DISCOFLARE_APP_HOSTNAME: 'managed.example.com',
+      DISCOFLARE_CUSTOM_DOMAIN: 'true',
+      DISCOFLARE_ZONE_ID: 'b'.repeat(32),
+      DISCOFLARE_ZONE_NAME: 'example.com',
+      DISCOFLARE_APP_SUBDOMAIN: 'managed',
+      DISCOFLARE_PRIMARY: 'true',
+      APP_NAME: 'Managed',
+    } as DiscoflareEnv, 'v0.6.1')
+
+    expect(request).toMatchObject({
+      managementMode: 'managed',
+      realtimekitEnabled: true,
+      mailEnabled: true,
+      mailSubdomain: 'managed',
+      mailLocalPart: 'inbox',
+    })
+  })
+
+  it('connects Huddles without guessing an email domain for workers.dev', () => {
+    const request = managedActivationRequest({
+      DISCOFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      DISCOFLARE_WORKER_NAME: 'discoflare-managed',
+      DISCOFLARE_APP_HOSTNAME: 'discoflare-managed.example.workers.dev',
+      DISCOFLARE_PRIMARY: 'true',
+      APP_NAME: 'Managed',
+    } as DiscoflareEnv, 'v0.6.1')
+
+    expect(request.realtimekitEnabled).toBe(true)
+    expect(request.mailEnabled).toBe(false)
+  })
+
+  it('disconnects the broad token and Huddles while preserving configured mail', () => {
+    const request = manualManagementRequest({
+      DISCOFLARE_ACCOUNT_ID: 'a'.repeat(32),
+      DISCOFLARE_WORKER_NAME: 'discoflare-managed',
+      DISCOFLARE_APP_HOSTNAME: 'managed.example.com',
+      DISCOFLARE_CUSTOM_DOMAIN: 'true',
+      DISCOFLARE_ZONE_ID: 'b'.repeat(32),
+      DISCOFLARE_ZONE_NAME: 'example.com',
+      DISCOFLARE_APP_SUBDOMAIN: 'managed',
+      DISCOFLARE_PRIMARY: 'true',
+      MAIL_ZONE_ID: 'b'.repeat(32),
+      MAIL_DOMAIN: 'managed.example.com',
+      REALTIMEKIT_ACCOUNT_ID: 'a'.repeat(32),
+      REALTIMEKIT_APP_ID: 'realtime-app',
+    } as DiscoflareEnv, 'v0.6.1')
+
+    expect(request).toMatchObject({
+      managementMode: 'manual',
+      realtimekitEnabled: false,
+      mailEnabled: true,
+    })
   })
 
   it('deletes every R2 page in bulk', async () => {

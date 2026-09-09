@@ -654,7 +654,8 @@ export async function deployDiscoflare(
     ? `${request.appSubdomain}.${request.zoneName}`
     : existing.appHostname || await ensureWorkersHostname(client, request.accountId, request.workerName)
   const provisionInfrastructure = requiresInitialInfrastructureProvisioning(existing.exists)
-  if (provisionInfrastructure) await assertDomainAvailable(accessToken, request)
+  const provisionMail = request.mailEnabled && !existing.mailZoneId
+  if (provisionInfrastructure || provisionMail) await assertDomainAvailable(accessToken, request)
   const requestedMailDomain = mailDomain(request)
   if (existing.appHostname && existing.appHostname !== requestedHostname) {
     throw createError({
@@ -662,10 +663,10 @@ export async function deployDiscoflare(
       statusMessage: `This Discoflare installation already owns ${existing.appHostname}. Domain moves require removing the old Cloudflare route first.`,
     })
   }
-  if (existing.exists && Boolean(existing.mailZoneId) !== request.mailEnabled) {
+  if (existing.exists && Boolean(existing.mailZoneId) && !request.mailEnabled) {
     throw createError({
       statusCode: 409,
-      statusMessage: 'Changing workspace email on an existing installation requires a manual migration.',
+      statusMessage: 'Disconnecting workspace email requires a manual migration.',
     })
   }
   if (request.mailEnabled && existing.mailZoneId && (
@@ -743,9 +744,15 @@ export async function deployDiscoflare(
       instanceAdmin = managedCredential
       await progress('management', 'complete', 'Instance admin token reused')
     }
-    else {
+    else if (request.instanceAdminToken) {
       instanceAdmin = await verifyInstanceAdminCredential(request.instanceAdminToken || '', request.accountId)
       await progress('management', 'complete', existing.adminTokenId === instanceAdmin.id ? 'Instance admin token verified' : 'Instance admin token configured')
+    }
+    else if (existing.managementMode === 'managed' && existing.adminTokenConfigured && existing.adminTokenId) {
+      await progress('management', 'complete', 'Instance admin token preserved')
+    }
+    else {
+      throw createError({ statusCode: 400, statusMessage: 'Paste the instance admin token in the installed workspace first' })
     }
   }
   else {
@@ -760,12 +767,26 @@ export async function deployDiscoflare(
     && (existing.realtimekitApiTokenConfigured || (existing.managementMode === 'managed' && existing.adminTokenConfigured)),
   )
   if (request.realtimekitEnabled && request.managementMode === 'managed') {
-    if (!instanceAdmin) throw createError({ statusCode: 409, statusMessage: 'Managed Huddles require the instance admin token' })
-    const provisioned = await ensureManagedRealtimeKit(instanceAdmin.value, request.accountId, request.workerName, {
-      appId: existing.realtimekitAppId,
-    })
-    realtimekit = { ...provisioned, apiToken: undefined, managed: true }
-    await progress('realtimekit', 'complete', existingRealtimeKit ? 'Huddles verified with the instance admin token' : 'Huddles enabled with the instance admin token')
+    if (instanceAdmin) {
+      const provisioned = await ensureManagedRealtimeKit(instanceAdmin.value, request.accountId, request.workerName, {
+        appId: existing.realtimekitAppId,
+      })
+      realtimekit = { ...provisioned, apiToken: undefined, managed: true }
+      await progress('realtimekit', 'complete', existingRealtimeKit ? 'Huddles verified with the instance admin token' : 'Huddles enabled with the instance admin token')
+    }
+    else if (existingRealtimeKit) {
+      realtimekit = {
+        accountId: existing.realtimekitAccountId!,
+        appId: existing.realtimekitAppId!,
+        voicePreset: existing.realtimekitVoicePreset || 'voice',
+        avPreset: existing.realtimekitAvPreset || existing.realtimekitVoicePreset || 'group_call_host',
+        managed: true,
+      }
+      await progress('realtimekit', 'complete', 'Managed Huddles preserved')
+    }
+    else {
+      throw createError({ statusCode: 409, statusMessage: 'Connect Cloudflare management in the installed workspace before enabling Huddles' })
+    }
   }
   else if (request.realtimekitEnabled && existingRealtimeKit && existing.managementMode !== 'managed' && !request.realtimekitApiToken) {
     realtimekit = {
@@ -791,7 +812,7 @@ export async function deployDiscoflare(
   }
 
   await progress('worker', 'active')
-  const primaryMail = request.mailEnabled && provisionInfrastructure
+  const primaryMail = provisionMail
     ? await ensurePrimaryMail(
         client,
         accessToken,
@@ -826,7 +847,7 @@ export async function deployDiscoflare(
   await progress('domain', 'complete', requestedHostname)
 
   await progress('mail', 'active')
-  if (request.mailEnabled && provisionInfrastructure) {
+  if (provisionMail) {
     await Promise.all([
       ensureEmailRouting(accessToken, request),
       ensureEmailSending(accessToken, request),
@@ -834,7 +855,7 @@ export async function deployDiscoflare(
     await attachMailCatchAll(accessToken, request, primaryMail!.name)
   }
   let mailDetail = 'Skipped'
-  if (request.mailEnabled) mailDetail = provisionInfrastructure ? mailDomain(request) : 'Existing routes preserved'
+  if (request.mailEnabled) mailDetail = provisionMail ? mailDomain(request) : 'Existing routes preserved'
   await progress('mail', 'complete', mailDetail)
 
   await progress('computer', 'active')
