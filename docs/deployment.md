@@ -2,21 +2,13 @@
 
 ## Discoflare installer
 
-The OAuth installer at `discoflare.com/deploy` deploys a base workspace to the operator's Cloudflare account. A fresh install uses the account's `workers.dev` hostname and Discoflare-owned accounts by default. A custom domain and Cloudflare Access are independent optional choices; an active zone is required only for a custom domain. Installation then:
+The OAuth installer at `discoflare.com/deploy` is deliberately thin. It uses an encrypted, one-hour browser session to create or repair one `discoflare-admin` Worker on the account's `workers.dev` hostname, creates one Cloudflare Access application restricted to the chosen operator email, and then relinquishes its Cloudflare authority. It does not create a workspace, storage, RealtimeKit app, mail route, or permanent credential.
 
-1. reserves or reuses the account's Workers subdomain and deploys the single Discoflare Worker;
-2. by default creates a private single-use Owner Setup Claim for choosing the first password, or, when explicitly selected, creates Cloudflare Access applications, an email one-time-PIN login method, and an allow policy;
-3. optionally attaches the selected custom hostname and disables the public `workers.dev` route so the installation has one public origin;
-4. leaves RealtimeKit, workspace email, and persistent Cloudflare management disconnected; and
-5. creates the Owner and workspace atomically from the private setup claim, or when the intended Owner first arrives with a verified Access identity.
+The operator opens Discoflare Admin through Access and pastes one account-owned Account Admin Token directly on that origin. Admin verifies the token, stores it as its own Worker secret, discovers marked Discoflare Installations in the account, and becomes the only guided control plane for workspace creation, updates, repair, RealtimeKit, and eligible email infrastructure. The broad token never enters a workspace Worker or `discoflare.com`.
 
-The encrypted installer session holds the OAuth access token only during installation and discards it without adding another deployment credential. After Owner setup, **Workspace Settings → Cloudflare** can open the account-token template and accept one account-owned `DISCOFLARE_ADMIN_TOKEN` on the workspace's own origin. The workspace verifies it, writes it to its own Worker secret, enables RealtimeKit, and, for a Primary installation with a selected zone, enables Email Routing and Email Sending without sending the raw value through `discoflare.com`. The same token authorizes owner-requested self-updates and later Cloudflare infrastructure maintenance. It is not exposed to browser code, D1, MCP, Members, Agents, or Agent Computers. The setup claim travels in the workspace URL fragment and is cleared from the address bar before the owner submits it. Additional mailbox addresses and member/Agent access are managed in **Workspace Settings → Email** without DNS changes or redeployment.
+An Admin-created Installation receives its D1, R2, KV, Durable Objects, Workflow, Container, Workers AI, optional custom domain, and owner setup claim. Huddles are enabled by default. The first eligible domain-backed Installation becomes Primary and receives the zone's catch-all Email Routing and Email Sending configuration. Each workspace holds only a service binding to Admin and a derived capability accepted by Admin's fixed RealtimeKit allowlist.
 
-The Cloudflare OAuth client registered for `discoflare.com` needs Access, Worker, storage, Zone, and DNS permissions for the base installation. It does not request RealtimeKit, Email Routing, or Email Sending authority. Cloudflare's public OAuth scope catalog does not expose Account API Tokens Write, so token creation remains an explicit dashboard action by a Super Administrator or Administrator. The Instance Admin Token template deliberately omits Account API Tokens, billing, and member-management permissions.
-
-Manual and Managed are reversible from **Workspace Settings → Cloudflare**. Connecting verifies the pasted Instance Admin Token on the installed origin and replaces any deployment-level Realtime token with the single managed credential. Disconnecting removes the token and managed Huddles; existing mail bindings and routes keep working, while updates and later Cloudflare-level repair return to `discoflare.com` or the CLI. The operator then revokes the now-unbound account token in Cloudflare. Replacing a managed token cannot revoke the previous account token; revoke the old token after the replacement is verified.
-
-Cloudflare token policies are account- and zone-scoped rather than bound to one Worker. A compromised managed Worker can therefore exercise every permission granted to its Instance Admin Token across the selected account. Use a separate Cloudflare account for the strongest installation isolation; using an existing paid account avoids another account-level Workers Paid subscription but shares that security boundary.
+Cloudflare token policies are account- and zone-scoped rather than bound to one Worker. A compromised Discoflare Admin can therefore exercise every permission granted to its Account Admin Token across the selected account. Use a separate Cloudflare account for the strongest isolation; using an existing paid account avoids another account-level Workers Paid subscription but shares that security boundary.
 
 Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 
@@ -24,7 +16,7 @@ Enabling Email Routing makes Cloudflare the MX provider for the selected email s
 
 Cloudflare exposes one catch-all rule per DNS zone. The installer assigns it directly to the Primary Discoflare workspace Worker, which also owns the zone's outbound Email Sending binding. The workspace accepts or rejects the complete address against its D1 mailbox registry. New Mailboxes therefore remain local D1 configuration and require neither a Cloudflare routing rule nor a redeployment. The base release refuses a second mail-enabled workspace in the same account instead of creating an auxiliary gateway Worker.
 
-Managed connection returns a conflict instead of replacing a foreign catch-all. Removing the Primary workspace disables its owned catch-all and removes its exact Email Sending subdomain. Guided and CLI deployments leave no Instance Admin Token unless the Owner explicitly connects one from the installed workspace.
+Discoflare Admin returns a conflict instead of replacing a foreign catch-all. Removing the Primary workspace disables its owned catch-all and removes its exact Email Sending subdomain. Workspace Workers never receive the Account Admin Token.
 
 ## GitHub / Workers Builds
 
@@ -170,7 +162,7 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 ## Secrets
 
-Connecting Cloudflare management enables RealtimeKit Huddles with the single `DISCOFLARE_ADMIN_TOKEN`. The workspace creates app-specific Discoflare presets with recording, transcription, livestreaming, plugins, polls, and RealtimeKit chat disabled. Disconnecting removes the Worker secret and reports the Account API token for explicit revocation; because Cloudflare currently exposes no RealtimeKit app deletion API, it also leaves the app for manual cleanup.
+Discoflare Admin enables RealtimeKit Huddles with its Account Admin Token. The workspace creates app-specific Discoflare presets with recording, transcription, livestreaming, plugins, polls, and RealtimeKit chat disabled. Runtime meeting operations cross the Admin service binding with a per-Installation capability; the Account Admin Token is never copied to the workspace.
 
 Manual installations may enable Huddles by configuring RealtimeKit later in **Workspace Settings → Huddles**. Settings-supplied credentials are encrypted in D1 with `AUTH_SECRET` and take effect without a Worker redeploy.
 
@@ -202,7 +194,7 @@ wrangler secret put REALTIMEKIT_PRESET_AV
 
 `REALTIMEKIT_API_SECRET` is only for the legacy Basic Auth API path. The current Cloudflare API-token path uses `REALTIMEKIT_ACCOUNT_ID`, `REALTIMEKIT_APP_ID`, and `REALTIMEKIT_API_KEY`. Never put RealtimeKit secrets in the client bundle.
 
-For a manually assembled managed deployment, `DISCOFLARE_ADMIN_TOKEN` replaces `REALTIMEKIT_API_KEY` and must be paired with `DISCOFLARE_ADMIN_TOKEN_ID`, `DISCOFLARE_ACCOUNT_ID`, `DISCOFLARE_WORKER_NAME`, and `DISCOFLARE_MANAGEMENT_MODE=managed`. For guided deployments, **Workspace Settings → Cloudflare** provides the account-token template and verifies this credential from the installed origin.
+Repository deployments may configure RealtimeKit directly with `REALTIMEKIT_API_KEY`. Admin-created Installations instead use `DISCOFLARE_ADMIN`, `DISCOFLARE_ADMIN_ORIGIN`, `DISCOFLARE_ADMIN_CAPABILITY`, and `DISCOFLARE_MANAGEMENT_MODE=admin`; none of those bindings is general Cloudflare API authority.
 
 ## Local
 

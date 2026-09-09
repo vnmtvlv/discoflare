@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  accountAdminTokenTemplateUrl,
+  adminReleaseManifestUrl,
+  deriveAdminCapability,
   durableObjectMigrations,
   InstallerError,
   instanceAdminPermissionTemplate,
   instanceAdminTokenTemplateUrl,
   parseDeployRequest,
+  proxyAdminRealtimeKit,
   requiresInitialInfrastructureProvisioning,
   realtimeKitAvPreset,
   realtimeKitPreset,
@@ -46,6 +50,7 @@ const manifest = {
     { binding: 'AGENT_THINK', className: 'DiscoflareThink', migration: 'v4' },
   ],
   workflow: { binding: 'AGENT_TASK_WORKFLOW', className: 'AgentTaskWorkflow' },
+  capabilities: ['discoflare-admin-v1'],
 } satisfies InstallerReleaseManifest
 
 describe('installer-core', () => {
@@ -78,6 +83,26 @@ describe('installer-core', () => {
     expect(() => parseDeployRequest({ ...request, managementMode: 'automatic' })).toThrow(InstallerError)
   })
 
+  it('normalizes Discoflare Admin management without accepting an invalid origin', () => {
+    expect(parseDeployRequest({
+      ...request,
+      managementMode: 'admin',
+      adminOrigin: 'https://discoflare-admin.example.workers.dev',
+      adminWorkerName: 'discoflare-admin',
+    })).toMatchObject({
+      managementMode: 'admin',
+      adminOrigin: 'https://discoflare-admin.example.workers.dev',
+      adminWorkerName: 'discoflare-admin',
+    })
+    expect(() => parseDeployRequest({ ...request, managementMode: 'admin' })).toThrow(InstallerError)
+    expect(() => parseDeployRequest({
+      ...request,
+      managementMode: 'admin',
+      adminOrigin: 'http://localhost:3000',
+      adminWorkerName: 'discoflare-admin',
+    })).toThrow(InstallerError)
+  })
+
   it('creates a huddle preset without recording or RealtimeKit chat', () => {
     const preset = realtimeKitPreset(realtimeKitAvPreset, true)
     expect(preset.config.view_type).toBe('GROUP_CALL')
@@ -94,6 +119,30 @@ describe('installer-core', () => {
     expect(url.searchParams.get('to')).toBe('/:account/api-tokens')
     expect(JSON.parse(url.searchParams.get('permissionGroupKeys')!)).toEqual(instanceAdminPermissionTemplate)
     expect(instanceAdminPermissionTemplate.some(permission => permission.key === 'billing')).toBe(false)
+  })
+
+  it('builds one account-admin token template and scoped installation capabilities', async () => {
+    const url = new URL(accountAdminTokenTemplateUrl())
+    expect(url.searchParams.get('name')).toBe('Discoflare Admin')
+    expect(await deriveAdminCapability('account-token', request.accountId, 'workspace-a'))
+      .toBe(await deriveAdminCapability('account-token', request.accountId, 'workspace-a'))
+    expect(await deriveAdminCapability('account-token', request.accountId, 'workspace-a'))
+      .not.toBe(await deriveAdminCapability('account-token', request.accountId, 'workspace-b'))
+  })
+
+  it('resolves Discoflare Admin releases independently from workspace releases', () => {
+    expect(adminReleaseManifestUrl()).toBe('https://github.com/vnmtvlv/discoflare-admin/releases/latest/download/discoflare-admin-cloudflare-manifest.json')
+    expect(adminReleaseManifestUrl('v0.1.0')).toContain('/discoflare-admin/releases/download/v0.1.0/')
+  })
+
+  it('rejects RealtimeKit operations outside the Admin allowlist before provider access', async () => {
+    await expect(proxyAdminRealtimeKit('account-token', 'capability', {
+      accountId: request.accountId,
+      workerName: request.workerName,
+      appId: '019c8d30-bf29-7000-8000-000000000001',
+      method: 'DELETE',
+      path: '/meetings/all',
+    })).rejects.toThrow('RealtimeKit operation is invalid')
   })
 
   it('groups fresh Durable Object migrations in release order', () => {

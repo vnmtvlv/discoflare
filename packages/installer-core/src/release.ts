@@ -1,5 +1,5 @@
 import { installerError } from './errors.js'
-import type { InstallerAssetsPayload, InstallerRelease, InstallerReleaseManifest, ReleaseAsset } from './types.js'
+import type { DiscoflareAdminRelease, DiscoflareAdminReleaseManifest, InstallerAssetsPayload, InstallerRelease, InstallerReleaseManifest, ReleaseAsset } from './types.js'
 
 async function sha256(value: ArrayBuffer) {
   const digest = await crypto.subtle.digest('SHA-256', value)
@@ -41,4 +41,31 @@ export function releaseManifestUrl(version?: string): string {
   return version
     ? `https://github.com/vnmtvlv/discoflare/releases/download/${version}/discoflare-cloudflare-manifest.json`
     : 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-cloudflare-manifest.json'
+}
+
+function assertAdminManifest(value: unknown): asserts value is DiscoflareAdminReleaseManifest {
+  const manifest = value as Partial<DiscoflareAdminReleaseManifest> | null
+  if (!manifest || manifest.schemaVersion !== 1 || !manifest.version || !manifest.worker || !manifest.assets) {
+    installerError(502, 'Discoflare Admin release manifest is invalid')
+  }
+}
+
+export async function loadDiscoflareAdminRelease(manifestUrl: string, fetcher: typeof fetch = fetch): Promise<DiscoflareAdminRelease> {
+  const response = await fetcher(manifestUrl, { redirect: 'follow' })
+  if (!response.ok) installerError(502, `Discoflare Admin release is unavailable (${response.status})`)
+  const manifest = await response.json()
+  assertAdminManifest(manifest)
+  const [worker, assetsBuffer] = await Promise.all([
+    fetchVerifiedAsset(manifest.worker, manifestUrl, fetcher),
+    fetchVerifiedAsset(manifest.assets, manifestUrl, fetcher),
+  ])
+  const assets = JSON.parse(new TextDecoder().decode(assetsBuffer)) as Pick<InstallerAssetsPayload, 'assets'>
+  if (!Array.isArray(assets.assets)) installerError(502, 'Discoflare Admin asset bundle is invalid')
+  return { manifest, worker, assets }
+}
+
+export function adminReleaseManifestUrl(version?: string): string {
+  return version
+    ? `https://github.com/vnmtvlv/discoflare-admin/releases/download/${version}/discoflare-admin-cloudflare-manifest.json`
+    : 'https://github.com/vnmtvlv/discoflare-admin/releases/latest/download/discoflare-admin-cloudflare-manifest.json'
 }

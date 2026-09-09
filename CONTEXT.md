@@ -138,13 +138,21 @@ _Avoid_: Hiding signup UI as the policy, workspace visibility
 The private, deployment-issued permission for the intended Owner email to create the first account on the new workspace origin. It stops working as soon as the `main` Workspace exists; it is not an open first-user race or a reusable Invite.
 _Avoid_: First user wins, installer password, permanent setup token
 
-**Management Mode**:
-The Owner-controlled state between Manual management, which requires fresh operator authorization for Cloudflare changes, and Managed operation, in which the installed workspace may maintain its own Cloudflare resources.
-_Avoid_: Installer type, with-token mode, automatic mode
+**Discoflare Admin**:
+The single small, Cloudflare Access-protected Worker that discovers and operates every Discoflare Installation in one Cloudflare account. It is an account-local control plane, not a workspace and not a hosted Discoflare service.
+_Avoid_: Management mode, installer workspace, admin instance
 
-**Instance Admin Token**:
-The single account-owned Cloudflare credential connected by the Owner on the installed workspace origin and held by a Managed installation. It is deployment authority for that installation, never an installer credential, workspace login, Member Grant, Agent credential, or MCP Access Token.
-_Avoid_: Installer OAuth token, RealtimeKit token, workspace API token
+**Account Admin Token**:
+The single account-owned Cloudflare credential held only by Discoflare Admin. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account; it is never stored in an Installation, discoflare.com, D1, browser code, a Member, an Agent, or an Agent Computer.
+_Avoid_: Instance Admin Token, installer token, workspace token
+
+**Installation Capability**:
+A narrow per-Installation secret derived by Discoflare Admin and stored in that workspace Worker. It authenticates only the fixed internal operations exposed through the Admin service binding and is not general Cloudflare API authority.
+_Avoid_: Account Admin Token, Member Grant, MCP Access Token
+
+**Bootstrap Installer**:
+The temporary OAuth flow on discoflare.com that creates or repairs Discoflare Admin, protects it with Cloudflare Access, and then relinquishes Cloudflare authority. It does not create workspaces.
+_Avoid_: Hosted control plane, workspace installer
 
 **Login Method**:
 An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.

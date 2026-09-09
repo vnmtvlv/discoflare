@@ -9,7 +9,8 @@ export type PublishedRelease = {
 export type UpdateStatusDTO = {
   installedVersion: string
   installationKind: 'guided' | 'manual'
-  managementMode: 'manual' | 'managed'
+  managementMode: 'manual' | 'managed' | 'admin'
+  adminOrigin: string | null
   latestRelease: PublishedRelease | null
   releasesBehind: number
   updateAvailable: boolean
@@ -20,7 +21,8 @@ export type UpdateStatusDTO = {
 
 export type InstallationManagementStatusDTO = {
   available: boolean
-  managementMode: 'manual' | 'managed'
+  managementMode: 'manual' | 'managed' | 'admin'
+  adminOrigin: string | null
   workerName: string | null
   hostname: string | null
   tokenTemplateUrl: string | null

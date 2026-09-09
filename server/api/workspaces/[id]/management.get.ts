@@ -1,5 +1,4 @@
 import type { InstallationManagementStatusDTO } from '../../../../shared/releases'
-import { instanceAdminTokenTemplateUrl } from '../../../../packages/installer-core/src/index'
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 
@@ -16,6 +15,8 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
   const available = Boolean(accountId && workerName && hostname)
   const managed = env.DISCOFLARE_MANAGEMENT_MODE === 'managed'
     && Boolean(env.DISCOFLARE_ADMIN_TOKEN && env.DISCOFLARE_ADMIN_TOKEN_ID)
+  const adminManaged = env.DISCOFLARE_MANAGEMENT_MODE === 'admin'
+    && Boolean(env.DISCOFLARE_ADMIN && env.DISCOFLARE_ADMIN_CAPABILITY && env.DISCOFLARE_ADMIN_ORIGIN)
   const emailDomain = env.MAIL_DOMAIN?.trim()
     || (env.DISCOFLARE_PRIMARY === 'true' && env.DISCOFLARE_ZONE_NAME
       ? `${env.DISCOFLARE_APP_SUBDOMAIN?.trim() || workerName}.${env.DISCOFLARE_ZONE_NAME.trim()}`
@@ -23,10 +24,11 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
 
   return {
     available,
-    managementMode: managed ? 'managed' : 'manual',
+    managementMode: adminManaged ? 'admin' : managed ? 'managed' : 'manual',
+    adminOrigin: adminManaged ? env.DISCOFLARE_ADMIN_ORIGIN!.trim() : null,
     workerName: workerName || null,
     hostname: hostname || null,
-    tokenTemplateUrl: available ? instanceAdminTokenTemplateUrl(workerName) : null,
+    tokenTemplateUrl: null,
     huddlesEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
     emailEnabled: Boolean(env.MAIL_ZONE_ID && emailDomain),
     emailDomain,

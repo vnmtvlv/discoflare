@@ -8,6 +8,7 @@ type AccessApplication = {
   domain?: string
   name?: string
   type?: string
+  destinations?: Array<{ type?: string, worker_id?: string, uri?: string }>
 }
 
 function statusCode(error: unknown) {
@@ -180,6 +181,55 @@ export async function ensureCloudflareAccess(client: Cloudflare, request: Deploy
   }
   try {
     return await provisionCloudflareAccess(client, request, hostname, workerId)
+  }
+  catch (error) {
+    if (statusCode(error) === 403) {
+      throw createError({
+        statusCode: 403,
+        statusMessage: 'Cloudflare Access permission was not granted. Sign out, reconnect Cloudflare, and try again.',
+      })
+    }
+    throw error
+  }
+}
+
+export async function ensureDiscoflareAdminAccess(
+  client: Cloudflare,
+  accountId: string,
+  workerId: string,
+  email: string,
+) {
+  try {
+    const authDomain = await ensureOrganization(client, accountId)
+    const [otpProviderId, applications] = await Promise.all([
+      ensureOtpProvider(client, accountId),
+      accessApplications(client, accountId),
+    ])
+    const name = 'Discoflare Admin'
+    const existing = applications.find(application => application.name === name)
+    const existingWorkerId = existing?.destinations?.find(destination => destination.type === 'worker')?.worker_id
+    if (existing && existingWorkerId !== workerId) {
+      throw createError({ statusCode: 409, statusMessage: 'The Discoflare Admin Access application belongs to another Worker' })
+    }
+    const application = await putApplication(client, accountId, existing, {
+      type: 'self_hosted',
+      name,
+      destinations: [{ type: 'worker', worker_id: workerId }],
+      allowed_idps: [otpProviderId],
+      auto_redirect_to_identity: true,
+      app_launcher_visible: true,
+      session_duration: '24h',
+      policies: [{
+        name: 'Discoflare Admin owner',
+        decision: 'allow',
+        include: [{ email: { email: email.trim().toLowerCase() } }],
+        require: [{ login_method: { id: otpProviderId } }],
+      }],
+    })
+    if (!application.id || !application.aud) {
+      throw createError({ statusCode: 502, statusMessage: 'Cloudflare did not return the Discoflare Admin Access application' })
+    }
+    return { issuer: `https://${authDomain}`, audience: application.aud, applicationId: application.id }
   }
   catch (error) {
     if (statusCode(error) === 403) {

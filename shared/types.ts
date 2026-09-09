@@ -394,7 +394,7 @@ export type AuthSettingsAdminDTO = PublicAuthConfig & {
 
 export type RealtimeKitSettingsAdminDTO = {
   configured: boolean
-  source: 'deployment' | 'database' | 'missing'
+  source: 'deployment' | 'database' | 'admin' | 'missing'
   accountId: string | null
   appId: string | null
   apiTokenConfigured: boolean

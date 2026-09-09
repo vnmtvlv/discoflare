@@ -49,4 +49,13 @@ describe('anonymous telemetry', () => {
       headers: expect.objectContaining({ Authorization: 'Bearer private-token' }),
     }))
   })
+
+  it('reports Admin-backed Huddles without a broad workspace token', () => {
+    const heartbeat = telemetryHeartbeat(env({
+      REALTIMEKIT_ACCOUNT_ID: 'a'.repeat(32),
+      REALTIMEKIT_APP_ID: '019c8d30-bf29-7000-8000-000000000001',
+      DISCOFLARE_ADMIN: {} as Fetcher,
+    }))
+    expect(heartbeat?.capabilities.huddles).toBe(true)
+  })
 })

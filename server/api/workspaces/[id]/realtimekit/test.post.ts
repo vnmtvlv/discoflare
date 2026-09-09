@@ -28,7 +28,7 @@ export default defineEventHandler(async (event): Promise<RealtimeKitConnectionTe
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
   const saved = await loadRealtimeKitConfig(env)
-  const config: RealtimeKitRuntimeConfig = saved.source === 'deployment'
+  const config: RealtimeKitRuntimeConfig = saved.source === 'deployment' || saved.source === 'admin'
     ? saved
     : {
         accountId: body.accountId || saved.accountId,

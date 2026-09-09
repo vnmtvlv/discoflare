@@ -30,7 +30,8 @@ const state = reactive<Schema>({
   avPreset: 'group_call_host',
 })
 
-const managed = computed(() => realtimekit.value?.source === 'deployment')
+const managed = computed(() => realtimekit.value?.source === 'deployment' || realtimekit.value?.source === 'admin')
+const managedLabel = computed(() => realtimekit.value?.source === 'admin' ? 'Managed by Discoflare Admin' : 'Managed by deployment')
 const canRevealApiToken = computed(() => (
   realtimekit.value?.source === 'database'
   && realtimekit.value.apiTokenConfigured
@@ -185,7 +186,7 @@ onMounted(load)
 
     <USkeleton v-if="loading" class="mt-6 h-64 w-full" />
     <template v-else-if="realtimekit">
-      <UAlert v-if="managed" class="mt-6" color="neutral" variant="subtle" title="Managed by deployment" />
+      <UAlert v-if="managed" class="mt-6" color="neutral" variant="subtle" :title="managedLabel" />
       <UAlert
         v-else-if="realtimekit.source === 'database' && !realtimekit.secretReadable"
         class="mt-6"
@@ -210,7 +211,7 @@ onMounted(load)
             class="w-full"
             :type="showApiToken ? 'text' : 'password'"
             :disabled="managed"
-            :placeholder="managed ? 'Managed by deployment' : realtimekit.apiTokenConfigured ? 'Saved; reveal or enter to replace' : ''"
+            :placeholder="managed ? managedLabel : realtimekit.apiTokenConfigured ? 'Saved; reveal or enter to replace' : ''"
             autocomplete="new-password"
           >
             <template #trailing>
