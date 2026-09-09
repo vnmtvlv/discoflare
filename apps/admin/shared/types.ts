@@ -6,6 +6,8 @@ export type AdminSession = {
   email: string
   tokenConnected: boolean
   tokenTemplateUrl: string
+  version: string | null
+  latestAdminVersion: string | null
   latestVersion: string | null
 }
 

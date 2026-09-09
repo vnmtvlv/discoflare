@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { waitForConnectedSession, waitForDisconnectedSession } from '../app/utils/session-activation'
+import { waitForAdminVersion, waitForConnectedSession, waitForDisconnectedSession } from '../app/utils/session-activation'
 
 describe('Admin token activation', () => {
   it('keeps refreshing while the new Worker version activates', async () => {
@@ -48,5 +48,24 @@ describe('Admin token activation', () => {
     })
 
     expect(refreshCount).toBe(2)
+  })
+
+  it('waits for the self-updated Admin version to activate', async () => {
+    let version = '0.7.6'
+    let refreshCount = 0
+
+    await waitForAdminVersion({
+      refresh: async () => {
+        refreshCount += 1
+        if (refreshCount === 3) version = '0.7.7'
+      },
+      currentVersion: () => version,
+      targetVersion: '0.7.7',
+      wait: async () => {},
+      attempts: 4,
+      delayMs: 100,
+    })
+
+    expect(refreshCount).toBe(3)
   })
 })

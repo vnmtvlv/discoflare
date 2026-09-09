@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { accountAdminTokenTemplateUrl, deriveAdminCapability } from '@discoflare/installer-core'
 import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../app/utils/account-controls'
+import { isNewerRelease } from '../shared/versions'
 
 describe('Discoflare Admin authority', () => {
   it('offers one fixed Cloudflare account-token template', () => {
@@ -20,5 +21,12 @@ describe('Discoflare Admin authority', () => {
   it('keeps account controls on canonical destinations', () => {
     expect(ACCESS_LOGOUT_PATH).toBe('/cdn-cgi/access/logout')
     expect(GITHUB_RELEASES_URL).toBe('https://github.com/vnmtvlv/discoflare/releases')
+  })
+
+  it('only offers forward Admin releases', () => {
+    expect(isNewerRelease('0.7.6', '0.7.7')).toBe(true)
+    expect(isNewerRelease('0.7.6', '0.8.0')).toBe(true)
+    expect(isNewerRelease('0.7.6', '0.7.6')).toBe(false)
+    expect(isNewerRelease('0.7.6', '0.7.5')).toBe(false)
   })
 })
