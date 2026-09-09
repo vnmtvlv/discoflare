@@ -1,5 +1,7 @@
 import { installDiscoflare, listDiscoflareInstallations, parseDeployRequest } from '@discoflare/installer-core'
+import { sendStream, setResponseHeaders } from 'h3'
 import { requireAccountToken, requireAdminConfig } from '../../utils/cloudflare'
+import { createDeployStream } from '../../utils/deploy-stream'
 import { assertAdminMutation, requireAdminIdentity } from '../../utils/security'
 
 export default defineEventHandler(async (event) => {
@@ -24,5 +26,10 @@ export default defineEventHandler(async (event) => {
     mailSubdomain: requested.appSubdomain,
     mailLocalPart: requested.mailLocalPart || 'inbox',
   }
-  return installDiscoflare(token, request)
+  setResponseHeaders(event, {
+    'Content-Type': 'application/x-ndjson; charset=utf-8',
+    'Cache-Control': 'no-store, no-transform',
+    'X-Accel-Buffering': 'no',
+  })
+  return sendStream(event, createDeployStream(report => installDiscoflare(token, request, { report })))
 })
