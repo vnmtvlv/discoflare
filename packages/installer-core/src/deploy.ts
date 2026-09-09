@@ -77,7 +77,34 @@ type DnsRecord = { name?: string; content?: string; type?: string }
 type SendingSubdomain = { name: string; enabled: boolean }
 type WorkerDomain = { hostname: string; service: string }
 type WorkerSearchResult = { id?: string, script_name?: string }
-type DeploymentHealth = { version?: string; ok?: boolean; ready?: boolean; migrated?: boolean; realtimekit?: boolean }
+export type DeploymentHealth = {
+  version?: string
+  ok?: boolean
+  ready?: boolean
+  users?: number
+  migrated?: boolean
+  ownerSetup?: boolean
+  realtimekit?: boolean
+}
+
+export function requiresReadyVerification(existing: boolean, authMode: DeployRequest['authMode'], previousHealth: DeploymentHealth | null): boolean {
+  if (!existing || authMode === 'access') return false
+  return !(previousHealth?.ownerSetup === true && previousHealth.users === 0)
+}
+
+async function readDeploymentHealth(origin: string): Promise<DeploymentHealth | null> {
+  try {
+    const response = await fetch(`${origin}/api/setup/health`, {
+      headers: { Accept: 'application/json' },
+      redirect: 'manual',
+      cache: 'no-store',
+    })
+    return response.ok ? await response.json() as DeploymentHealth : null
+  }
+  catch {
+    return null
+  }
+}
 
 async function deleteWorkerSecret(client: Cloudflare, accountId: string, workerName: string, secretName: string) {
   await client.workers.scripts.secrets.delete(secretName, {
@@ -675,6 +702,10 @@ export async function deployDiscoflare(
   const requestedHostname = request.customDomainEnabled
     ? `${request.appSubdomain}.${request.zoneName}`
     : existing.appHostname || await ensureWorkersHostname(client, request.accountId, request.workerName)
+  const origin = `https://${requestedHostname}`
+  const previousHealth = existing.exists && request.authMode !== 'access'
+    ? await readDeploymentHealth(origin)
+    : null
   const provisionInfrastructure = requiresInitialInfrastructureProvisioning(existing.exists)
   const provisionMail = request.mailEnabled && !existing.mailZoneId
   if (provisionInfrastructure || provisionMail) await assertDomainAvailable(accessToken, request)
@@ -735,7 +766,6 @@ export async function deployDiscoflare(
     : undefined
   const assetsJwt = await uploadAssets(accessToken, request.accountId, request.workerName, release.assets)
   await progress('assets', 'complete')
-  const origin = `https://${requestedHostname}`
   await progress('access', 'active')
   const access = request.authMode === 'access'
     ? existing.exists
@@ -917,7 +947,7 @@ export async function deployDiscoflare(
   await verifyDeployment(
     origin,
     release.manifest.version,
-    existing.exists && request.authMode !== 'access',
+    requiresReadyVerification(existing.exists, request.authMode, previousHealth),
     Boolean(realtimekit),
     report,
   )

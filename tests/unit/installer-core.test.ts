@@ -9,6 +9,7 @@ import {
   instanceAdminTokenTemplateUrl,
   parseDeployRequest,
   proxyAdminRealtimeKit,
+  requiresReadyVerification,
   requiresInitialInfrastructureProvisioning,
   realtimeKitAvPreset,
   realtimeKitPreset,
@@ -163,5 +164,26 @@ describe('installer-core', () => {
   it('does not reprovision domain and mail infrastructure during an upgrade', () => {
     expect(requiresInitialInfrastructureProvisioning(true)).toBe(false)
     expect(requiresInitialInfrastructureProvisioning(false)).toBe(true)
+  })
+
+  it('does not require a new owner-setup installation to be ready after an update', () => {
+    expect(requiresReadyVerification(true, 'builtin', {
+      version: '0.7.1',
+      ok: true,
+      ready: false,
+      users: 0,
+      migrated: true,
+      ownerSetup: true,
+    })).toBe(false)
+  })
+
+  it('keeps ready verification for claimed and unknown builtin installations', () => {
+    expect(requiresReadyVerification(true, 'builtin', {
+      ready: true,
+      users: 1,
+      ownerSetup: false,
+    })).toBe(true)
+    expect(requiresReadyVerification(true, 'builtin', null)).toBe(true)
+    expect(requiresReadyVerification(true, 'access', null)).toBe(false)
   })
 })
