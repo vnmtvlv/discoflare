@@ -1,6 +1,6 @@
 {
   "name": "@discoflare/installer-core",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Cloudflare provisioning engine shared by the Discoflare web installer and CLI",
   "type": "module",
   "license": "MIT",
