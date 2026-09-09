@@ -1,0 +1,41 @@
+{
+  "name": "@discoflare/admin",
+  "version": "0.7.1",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=24.20.0"
+  },
+  "scripts": {
+    "prebuild": "pnpm --filter @discoflare/installer-core build",
+    "build": "nuxt build",
+    "predev": "pnpm --filter @discoflare/installer-core build",
+    "dev": "nuxt dev",
+    "postinstall": "nuxt prepare",
+    "preview": "nuxt preview",
+    "release:artifact": "pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .admin-release/bundle && node scripts/build-release.mjs",
+    "pretest": "pnpm --filter @discoflare/installer-core build",
+    "test": "vitest run",
+    "pretypecheck": "pnpm --filter @discoflare/installer-core build",
+    "typecheck": "nuxt typecheck",
+    "types": "wrangler types"
+  },
+  "dependencies": {
+    "@discoflare/installer-core": "workspace:*",
+    "@iconify-json/ph": "^1.2.2",
+    "@nuxt/ui": "^4.11.0",
+    "cloudflare": "7.1.0",
+    "jose": "6.2.12",
+    "nuxt": "^4.5.2",
+    "tailwindcss": "^4.3.3",
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.2",
+    "vitest": "4.1.11",
+    "vue-tsc": "^3.3.11",
+    "wrangler": "4.130.0"
+  }
+}

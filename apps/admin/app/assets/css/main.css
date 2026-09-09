@@ -1,0 +1,27 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --color-cloudflare-50: #fff7ed;
+  --color-cloudflare-100: #ffedd5;
+  --color-cloudflare-200: #fed7aa;
+  --color-cloudflare-300: #fdba74;
+  --color-cloudflare-400: #fb923c;
+  --color-cloudflare-500: #f6821f;
+  --color-cloudflare-600: #e66b0a;
+  --color-cloudflare-700: #bf5008;
+  --color-cloudflare-800: #983f0f;
+  --color-cloudflare-900: #7c3510;
+  --color-cloudflare-950: #431807;
+}
+
+:root { --ui-radius: 0.75rem; }
+body { background: var(--ui-bg); }
+::selection { color: white; background: var(--color-cloudflare-600); }
+.noise-grid {
+  background-image:
+    linear-gradient(to right, color-mix(in srgb, var(--ui-border-muted) 55%, transparent) 1px, transparent 1px),
+    linear-gradient(to bottom, color-mix(in srgb, var(--ui-border-muted) 55%, transparent) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: linear-gradient(to bottom, black 15%, transparent 92%);
+}

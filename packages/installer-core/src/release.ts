@@ -66,6 +66,6 @@ export async function loadDiscoflareAdminRelease(manifestUrl: string, fetcher: t
 
 export function adminReleaseManifestUrl(version?: string): string {
   return version
-    ? `https://github.com/vnmtvlv/discoflare-admin/releases/download/${version}/discoflare-admin-cloudflare-manifest.json`
-    : 'https://github.com/vnmtvlv/discoflare-admin/releases/latest/download/discoflare-admin-cloudflare-manifest.json'
+    ? `https://github.com/vnmtvlv/discoflare/releases/download/${version}/discoflare-admin-cloudflare-manifest.json`
+    : 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-admin-cloudflare-manifest.json'
 }

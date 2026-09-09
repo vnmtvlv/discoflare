@@ -1,20 +1,20 @@
 # Discoflare.com installer releases
 
-The installer on `discoflare.com/deploy` creates or repairs only `discoflare-admin`. That account-local Worker consumes the separately versioned Discoflare workspace releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
+The installer on `discoflare.com/deploy` creates or repairs only `discoflare-admin`. That account-local Worker consumes Discoflare releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
 
 ## Publishing a release
 
 Publishing a GitHub Release triggers `.github/workflows/publish-installer-release.yml`. The workflow:
 
-1. Builds the Nuxt Worker without deploying it.
-2. Packages the Worker, static assets, and D1 migrations as release artifacts.
+1. Builds the workspace and Admin Nuxt Workers without deploying them.
+2. Packages both Workers and their static assets, plus workspace D1 migrations, as release artifacts.
 3. Publishes the versioned Agent Computer image to public GHCR.
 4. Builds the shared installer-core and standalone CLI packages.
-5. Attaches the installer manifest, payloads, and packages to the GitHub Release.
+5. Attaches the workspace and Admin manifests, payloads, and packages to the GitHub Release.
 
 Release tags may use either `v1.2.3` or `1.2.3`. The GitHub workflow publishes the matching public `ghcr.io/vnmtvlv/discoflare-computer:<version>` image before attaching the manifest.
 
-Discoflare Admin has its own repository, version, GitHub Release, Worker bundle, static asset payload, and integrity manifest. The bootstrap installer follows that Admin manifest. Admin separately follows the latest workspace manifest, reports outdated Installations in its inventory, and applies a selected update in place while reusing the bound D1, R2, KV, Durable Object, Workflow, Container, domain, Access, and mail resources.
+Discoflare Admin lives in `apps/admin` and is published from the same versioned GitHub Release as the workspace Worker. It remains a separate Worker bundle, static asset payload, and integrity manifest. The bootstrap installer follows the Admin manifest, while Admin follows the workspace manifest from that release, reports outdated Installations in its inventory, and applies a selected update in place while reusing the bound D1, R2, KV, Durable Object, Workflow, Container, domain, Access, and mail resources.
 
 Owners can check **Workspace Settings → Updates**, but infrastructure changes open Discoflare Admin. New installs carry a `DISCOFLARE_INSTALLATION` marker and `DISCOFLARE_MANAGEMENT_MODE=admin`. Adoption recognizes older marked installs, removes any legacy broad token or deployment-level RealtimeKit token, and adds the Admin service binding plus narrow capability. Admin refuses to overwrite unrelated Workers.
 
