@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { DeployRequest, DeployResponse } from '@discoflare/installer-core'
+import type { DeployRequest } from '@discoflare/installer-core'
 import type { AdminSession, InstallationList } from '../../shared/types'
 import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
+import { readDeployStream } from '../utils/deploy-stream'
 import { waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
 
 const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
@@ -153,10 +154,16 @@ async function createInstallation() {
   mutating.value = 'create'
   error.value = ''
   try {
-    const response = await $fetch<DeployResponse>('/api/installations', { method: 'POST', body: form })
+    const response = await fetch('/api/installations', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    })
+    const deployed = await readDeployStream(response)
     showCreate.value = false
     await loadInventory()
-    await navigateTo(response.setupUrl || response.url, { external: true, open: { target: '_blank' } })
+    await navigateTo(deployed.setupUrl || deployed.url, { external: true, open: { target: '_blank' } })
   }
   catch (cause) {
     error.value = errorMessage(cause)
@@ -170,10 +177,13 @@ async function updateInstallation(workerName: string) {
   mutating.value = workerName
   error.value = ''
   try {
-    await $fetch(`/api/installations/${encodeURIComponent(workerName)}`, {
+    const response = await fetch(`/api/installations/${encodeURIComponent(workerName)}`, {
       method: 'POST',
-      body: { targetVersion: latestVersion.value ? `v${latestVersion.value}` : undefined },
+      credentials: 'same-origin',
+      headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ targetVersion: latestVersion.value ? `v${latestVersion.value}` : undefined }),
     })
+    await readDeployStream(response)
     await loadInventory()
   }
   catch (cause) {
