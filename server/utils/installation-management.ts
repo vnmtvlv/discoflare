@@ -65,3 +65,29 @@ export function managedUpdateRequest(env: DiscoflareEnv, targetVersion: string):
     targetVersion,
   }
 }
+
+/** Turn a guided installation into a self-managing installation from its own origin. */
+export function managedActivationRequest(env: DiscoflareEnv, targetVersion: string): DeployRequest {
+  const request = managedUpdateRequest(env, targetVersion)
+  const canEnableMail = env.DISCOFLARE_PRIMARY === 'true'
+    && Boolean(request.zoneId && request.zoneName)
+
+  return {
+    ...request,
+    managementMode: 'managed',
+    realtimekitEnabled: true,
+    mailEnabled: request.mailEnabled || canEnableMail,
+    mailSubdomain: request.mailEnabled
+      ? request.mailSubdomain
+      : env.DISCOFLARE_APP_SUBDOMAIN?.trim() || request.workerName,
+  }
+}
+
+/** Disconnect management without requiring a second provider credential. */
+export function manualManagementRequest(env: DiscoflareEnv, targetVersion: string): DeployRequest {
+  return {
+    ...managedUpdateRequest(env, targetVersion),
+    managementMode: 'manual',
+    realtimekitEnabled: false,
+  }
+}

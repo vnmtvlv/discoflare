@@ -18,6 +18,18 @@ export type UpdateStatusDTO = {
   checkFailed: boolean
 }
 
+export type InstallationManagementStatusDTO = {
+  available: boolean
+  managementMode: 'manual' | 'managed'
+  workerName: string | null
+  hostname: string | null
+  tokenTemplateUrl: string | null
+  huddlesEnabled: boolean
+  emailEnabled: boolean
+  emailDomain: string | null
+  emailEligible: boolean
+}
+
 type Semver = readonly [major: number, minor: number, patch: number]
 
 const DISCOFLARE_RELEASES_URL = 'https://github.com/vnmtvlv/discoflare/releases/tag'
