@@ -7,8 +7,10 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   const accountId = String(body.accountId || '').trim()
   const workerName = String(body.workerName || '').trim().toLowerCase()
   const managementMode = body.managementMode === undefined ? 'manual' : body.managementMode
-  if (managementMode !== 'manual' && managementMode !== 'managed') installerError(400, 'Select an installation management mode')
+  if (managementMode !== 'manual' && managementMode !== 'managed' && managementMode !== 'admin') installerError(400, 'Select an installation management mode')
   const instanceAdminToken = typeof body.instanceAdminToken === 'string' ? body.instanceAdminToken.trim() : undefined
+  const adminOrigin = body.adminOrigin === undefined ? undefined : installationOrigin(body.adminOrigin)
+  const adminWorkerName = body.adminWorkerName === undefined ? undefined : String(body.adminWorkerName).trim().toLowerCase()
   const appName = String(body.appName || '').trim()
   const authMode = body.authMode === undefined ? 'builtin' : body.authMode
   if (authMode !== 'builtin' && authMode !== 'access') installerError(400, 'Select a sign-in mode')
@@ -23,6 +25,8 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   const realtimekitApiToken = String(body.realtimekitApiToken || '').trim()
   if (!/^[0-9a-f]{32}$/u.test(accountId)) installerError(400, 'Select a Cloudflare account')
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName)) installerError(400, 'Worker name must use lowercase letters, numbers, and hyphens')
+  if (managementMode === 'admin' && (!adminOrigin || !adminWorkerName)) installerError(400, 'Discoflare Admin identity is required')
+  if (adminWorkerName && !/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(adminWorkerName)) installerError(400, 'Admin Worker name must use lowercase letters, numbers, and hyphens')
   if (!appName || appName.length > 80) installerError(400, 'App name must be 1–80 characters')
   const zoneRequired = customDomainEnabled || mailEnabled
   if (zoneRequired && !/^[0-9a-f]{32}$/u.test(zoneId)) installerError(400, 'Select a Cloudflare domain')
@@ -47,6 +51,8 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     workerName,
     managementMode,
     instanceAdminToken,
+    adminOrigin,
+    adminWorkerName,
     appName,
     authMode,
     registrationMode: authMode === 'access' ? 'open' : registrationMode,
@@ -62,5 +68,16 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     realtimekitEnabled,
     realtimekitApiToken,
     targetVersion,
+  }
+}
+
+function installationOrigin(value: unknown): string {
+  try {
+    const url = new URL(String(value || ''))
+    if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error()
+    return url.origin
+  }
+  catch {
+    installerError(400, 'Discoflare Admin origin is invalid')
   }
 }

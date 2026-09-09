@@ -13,6 +13,7 @@ const updateQ = useQuery({
 
 const status = computed(() => updateQ.data.value)
 const releaseLabel = computed(() => status.value?.releasesBehind === 1 ? 'release' : 'releases')
+const adminUrl = computed(() => status.value?.adminOrigin || null)
 const updating = ref(false)
 const updateError = ref('')
 const updateComplete = ref(false)
@@ -86,7 +87,7 @@ async function installManagedUpdate() {
             <p v-else class="mt-1 text-sm text-success">Up to date</p>
           </div>
           <UBadge
-            :label="status.managementMode === 'managed' ? 'Managed installation' : 'Manual management'"
+            :label="status.managementMode === 'admin' ? 'Discoflare Admin' : status.managementMode === 'managed' ? 'Legacy self-managed' : 'Repository managed'"
             color="neutral"
             variant="subtle"
           />
@@ -110,6 +111,14 @@ async function installManagedUpdate() {
             :loading="updating"
             icon="i-ph-download-simple"
             @click="installManagedUpdate"
+          />
+          <UButton
+            v-if="status.managementMode === 'admin' && adminUrl"
+            :to="adminUrl"
+            external
+            target="_blank"
+            :label="status.updateAvailable ? 'Update in Discoflare Admin' : 'Open Discoflare Admin'"
+            trailing-icon="i-ph-arrow-up-right"
           />
           <UButton
             v-if="status.upgradeUrl"
@@ -147,6 +156,13 @@ async function installManagedUpdate() {
         color="neutral"
         title="Manual deployment"
         description="Update the connected repository and apply its D1 migrations before deploying the new Worker."
+      />
+      <UAlert
+        v-if="status.managementMode === 'managed'"
+        class="mt-4"
+        color="warning"
+        title="Move updates to Discoflare Admin"
+        description="This legacy installation still holds a broad Cloudflare token. Adopt it in Discoflare Admin to remove that credential from the workspace."
       />
     </template>
   </div>

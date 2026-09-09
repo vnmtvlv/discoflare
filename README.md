@@ -79,15 +79,14 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 
 Chat may be ready several minutes before the first Agent Task can start, while the first container image finishes provisioning.
 
-### Managed server creation
+### Guided installation
 
-1. Open the [Discoflare installer](https://discoflare.com/deploy) and connect Cloudflare for this temporary installation session.
-2. Enter the intended Owner email and choose Discoflare accounts or the advanced Cloudflare Access mode.
-3. Keep the generated `workers.dev` URL or add a custom domain.
-4. Open the private setup link and create the first Owner password. If Cloudflare Access was explicitly selected, open the workspace and use the one-time code sent by Cloudflare instead.
-5. To let the installation operate its own Cloudflare resources, open **Workspace Settings → Cloudflare**, create the account-owned Instance Admin Token from the provided template, and paste it there on your own workspace origin.
+1. Open the [Discoflare installer](https://discoflare.com/deploy), connect Cloudflare temporarily, choose the account, and enter the email allowed into its Admin.
+2. The installer creates or repairs the small `discoflare-admin` Worker and protects it with Cloudflare Access.
+3. Open Discoflare Admin, create the account-owned Account Admin Token from its template, and paste it on that private Worker origin.
+4. Create, adopt, update, and repair all Discoflare workspace Installations from Admin. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
 
-The guided installer provisions the base workspace without RealtimeKit, workspace email, or a permanent Cloudflare credential. Connecting Cloudflare from the installed workspace verifies the pasted token and stores it only as that Worker's secret; the value never passes through `discoflare.com`. The workspace then enables Huddles and, when the Primary installation uses an explicitly selected custom domain, configures email on that domain. The same token authorizes Owner-requested self-updates. It is not available to D1, browser code, MCP clients, Members, Agents, or Agent Computers. Cloudflare scopes these permissions to an account and its zones, so use a dedicated Cloudflare account when installation-level isolation matters. The downloadable CLI uses an explicit `CLOUDFLARE_API_TOKEN` and the same open-source installer core, so installation and recovery do not depend on `discoflare.com` remaining online. In the default builtin mode, the random setup claim is carried in the URL fragment, is not sent in the initial HTTP request, and becomes unusable once the Owner and workspace are created. When Access is explicitly selected, Cloudflare enforces its email allow policy before requests reach Discoflare.
+The broad Account Admin Token is stored only as the Discoflare Admin Worker secret. It never passes through `discoflare.com` and is never stored in a workspace Worker, D1, browser code, MCP client, Member, Agent, or Agent Computer. Each workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Cloudflare scopes the broad permissions to an account and its zones, so use a dedicated Cloudflare account when installation-level isolation matters. The downloadable CLI remains the source-level recovery path and does not require `discoflare.com`.
 
 ### Manual deployment
 
@@ -135,7 +134,7 @@ The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deploy
 
 ### Server deletion
 
-For managed installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the installation through a temporary Cloudflare OAuth session.
+For guided Installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the Installation through temporary Cloudflare authorization.
 
 A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, Workflow, Container application, owned Access applications, optional custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
 

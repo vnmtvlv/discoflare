@@ -36,6 +36,9 @@ export type DiscoflareEnv = {
   REALTIMEKIT_API_SECRET?: string
   REALTIMEKIT_PRESET_VOICE?: string
   REALTIMEKIT_PRESET_AV?: string
+  DISCOFLARE_ADMIN?: Fetcher
+  DISCOFLARE_ADMIN_ORIGIN?: string
+  DISCOFLARE_ADMIN_CAPABILITY?: string
   AUTH_SECRET?: string
   AUTH_MODE?: string
   CF_ACCESS_ISS?: string

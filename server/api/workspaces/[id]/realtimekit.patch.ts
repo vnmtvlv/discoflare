@@ -33,7 +33,9 @@ export default defineEventHandler(async (event): Promise<{ realtimekit: Realtime
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
   const current = await loadRealtimeKitConfig(env)
-  if (current.source === 'deployment') fail(400, 'managed_by_deployment', 'RealtimeKit is managed by the deployment')
+  if (current.source === 'deployment' || current.source === 'admin') {
+    fail(400, 'managed_by_deployment', current.source === 'admin' ? 'RealtimeKit is managed by Discoflare Admin' : 'RealtimeKit is managed by the deployment')
+  }
 
   const db = getDb(env.DB)
   if (body.remove) {

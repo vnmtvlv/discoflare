@@ -20,6 +20,9 @@ export default defineEventHandler(async (event) => {
   }
   const token = env.DISCOFLARE_ADMIN_TOKEN?.trim()
   const tokenId = env.DISCOFLARE_ADMIN_TOKEN_ID?.trim()
+  if (env.DISCOFLARE_MANAGEMENT_MODE === 'admin') {
+    fail(409, 'admin_managed', 'Open Discoflare Admin to update this installation')
+  }
   if (env.DISCOFLARE_MANAGEMENT_MODE !== 'managed' || !token || !tokenId) {
     fail(409, 'manual_management', 'This installation requires discoflare.com or the CLI for updates')
   }

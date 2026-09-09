@@ -1,6 +1,6 @@
 # Discoflare.com installer releases
 
-The installer on `discoflare.com/deploy` deploys Discoflare directly into a user's Cloudflare account. It does not require the user to create a GitHub repository. The existing Cloudflare Deploy Button remains available as an alternative.
+The installer on `discoflare.com/deploy` creates or repairs only `discoflare-admin`. That account-local Worker consumes the separately versioned Discoflare workspace releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
 
 ## Publishing a release
 
@@ -14,11 +14,9 @@ Publishing a GitHub Release triggers `.github/workflows/publish-installer-releas
 
 Release tags may use either `v1.2.3` or `1.2.3`. The GitHub workflow publishes the matching public `ghcr.io/vnmtvlv/discoflare-computer:<version>` image before attaching the manifest.
 
-The installer follows the manifest URL configured on `discoflare.com`. Its default points to the latest GitHub Release, so existing installations can be updated by running the installer again. New installs carry a `DISCOFLARE_INSTALLATION` marker. Updates also recognize the full binding signature of older GitHub installs, while refusing to overwrite an unrelated Worker with the same name.
+Discoflare Admin has its own repository, version, GitHub Release, Worker bundle, static asset payload, and integrity manifest. The bootstrap installer follows that Admin manifest. Admin separately follows the latest workspace manifest, reports outdated Installations in its inventory, and applies a selected update in place while reusing the bound D1, R2, KV, Durable Object, Workflow, Container, domain, Access, and mail resources.
 
-Owners can check **Workspace Settings → Updates**. The installed Worker reads the public stable GitHub Releases list and compares it with `DISCOFLARE_VERSION`. A Manual installation opens a release-pinned upgrade URL on `discoflare.com`; after fresh Cloudflare OAuth, the installer finds the marked Worker by its existing hostname and reuses the D1, R2, and KV resources already bound to it. A Managed installation downloads the same signed-by-hash release artifacts and updates itself with its account-owned Instance Admin Token after the Owner explicitly selects the release.
-
-Manual and Managed describe management authority, not how the installation was originally deployed. New guided installations start in Manual mode. The Owner may connect one account-owned token for updates, RealtimeKit, and eligible Cloudflare email infrastructure from **Workspace Settings → Cloudflare** on the installed origin. Disconnecting removes it from the Worker, disables managed Huddles, preserves existing email routes, and reminds the operator to revoke the token in Cloudflare.
+Owners can check **Workspace Settings → Updates**, but infrastructure changes open Discoflare Admin. New installs carry a `DISCOFLARE_INSTALLATION` marker and `DISCOFLARE_MANAGEMENT_MODE=admin`. Adoption recognizes older marked installs, removes any legacy broad token or deployment-level RealtimeKit token, and adds the Admin service binding plus narrow capability. Admin refuses to overwrite unrelated Workers.
 
 The same provisioning engine lives in `packages/installer-core`. `packages/cli` bundles it into a standalone Node executable that reads release artifacts from GitHub and accepts an explicit `CLOUDFLARE_API_TOKEN`; it never calls `discoflare.com`. A release tarball can be run with `npx <GitHub Release URL to discoflare-cli-VERSION.tgz>`.
 

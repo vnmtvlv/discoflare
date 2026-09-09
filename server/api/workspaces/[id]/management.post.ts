@@ -52,6 +52,7 @@ export default defineEventHandler(async (event): Promise<{ management: Installat
     management: {
       available: true,
       managementMode: 'managed',
+      adminOrigin: null,
       workerName: request.workerName,
       hostname: env.DISCOFLARE_APP_HOSTNAME,
       tokenTemplateUrl: null,

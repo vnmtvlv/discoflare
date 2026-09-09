@@ -11,9 +11,14 @@ export type RealtimeKitRuntimeConfig = {
   apiSecret: string
   voicePreset: string
   avPreset: string
-  source: 'deployment' | 'database' | 'missing'
+  source: 'deployment' | 'database' | 'admin' | 'missing'
   apiTokenConfigured: boolean
   secretReadable: boolean
+  admin?: {
+    fetcher: Fetcher
+    capability: string
+    workerName: string
+  }
 }
 
 type RealtimeKitSettingsRow = {
@@ -43,6 +48,26 @@ function blankConfig(env: DiscoflareEnv): RealtimeKitRuntimeConfig {
 export async function loadRealtimeKitConfig(env: DiscoflareEnv): Promise<RealtimeKitRuntimeConfig> {
   const accountId = env.REALTIMEKIT_ACCOUNT_ID?.trim() || ''
   const appId = env.REALTIMEKIT_APP_ID?.trim() || ''
+  const adminCapability = env.DISCOFLARE_ADMIN_CAPABILITY?.trim() || ''
+  const adminWorkerName = env.DISCOFLARE_WORKER_NAME?.trim() || ''
+  if (appId && accountId && env.DISCOFLARE_ADMIN && adminCapability && adminWorkerName) {
+    return {
+      accountId,
+      appId,
+      apiKey: '',
+      apiSecret: '',
+      voicePreset: env.REALTIMEKIT_PRESET_VOICE?.trim() || 'voice',
+      avPreset: env.REALTIMEKIT_PRESET_AV?.trim() || env.REALTIMEKIT_PRESET_VOICE?.trim() || 'group_call_host',
+      source: 'admin',
+      apiTokenConfigured: false,
+      secretReadable: true,
+      admin: {
+        fetcher: env.DISCOFLARE_ADMIN,
+        capability: adminCapability,
+        workerName: adminWorkerName,
+      },
+    }
+  }
   const apiKey = env.REALTIMEKIT_API_KEY?.trim() || env.DISCOFLARE_ADMIN_TOKEN?.trim() || ''
   const apiSecret = env.REALTIMEKIT_API_SECRET?.trim() || ''
   if (appId && apiKey && (accountId || apiSecret)) {
@@ -102,7 +127,7 @@ export async function loadRealtimeKitConfig(env: DiscoflareEnv): Promise<Realtim
 }
 
 export function realtimekitConfigured(config: RealtimeKitRuntimeConfig): boolean {
-  return Boolean(config.appId && config.apiKey && (config.accountId || config.apiSecret))
+  return Boolean(config.appId && (config.admin || (config.apiKey && (config.accountId || config.apiSecret))))
 }
 
 export function realtimekitSettingsAdminDto(config: RealtimeKitRuntimeConfig): RealtimeKitSettingsAdminDTO {
@@ -174,6 +199,27 @@ export async function endMeeting(config: RealtimeKitRuntimeConfig, meetingId: st
 }
 
 async function kitFetch(config: RealtimeKitRuntimeConfig, method: string, path: string, body?: unknown): Promise<unknown> {
+  if (config.admin && config.accountId && config.appId) {
+    const res = await config.admin.fetcher.fetch('https://discoflare-admin.internal/api/internal/realtimekit', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${config.admin.capability}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        workerName: config.admin.workerName,
+        accountId: config.accountId,
+        appId: config.appId,
+        method,
+        path,
+        body,
+      }),
+    })
+    const json = await res.json() as { result?: unknown, error?: string }
+    if (!res.ok) throw new RealtimeKitHttpError(res.status)
+    return json.result
+  }
+
   if (config.accountId && config.appId && config.apiKey) {
     const url = `https://api.cloudflare.com/client/v4/accounts/${config.accountId}/realtime/kit/${config.appId}${path}`
     const res = await fetch(url, {

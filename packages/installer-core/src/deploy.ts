@@ -9,6 +9,7 @@ import { ensurePrimaryMail } from './primary-mail.js'
 import { ensureTenantContainerImage } from './container-registry.js'
 import { ensureManagedRealtimeKit, realtimeKitCapability, type ManagedRealtimeKit } from './realtimekit.js'
 import { instanceAdminCapability, verifyInstanceAdminCredential, type InstanceAdminCredential } from './instance-admin.js'
+import { adminManagedCapability, deriveAdminCapability } from './admin.js'
 
 type WorkerUploadResult = {
   deployment_id?: string
@@ -57,7 +58,9 @@ type ExistingWorker = {
   accessHealthApplicationId?: string
   accessDeletionApplicationId?: string
   primary?: boolean
-  managementMode?: 'manual' | 'managed'
+  managementMode?: 'manual' | 'managed' | 'admin'
+  adminOrigin?: string
+  adminWorkerName?: string
   adminTokenId?: string
   adminTokenConfigured?: boolean
   realtimekitAccountId?: string
@@ -149,7 +152,11 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       accessHealthApplicationId: text('CF_ACCESS_HEALTH_APP_ID'),
       accessDeletionApplicationId: text('CF_ACCESS_DELETION_APP_ID'),
       primary: text('DISCOFLARE_PRIMARY') === 'true',
-      managementMode: text('DISCOFLARE_MANAGEMENT_MODE') === 'managed' ? 'managed' : 'manual',
+      managementMode: text('DISCOFLARE_MANAGEMENT_MODE') === 'admin'
+        ? 'admin'
+        : text('DISCOFLARE_MANAGEMENT_MODE') === 'managed' ? 'managed' : 'manual',
+      adminOrigin: text('DISCOFLARE_ADMIN_ORIGIN'),
+      adminWorkerName: bindings.find(binding => binding.name === 'DISCOFLARE_ADMIN' && binding.type === 'service')?.service,
       adminTokenId: text('DISCOFLARE_ADMIN_TOKEN_ID'),
       adminTokenConfigured: bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text'),
       realtimekitAccountId: text('REALTIMEKIT_ACCOUNT_ID'),
@@ -157,7 +164,7 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       realtimekitVoicePreset: text('REALTIMEKIT_PRESET_VOICE'),
       realtimekitAvPreset: text('REALTIMEKIT_PRESET_AV'),
       realtimekitApiTokenConfigured: bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text'),
-      realtimekitManaged: text('DISCOFLARE_REALTIMEKIT_MANAGED') === 'true',
+      realtimekitManaged: ['true', 'admin'].includes(text('DISCOFLARE_REALTIMEKIT_MANAGED') || ''),
     }
   }
   return { exists: false }
@@ -399,7 +406,11 @@ async function uploadWorker(
   telemetry: { installationId: string, token: string },
   access: { issuer: string, audience: string, applicationId: string, healthApplicationId: string, deletionApplicationId: string } | null,
   primary: boolean,
-  management: { mode: 'manual' | 'managed', credential?: InstanceAdminCredential },
+  management: {
+    mode: 'manual' | 'managed' | 'admin'
+    credential?: InstanceAdminCredential
+    admin?: { origin: string, workerName: string, capability: string }
+  },
   realtimekit: ManagedRealtimeKit | null,
 ) {
   const hostname = new URL(resources.origin).hostname
@@ -445,6 +456,14 @@ async function uploadWorker(
       bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_TOKEN', text: management.credential.value })
     }
   }
+  if (management.mode === 'admin') {
+    if (!management.admin) throw createError({ statusCode: 409, statusMessage: 'Discoflare Admin identity is incomplete' })
+    bindings.push(
+      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_ORIGIN', text: management.admin.origin },
+      { type: 'service', name: 'DISCOFLARE_ADMIN', service: management.admin.workerName },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_CAPABILITY', text: management.admin.capability },
+    )
+  }
   if (primary) bindings.push({ type: 'plain_text', name: 'DISCOFLARE_PRIMARY', text: 'true' })
   if (access) {
     bindings.push(
@@ -474,7 +493,7 @@ async function uploadWorker(
     )
     if (realtimekit.apiToken) bindings.push({ type: 'secret_text', name: 'REALTIMEKIT_API_KEY', text: realtimekit.apiToken })
     if (realtimekit.managed) {
-      bindings.push({ type: 'plain_text', name: 'DISCOFLARE_REALTIMEKIT_MANAGED', text: 'true' })
+      bindings.push({ type: 'plain_text', name: 'DISCOFLARE_REALTIMEKIT_MANAGED', text: management.mode === 'admin' ? 'admin' : 'true' })
     }
   }
   if (!existing.exists) {
@@ -638,6 +657,9 @@ export async function deployDiscoflare(
   if (request.managementMode === 'managed' && !release.manifest.capabilities?.includes(instanceAdminCapability)) {
     throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support managed installation tokens` })
   }
+  if (request.managementMode === 'admin' && !release.manifest.capabilities?.includes(adminManagedCapability)) {
+    throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} does not support Discoflare Admin management` })
+  }
   const existing = await inspectWorker(client, request.accountId, request.workerName)
   const existingPrimary = await primaryWorker(client, request.accountId)
   const primary = existing.exists ? existing.primary === true : existingPrimary === null
@@ -755,6 +777,9 @@ export async function deployDiscoflare(
       throw createError({ statusCode: 400, statusMessage: 'Paste the instance admin token in the installed workspace first' })
     }
   }
+  else if (request.managementMode === 'admin') {
+    await progress('management', 'complete', 'Managed by Discoflare Admin')
+  }
   else {
     await progress('management', 'complete', 'Manual management')
   }
@@ -764,9 +789,20 @@ export async function deployDiscoflare(
   const existingRealtimeKit = Boolean(
     existing.realtimekitAccountId
     && existing.realtimekitAppId
-    && (existing.realtimekitApiTokenConfigured || (existing.managementMode === 'managed' && existing.adminTokenConfigured)),
+    && (
+      existing.realtimekitApiTokenConfigured
+      || (existing.managementMode === 'managed' && existing.adminTokenConfigured)
+      || existing.managementMode === 'admin'
+    ),
   )
-  if (request.realtimekitEnabled && request.managementMode === 'managed') {
+  if (request.realtimekitEnabled && request.managementMode === 'admin') {
+    const provisioned = await ensureManagedRealtimeKit(accessToken, request.accountId, request.workerName, {
+      appId: existing.realtimekitAppId,
+    })
+    realtimekit = { ...provisioned, apiToken: undefined, managed: true }
+    await progress('realtimekit', 'complete', existingRealtimeKit ? 'Huddles verified through Discoflare Admin' : 'Huddles enabled through Discoflare Admin')
+  }
+  else if (request.realtimekitEnabled && request.managementMode === 'managed') {
     if (instanceAdmin) {
       const provisioned = await ensureManagedRealtimeKit(instanceAdmin.value, request.accountId, request.workerName, {
         appId: existing.realtimekitAppId,
@@ -819,6 +855,13 @@ export async function deployDiscoflare(
         request,
       )
     : null
+  const admin = request.managementMode === 'admin'
+    ? {
+        origin: request.adminOrigin!,
+        workerName: request.adminWorkerName!,
+        capability: await deriveAdminCapability(accessToken, request.accountId, request.workerName),
+      }
+    : undefined
   const uploaded: WorkerUploadResult = await uploadWorker(accessToken, request.accountId, request, release.manifest, release.worker, {
     databaseId,
     bucketName,
@@ -828,13 +871,14 @@ export async function deployDiscoflare(
   }, existing, ownerSetupToken, telemetry, access, primary, {
     mode: request.managementMode,
     credential: instanceAdmin,
+    admin,
   }, realtimekit)
   await progress('worker', 'complete', `Discoflare ${release.manifest.version}`)
 
-  if (existing.realtimekitApiTokenConfigured && (request.managementMode === 'managed' || !request.realtimekitEnabled)) {
+  if (existing.realtimekitApiTokenConfigured && (request.managementMode === 'managed' || request.managementMode === 'admin' || !request.realtimekitEnabled)) {
     await deleteWorkerSecret(client, request.accountId, request.workerName, 'REALTIMEKIT_API_KEY')
   }
-  if (existing.adminTokenConfigured && request.managementMode === 'manual') {
+  if (existing.adminTokenConfigured && request.managementMode !== 'managed') {
     await deleteWorkerSecret(client, request.accountId, request.workerName, 'DISCOFLARE_ADMIN_TOKEN')
   }
   await progress('domain', 'active')

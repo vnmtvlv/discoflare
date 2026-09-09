@@ -14,8 +14,10 @@ export type CloudflareZone = {
 export type DeployRequest = {
   accountId: string
   workerName: string
-  managementMode: 'manual' | 'managed'
+  managementMode: 'manual' | 'managed' | 'admin'
   instanceAdminToken?: string
+  adminOrigin?: string
+  adminWorkerName?: string
   adminEmail: string
   allowedEmails: string[]
   appName: string
@@ -37,7 +39,7 @@ export type DeployResponse = {
   url: string
   setupUrl?: string
   version: string
-  managementMode: 'manual' | 'managed'
+  managementMode: 'manual' | 'managed' | 'admin'
   updated: boolean
   appliedMigrations: string[]
   verified: boolean
@@ -51,6 +53,7 @@ export type CloudflareInstallation = {
   configuration: DeployRequest
   resources: {
     databaseId: string | null
+    primary: boolean
     bucketName: string | null
     kvId: string | null
     workflowName: string
@@ -150,4 +153,35 @@ export type InstallerRelease = {
   manifest: InstallerReleaseManifest
   worker: ArrayBuffer
   assets: InstallerAssetsPayload
+}
+
+export type DiscoflareAdminReleaseManifest = {
+  schemaVersion: 1
+  version: string
+  releasedAt: string
+  compatibilityDate: string
+  compatibilityFlags: string[]
+  worker: ReleaseAsset
+  assets: ReleaseAsset
+}
+
+export type DiscoflareAdminRelease = {
+  manifest: DiscoflareAdminReleaseManifest
+  worker: ArrayBuffer
+  assets: Pick<InstallerAssetsPayload, 'assets'>
+}
+
+export type DiscoflareAdminBootstrapRequest = {
+  accountId: string
+  accountName: string
+  email: string
+  workerName?: string
+  targetVersion?: string
+}
+
+export type DiscoflareAdminBootstrapResponse = {
+  origin: string
+  version: string
+  workerName: string
+  updated: boolean
 }

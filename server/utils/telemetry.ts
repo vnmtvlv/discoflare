@@ -32,7 +32,7 @@ export function telemetryHeartbeat(env: DiscoflareEnv, sentAt = new Date().toISO
       customDomain: Boolean(env.DISCOFLARE_APP_HOSTNAME),
       email: Boolean(env.MAIL_DOMAIN && (workspaceEmailAvailable(env) || env.EMAIL)),
       agents: Boolean(env.AI && env.AGENT_DO && env.AGENT_TASK_WORKFLOW),
-      huddles: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID && (env.REALTIMEKIT_API_KEY || env.DISCOFLARE_ADMIN_TOKEN)),
+      huddles: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID && (env.REALTIMEKIT_API_KEY || env.DISCOFLARE_ADMIN_TOKEN || env.DISCOFLARE_ADMIN)),
     },
   }
 }

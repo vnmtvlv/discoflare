@@ -13,9 +13,15 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
   const { env } = cf(event)
   const installedVersion = env.DISCOFLARE_VERSION?.trim() || packageVersion
   const installationKind = env.DISCOFLARE_INSTALLATION === 'discoflare.com/v1' ? 'guided' : 'manual'
-  const managementMode = env.DISCOFLARE_MANAGEMENT_MODE === 'managed' && env.DISCOFLARE_ADMIN_TOKEN && env.DISCOFLARE_ADMIN_TOKEN_ID
-    ? 'managed'
-    : 'manual'
+  const managementMode = env.DISCOFLARE_MANAGEMENT_MODE === 'admin'
+    && env.DISCOFLARE_ADMIN
+    && env.DISCOFLARE_ADMIN_CAPABILITY
+    && env.DISCOFLARE_ADMIN_ORIGIN
+    ? 'admin'
+    : env.DISCOFLARE_MANAGEMENT_MODE === 'managed' && env.DISCOFLARE_ADMIN_TOKEN && env.DISCOFLARE_ADMIN_TOKEN_ID
+      ? 'managed'
+      : 'manual'
+  const adminOrigin = managementMode === 'admin' ? env.DISCOFLARE_ADMIN_ORIGIN!.trim() : null
   const checkedAt = new Date().toISOString()
 
   try {
@@ -35,6 +41,7 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
       installedVersion,
       installationKind,
       managementMode,
+      adminOrigin,
       latestRelease,
       releasesBehind: newer.length,
       updateAvailable: newer.length > 0,
@@ -48,6 +55,7 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
       installedVersion,
       installationKind,
       managementMode,
+      adminOrigin,
       latestRelease: null,
       releasesBehind: 0,
       updateAvailable: false,

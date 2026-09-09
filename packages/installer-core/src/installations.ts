@@ -45,16 +45,21 @@ function installationConfiguration(
   const mailEnabled = Boolean(mailDomain && mailZoneId && mailSubdomain)
   const registration = textBinding(bindings, 'AUTH_REGISTRATION_MODE')
   const mode = textBinding(bindings, 'AUTH_MODE') === 'access' ? 'access' : 'builtin'
-  const managementMode = textBinding(bindings, 'DISCOFLARE_MANAGEMENT_MODE') === 'managed'
-    && bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
-    ? 'managed'
-    : 'manual'
+  const declaredManagement = textBinding(bindings, 'DISCOFLARE_MANAGEMENT_MODE')
+  const managementMode = declaredManagement === 'admin'
+    && bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN' && binding.type === 'service')
+    ? 'admin'
+    : declaredManagement === 'managed'
+      && bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
+      ? 'managed'
+      : 'manual'
   const realtimekitEnabled = Boolean(
     textBinding(bindings, 'REALTIMEKIT_ACCOUNT_ID')
     && textBinding(bindings, 'REALTIMEKIT_APP_ID')
     && (
       bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text')
       || managementMode === 'managed'
+      || managementMode === 'admin'
     ),
   )
 
@@ -62,6 +67,10 @@ function installationConfiguration(
     accountId,
     workerName,
     managementMode,
+    adminOrigin: managementMode === 'admin' ? textBinding(bindings, 'DISCOFLARE_ADMIN_ORIGIN') : undefined,
+    adminWorkerName: managementMode === 'admin'
+      ? bindings.find(binding => binding.name === 'DISCOFLARE_ADMIN' && binding.type === 'service')?.service
+      : undefined,
     adminEmail: '',
     allowedEmails: [],
     appName: textBinding(bindings, 'APP_NAME') || textBinding(bindings, 'ADMIN_WORKSPACE') || 'Discoflare',
@@ -77,6 +86,67 @@ function installationConfiguration(
     realtimekitEnabled,
     realtimekitApiToken: '',
   }
+}
+
+function installationFromBindings(
+  accountId: string,
+  workerName: string,
+  bindings: ExistingWorkerBinding[],
+  zones: CloudflareZone[],
+): CloudflareInstallation | null {
+  if (!isDiscoflareWorker(bindings)) return null
+  const hostname = textBinding(bindings, 'DISCOFLARE_APP_HOSTNAME') || textBinding(bindings, 'MAIL_APP_HOSTNAME')
+  if (!hostname) return null
+  const configuration = installationConfiguration(accountId, workerName, hostname, bindings, zones)
+  if (!configuration) return null
+  return {
+    accountId,
+    workerName,
+    origin: `https://${hostname}`,
+    version: textBinding(bindings, 'DISCOFLARE_VERSION') || null,
+    configuration,
+    resources: {
+      databaseId: bindings.find(binding => binding.name === 'DB' && binding.type === 'd1')?.database_id || null,
+      primary: textBinding(bindings, 'DISCOFLARE_PRIMARY') === 'true',
+      bucketName: bindings.find(binding => binding.name === 'FILES' && binding.type === 'r2_bucket')?.bucket_name || null,
+      kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id || null,
+      workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${workerName}-agent-tasks`,
+      containerName: `${workerName}-computer`,
+      mailZoneId: textBinding(bindings, 'MAIL_ZONE_ID') || null,
+      mailDomain: textBinding(bindings, 'MAIL_DOMAIN') || null,
+      telemetryId: textBinding(bindings, 'DISCOFLARE_TELEMETRY_ID') || null,
+      accessApplicationId: textBinding(bindings, 'CF_ACCESS_APP_ID') || null,
+      accessHealthApplicationId: textBinding(bindings, 'CF_ACCESS_HEALTH_APP_ID') || null,
+      accessDeletionApplicationId: textBinding(bindings, 'CF_ACCESS_DELETION_APP_ID') || null,
+      adminTokenId: textBinding(bindings, 'DISCOFLARE_ADMIN_TOKEN_ID') || null,
+      adminTokenConfigured: bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text'),
+      realtimekitAppId: textBinding(bindings, 'REALTIMEKIT_APP_ID') || null,
+      realtimekitManaged: ['true', 'admin'].includes(textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED')),
+    },
+  }
+}
+
+export async function listDiscoflareInstallations(
+  accessToken: string,
+  accountId: string,
+): Promise<CloudflareInstallation[]> {
+  if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Cloudflare account is invalid' })
+  const client = cloudflareClient(accessToken)
+  const account = await client.accounts.get({ account_id: accountId })
+  if (account.id !== accountId) throw createError({ statusCode: 403, statusMessage: 'Cloudflare account is unavailable' })
+  const zones: CloudflareZone[] = []
+  for await (const zone of client.zones.list({ account: { id: accountId }, per_page: 50 })) {
+    if (!zone.id || !zone.name) continue
+    zones.push({ id: zone.id, name: zone.name, accountId, status: zone.status || 'unknown' })
+  }
+  const installations: CloudflareInstallation[] = []
+  for await (const worker of client.workers.scripts.list({ account_id: accountId })) {
+    if (!worker.id) continue
+    const settings = await client.workers.scripts.scriptAndVersionSettings.get(worker.id, { account_id: accountId })
+    const installation = installationFromBindings(accountId, worker.id, settings.bindings as ExistingWorkerBinding[] || [], zones)
+    if (installation) installations.push(installation)
+  }
+  return installations.sort((left, right) => left.workerName.localeCompare(right.workerName))
 }
 
 export async function findDiscoflareInstallations(accessToken: string, origin: unknown): Promise<CloudflareInstallation[]> {
@@ -115,6 +185,7 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
         configuration,
         resources: {
           databaseId: bindings.find(binding => binding.name === 'DB' && binding.type === 'd1')?.database_id || null,
+          primary: textBinding(bindings, 'DISCOFLARE_PRIMARY') === 'true',
           bucketName: bindings.find(binding => binding.name === 'FILES' && binding.type === 'r2_bucket')?.bucket_name || null,
           kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id || null,
           workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${worker.id}-agent-tasks`,
@@ -128,7 +199,7 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           adminTokenId: textBinding(bindings, 'DISCOFLARE_ADMIN_TOKEN_ID') || null,
           adminTokenConfigured: bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text'),
           realtimekitAppId: textBinding(bindings, 'REALTIMEKIT_APP_ID') || null,
-          realtimekitManaged: textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED') === 'true',
+          realtimekitManaged: ['true', 'admin'].includes(textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED')),
         },
       })
     }
