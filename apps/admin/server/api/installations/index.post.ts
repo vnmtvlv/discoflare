@@ -31,5 +31,5 @@ export default defineEventHandler(async (event) => {
     'Cache-Control': 'no-store, no-transform',
     'X-Accel-Buffering': 'no',
   })
-  return sendStream(event, createDeployStream(report => installDiscoflare(token, request, { report })))
+  return sendStream(event, createDeployStream(report => installDiscoflare(token, request, { report, verification: 'client' })))
 })

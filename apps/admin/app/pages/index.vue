@@ -4,6 +4,7 @@ import type { AdminSession, InstallationList } from '../../shared/types'
 import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
 import { readDeployStream } from '../utils/deploy-stream'
 import { waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
+import { verifyWorkspaceDeployment } from '../utils/deployment-health'
 
 const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
 const toast = useToast()
@@ -161,6 +162,7 @@ async function createInstallation() {
       body: JSON.stringify(form),
     })
     const deployed = await readDeployStream(response)
+    if (!deployed.verified) await verifyWorkspaceDeployment(deployed)
     showCreate.value = false
     await loadInventory()
     await navigateTo(deployed.setupUrl || deployed.url, { external: true, open: { target: '_blank' } })
@@ -183,7 +185,8 @@ async function updateInstallation(workerName: string) {
       headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetVersion: latestVersion.value ? `v${latestVersion.value}` : undefined }),
     })
-    await readDeployStream(response)
+    const deployed = await readDeployStream(response)
+    if (!deployed.verified) await verifyWorkspaceDeployment(deployed)
     await loadInventory()
   }
   catch (cause) {

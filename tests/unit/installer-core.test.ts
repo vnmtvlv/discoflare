@@ -11,6 +11,7 @@ import {
   proxyAdminRealtimeKit,
   requiresReadyVerification,
   requiresInitialInfrastructureProvisioning,
+  requiresServerVerification,
   realtimeKitAvPreset,
   realtimeKitPreset,
   verifyDeployment,
@@ -207,5 +208,10 @@ describe('installer-core', () => {
       wait: async () => {},
     })).resolves.toBe(true)
     expect(calls).toBe(16)
+  })
+
+  it('defers Admin health verification to the browser without weakening other installers', () => {
+    expect(requiresServerVerification('server')).toBe(true)
+    expect(requiresServerVerification('client')).toBe(false)
   })
 })

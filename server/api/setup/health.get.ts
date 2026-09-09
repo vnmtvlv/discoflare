@@ -7,6 +7,7 @@ import { readAppBranding } from '../../../shared/app-branding'
 import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
 import { version as packageVersion } from '../../../package.json'
 import { authMode } from '../../utils/cloudflare-access'
+import { allowedAdminHealthOrigin } from '../../utils/health-cors'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -30,6 +31,12 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       twitterAuth: false,
       ...readAppBranding(),
     }
+  }
+
+  const adminOrigin = allowedAdminHealthOrigin(getHeader(event, 'origin'), env.DISCOFLARE_ADMIN_ORIGIN)
+  if (adminOrigin) {
+    setHeader(event, 'Access-Control-Allow-Origin', adminOrigin)
+    appendHeader(event, 'Vary', 'Origin')
   }
 
   const bindings = {

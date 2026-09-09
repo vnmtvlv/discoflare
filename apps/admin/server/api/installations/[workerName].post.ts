@@ -29,5 +29,5 @@ export default defineEventHandler(async (event) => {
     mailEnabled: installation.configuration.mailEnabled
       || (installation.resources.primary && installation.configuration.customDomainEnabled),
     targetVersion,
-  }, { report })))
+  }, { report, verification: 'client' })))
 })

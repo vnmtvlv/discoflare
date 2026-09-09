@@ -626,6 +626,12 @@ export type DeploymentHealthVerificationOptions = {
   wait?: (delayMs: number) => Promise<void>
 }
 
+export type DeploymentVerification = 'server' | 'client'
+
+export function requiresServerVerification(verification: DeploymentVerification = 'server'): boolean {
+  return verification === 'server'
+}
+
 export async function verifyDeployment(
   origin: string,
   version: string,
@@ -686,6 +692,7 @@ export async function deployDiscoflare(
   release: { manifest: InstallerReleaseManifest, worker: ArrayBuffer, assets: InstallerAssetsPayload },
   report?: DeployProgressReporter,
   managedCredential?: InstanceAdminCredential,
+  verification: DeploymentVerification = 'server',
 ) {
   const progress = async (step: DeployProgressStep, state: 'active' | 'complete', detail?: string) => {
     await report?.({ type: 'progress', step, state, detail })
@@ -960,15 +967,21 @@ export async function deployDiscoflare(
   })
   await progress('schedule', 'complete')
 
-  await progress('verify', 'active')
-  await verifyDeployment(
-    origin,
-    release.manifest.version,
-    requiresReadyVerification(existing.exists, request.authMode, previousHealth),
-    Boolean(realtimekit),
-    report,
-  )
-  await progress('verify', 'complete', 'Workspace health verified')
+  const serverVerified = requiresServerVerification(verification)
+  if (serverVerified) {
+    await progress('verify', 'active')
+    await verifyDeployment(
+      origin,
+      release.manifest.version,
+      requiresReadyVerification(existing.exists, request.authMode, previousHealth),
+      Boolean(realtimekit),
+      report,
+    )
+    await progress('verify', 'complete', 'Workspace health verified')
+  }
+  else {
+    await progress('verify', 'complete', 'Browser health verification required')
+  }
   return {
     url: origin,
     setupUrl: ownerSetupToken ? `${origin}/setup#claim=${encodeURIComponent(ownerSetupToken)}` : undefined,
@@ -976,7 +989,7 @@ export async function deployDiscoflare(
     managementMode: request.managementMode,
     updated: existing.exists,
     appliedMigrations,
-    verified: true,
+    verified: serverVerified,
     telemetry,
   }
 }
