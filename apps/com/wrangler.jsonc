@@ -4,7 +4,7 @@
   "compatibility_date": "2026-09-03",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
   "vars": {
-    "NUXT_CLOUDFLARE_MANAGED_OAUTH_CLIENT_ID": "c45383fcf488f3429b3358973980535f"
+    "NUXT_CLOUDFLARE_MANAGED_OAUTH_CLIENT_ID": "9681bc1d7765a0e9023b5f6a5d5c62d8"
   },
   "assets": {
     "binding": "ASSETS",
