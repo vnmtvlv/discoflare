@@ -1,18 +1,12 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "discoflare-dev",
+  // Local Nuxt skips AI, Browser, Workflows, and Containers: those bindings
+  // start a remote wrangler session and fail without CLOUDFLARE_API_TOKEN.
   "main": "workers/index.ts",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat"],
   "triggers": { "crons": ["17 4 * * 1"] },
-  "ai": { "binding": "AI", "remote": true },
-  "browser": { "binding": "BROWSER", "remote": true },
-  "workflows": [
-    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-agent-tasks-dev", "class_name": "AgentTaskWorkflow" }
-  ],
-  "containers": [
-    { "class_name": "DiscoflareAgent", "image": "./Dockerfile.computer", "instance_type": "lite", "max_instances": 3 }
-  ],
   "d1_databases": [
     {
       "binding": "DB",

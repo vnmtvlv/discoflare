@@ -78,8 +78,25 @@ export function adminLoginTarget(originValue: unknown, accountIdValue: unknown) 
   }
 }
 
+function requestOrigin(event: H3Event) {
+  const forwardedHost = getHeader(event, 'x-forwarded-host')?.split(',')[0]?.trim()
+  const forwardedProto = getHeader(event, 'x-forwarded-proto')?.split(',')[0]?.trim()
+  const host = forwardedHost || getHeader(event, 'host')?.trim()
+  if (!host) return ''
+  const protocol = forwardedProto === 'https' || forwardedProto === 'http'
+    ? forwardedProto
+    : getRequestURL(event).protocol.replace(/:$/, '') || 'http'
+  try {
+    return new URL(`${protocol}://${host}`).origin
+  }
+  catch {
+    return ''
+  }
+}
+
 export function installerOrigin(event: H3Event) {
-  const origin = installerConfig(event).installerOrigin
+  const configured = installerConfig(event).installerOrigin
+  const origin = import.meta.dev ? (requestOrigin(event) || configured) : configured
   try {
     return new URL(origin).origin
   }
