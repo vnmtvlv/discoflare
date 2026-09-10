@@ -19,10 +19,11 @@ Nuxt/Nitro Worker
   ├─ WorkspaceDO presence
   ├─ NotificationDO D1 outbox delivery + retries
   ├─ RateLimitDO per ip:/user:
-  ├─ AgentDO      one coordinator + durable Computer + isolated Think facets
-  ├─ Workflows    durable Task Runs
+  ├─ AgentDO      one coordinator + isolated Think facets; optional Computer files
+  ├─ Workflows    durable Task Runs (Agent Computer)
   ├─ Workers AI   default model inference
-  └─ Container    replaceable Linux execution backend for Agent Computers
+  ├─ Browser Run  public URL markdown, screenshots, and links
+  └─ Container    optional Linux execution backend for Agent Computers
 
 RealtimeKit
   huddle audio/video  ◄── participant token from Worker
@@ -45,10 +46,10 @@ RealtimeKit
 12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
 13. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
 14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Access, email, and social admissions record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
-15. One Agent has one stable Computer owned by its `DiscoflareAgent` Durable Object. `@cloudflare/computer` keeps the filesystem in the Agent DO's SQLite storage, so reads and writes do not require a running container. A Container is a replaceable Linux execution backend and is never the source of durable Agent identity or files.
-16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
+15. Chat and public-web tools do not require Agent Computer. Computer is an optional connection: `@cloudflare/computer` keeps the filesystem in the Agent DO's SQLite storage, and a Container is the replaceable Linux execution backend. Durable Task Runs that execute commands require Computer. The Container is never the source of Agent identity.
+16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. Public-web reading uses the `BROWSER` binding (Cloudflare Browser Run Quick Actions) on a caller-supplied http(s) URL after SSRF checks. That is not a search index. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
 17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts and mailbox registry, while R2 owns raw MIME and attachment bytes. The primary workspace Worker owns the zone catch-all and Email Sending binding; the base release routes its own domain locally without another Worker. The workspace accepts or rejects the full mailbox address against D1. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
-18. One Cloudflare account has one `discoflare-admin` control-plane Worker. Its broad credential is stored only there: a renewable OAuth credential from Managed Setup or an operator-supplied account token from Private Setup. Every guided workspace receives a service binding and a narrow per-Installation capability derived from Admin's stable session secret, so OAuth access-token rotation cannot change the capability. Admin login uses Cloudflare identity plus a stateless encrypted cookie and requires neither Access nor D1. Managed Setup creates the first base Installation without RealtimeKit, mail, a custom domain, Workflow, or Container metadata; the Owner enables those capabilities later from Workspace Settings. Discoflare.com is only the OAuth callback broker and is never in the workspace or Huddle runtime path. Because Cloudflare permissions are account- and zone-scoped, a dedicated Cloudflare account is the effective isolation boundary.
+18. One Cloudflare account has one `discoflare-admin` control-plane Worker. Its broad credential is stored only there: a renewable OAuth credential from Managed Setup or an operator-supplied account token from Private Setup. Every guided workspace receives a service binding and a narrow per-Installation capability derived from Admin's stable session secret, so OAuth access-token rotation cannot change the capability. Admin login uses Cloudflare identity plus a stateless encrypted cookie and requires neither Access nor D1. Managed Setup creates the first base Installation with Workers AI and Browser Run, without RealtimeKit, mail, a custom domain, Workflow, or Container metadata; the Owner enables those capabilities later from Workspace Settings. Discoflare.com is only the OAuth callback broker and is never in the workspace or Huddle runtime path. Because Cloudflare permissions are account- and zone-scoped, a dedicated Cloudflare account is the effective isolation boundary.
 19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, shared Views, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. Bookmark writes derive the User from the authenticated session and can change only that User's private shortcuts. The Data navigation index returns only lightweight resource and View metadata, while an active Database View, Document, or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 21. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. A token names an active Human or Agent principal separately from the Human who created it. Every request resolves that principal's current Role Grants and intersects them with the credential's scopes. Browser, MCP, Agent, and Workflow writes reuse the same authorized Task and Document domain operations. Audit entries name the acting principal and retain credential, delegator, and Task Run attribution; no raw SQL or general browser-session bypass is exposed.
@@ -95,13 +96,14 @@ Human mentions Agent, or sends a DM containing an Agent
   → Coordinator routes to the Channel/Thread's isolated Think facet
   → Think durably queues one idempotent submission for that Message
   → Lifecycle hooks expose tool progress and stream one editable Agent Message
-  → Risky actions park durably until an authorized Member approves or rejects them
+  → Public http(s) URLs may be read through Browser Run Quick Actions after SSRF checks
+  → Risky Computer or mail actions park durably until an authorized Member approves or rejects them
   → In a 1:1 DM, the facet creates/reuses a Thread rooted at that Message
 ```
 
-Replies in that DM Thread keep addressing the same Agent without another mention. Workspace-channel mentions and group-DM replies remain in their source Channel. An Agent-authored Message does not recursively enter this routing path. Paused Agents are not addressed, and a mentioned Agent cannot cross a private Channel boundary it has not joined.
+Image attachments are loaded from R2 only for the active turn and passed as inline model input when the selected Workers AI model supports vision. Binary image data is not persisted in the Think transcript. A text-only model is told that the visual input was unavailable and must not claim that it inspected the image. Browser screenshots are stored in R2 the same way: the Think transcript keeps the object key and byte size, not the image bytes.
 
-Image attachments are loaded from R2 only for the active turn and passed as inline model input when the selected Workers AI model supports vision. Binary image data is not persisted in the Think transcript. A text-only model is told that visual input was unavailable and must not claim that it inspected the image.
+Replies in that DM Thread keep addressing the same Agent without another mention. Workspace-channel mentions and group-DM replies remain in their source Channel. An Agent-authored Message does not recursively enter this routing path. Paused Agents are not addressed, and a mentioned Agent cannot cross a private Channel boundary it has not joined.
 
 ## Notifications
 
@@ -115,7 +117,7 @@ Image attachments are loaded from R2 only for the active turn and passed as inli
 
 - `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
-- Agent Computer execution development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup.
+- Agent Computer execution development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup. Browser Run in local Wrangler uses the remote binding.
 - `pnpm dev:remote` — local frontend with HTTP requests proxied to a selected deployment and WebSockets connected directly to it. Personal targets live in ignored env files; see [Remote development](remote-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 - The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.

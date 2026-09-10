@@ -59,13 +59,16 @@ describe('anonymous telemetry', () => {
     expect(heartbeat?.capabilities.huddles).toBe(true)
   })
 
-  it('does not report Agents when the base Installation explicitly omits Agent Computer', () => {
-    const heartbeat = telemetryHeartbeat(env({ DISCOFLARE_AGENT_COMPUTER_ENABLED: 'false' }))
-    expect(heartbeat?.capabilities.agents).toBe(false)
+  it('reports Agents from Workers AI and the Agent Durable Object without Agent Computer', () => {
+    const heartbeat = telemetryHeartbeat(env({
+      DISCOFLARE_AGENT_COMPUTER_ENABLED: 'false',
+      AGENT_TASK_WORKFLOW: undefined,
+    }))
+    expect(heartbeat?.capabilities.agents).toBe(true)
   })
 
-  it('does not infer Agent Computer from the Durable Object binding alone', () => {
-    const heartbeat = telemetryHeartbeat(env({ AGENT_TASK_WORKFLOW: undefined }))
+  it('does not report Agents without inference or an Agent Durable Object', () => {
+    const heartbeat = telemetryHeartbeat(env({ AI: undefined, AGENT_DO: undefined }))
     expect(heartbeat?.capabilities.agents).toBe(false)
   })
 })

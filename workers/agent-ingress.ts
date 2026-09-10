@@ -1,6 +1,6 @@
 import { isDmType } from '../shared/dm'
 import { hasPermission, Permission } from '../shared/permissions'
-import { agentComputerConfigured, asRpc, type DiscoflareEnv } from './env'
+import { agentRuntimeConfigured, asRpc, type DiscoflareEnv } from './env'
 
 type AgentIngressMessage = {
   messageId: string
@@ -18,7 +18,7 @@ type AgentReceiveMessage = Omit<AgentIngressMessage, 'mentionIds'> & {
 
 /** Starts one durable reply workflow per addressed agent. D1 remains the routing authority. */
 export async function signalAgentsForMessage(env: DiscoflareEnv, message: AgentIngressMessage): Promise<void> {
-  if (!agentComputerConfigured(env)) return
+  if (!agentRuntimeConfigured(env)) return
   const image = await env.DB.prepare(
     "SELECT id FROM attachments WHERE message_id = ? AND content_type LIKE 'image/%' LIMIT 1",
   ).bind(message.messageId).first<{ id: string }>()

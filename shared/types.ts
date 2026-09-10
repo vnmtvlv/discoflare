@@ -632,6 +632,7 @@ export type SetupHealth = {
     agentComputer: boolean
     agentWorkflow: boolean
     workersAi: boolean
+    browser: boolean
   }
   realtimekit: boolean
   twitterAuth: boolean

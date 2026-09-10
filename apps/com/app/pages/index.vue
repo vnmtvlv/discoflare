@@ -99,8 +99,8 @@ const features = [
   {
     icon: 'i-ph-robot',
     title: 'AI with no per-seat add-on',
-    stack: 'Workers AI · Containers',
-    description: 'Agents are workspace members running on Workers AI through your own binding. No vendor key, no assistant tier—you pay Cloudflare for the inference you use.',
+    stack: 'Workers AI · Browser Run',
+    description: 'Agents are workspace members running on Workers AI through your own binding. They can read public URLs. Linux sandboxes are optional. No vendor key, no assistant tier—you pay Cloudflare for the inference you use.',
   },
   {
     icon: 'i-ph-cloud',
@@ -156,7 +156,8 @@ const platform = [
   { service: 'Durable Objects', role: 'Live connection state and ordered realtime delivery.' },
   { service: 'Workflows', role: 'Task runs that survive interruption, cancellation, and retry.' },
   { service: 'Workers AI', role: 'Agent inference through the deployment\u2019s own binding.' },
-  { service: 'Containers', role: 'Linux execution for each durable Agent Computer.' },
+  { service: 'Browser Run', role: 'Public URL reading for agents. Not a search engine.' },
+  { service: 'Containers', role: 'Optional Linux execution for Agent Computer.' },
   { service: 'Email Routing and Sending', role: 'Inbound mail into shared mailboxes, and outbound replies.' },
 ]
 
@@ -246,7 +247,7 @@ const faqItems: AccordionItem[] = [
   },
   {
     label: 'What runs the agents?',
-    content: 'Agents use Workers AI through the deployment\u2019s own AI binding. Each Agent has a durable Computer backed by Durable Object SQLite and uses Cloudflare Containers for Linux execution, which is why the Workers Paid plan is required.',
+    content: 'Agents use Workers AI through the deployment\u2019s own AI binding. They can read public URLs through Cloudflare Browser Run. Linux command execution is an optional Agent Computer connection that uses Containers and therefore Workers Paid.',
   },
   {
     label: 'How are agent actions controlled?',
@@ -584,7 +585,7 @@ useHead({
             <DemoPanel
               eyebrow="Agents"
               title="Agents are members, not integrations."
-              description="Mention an agent in a channel or send it a direct message, and it answers in place. Each channel and thread keeps its own memory. They run on Workers AI through your own binding—no vendor key, no per-seat assistant tier, just the inference you actually use."
+              description="Mention an agent in a channel or send it a direct message, and it answers in place. Each channel and thread keeps its own memory. They run on Workers AI through your own binding and can read public URLs through Browser Run. Linux command execution is an optional later connection."
               icon="i-ph-robot"
               reverse
             >

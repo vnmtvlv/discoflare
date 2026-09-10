@@ -62,8 +62,8 @@ describe('agent message ingress', () => {
     const receiveMessage = vi.fn(async () => 'workflow-id')
     const env = {
       DB: db,
+      AI: {},
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
-      AGENT_TASK_WORKFLOW: {},
     }
 
     await signalAgentsForMessage(env as never, {
@@ -92,8 +92,8 @@ describe('agent message ingress', () => {
     const receiveMessage = vi.fn(async () => 'workflow-id')
     const env = {
       DB: db,
+      AI: {},
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
-      AGENT_TASK_WORKFLOW: {},
     }
 
     await signalAgentsForMessage(env as never, {
@@ -112,12 +112,31 @@ describe('agent message ingress', () => {
     }))
   })
 
-  it('does not let a chat-only member start an agent turn', async () => {
+  it('does not start a turn without Workers AI', async () => {
     const receiveMessage = vi.fn(async () => 'workflow-id')
     const env = {
       DB: db,
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
-      AGENT_TASK_WORKFLOW: {},
+    }
+
+    await signalAgentsForMessage(env as never, {
+      messageId: 'message-no-ai',
+      channelId: 'dm',
+      authorId: 'human',
+      authorName: 'Human',
+      content: 'Hello',
+      mentionIds: [],
+    })
+
+    expect(receiveMessage).not.toHaveBeenCalled()
+  })
+
+  it('does not let a chat-only member start an agent turn', async () => {
+    const receiveMessage = vi.fn(async () => 'workflow-id')
+    const env = {
+      DB: db,
+      AI: {},
+      AGENT_DO: { getByName: () => ({ receiveMessage }) },
     }
 
     await signalAgentsForMessage(env as never, {
