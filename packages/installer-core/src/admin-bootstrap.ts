@@ -1,20 +1,28 @@
-import { ensureDiscoflareAdminAccess, ensureWorkersHostname } from './access.js'
+import { ensureWorkersHostname } from './access.js'
 import { discoflareAdminWorkerName } from './admin.js'
 import { cloudflareApi, cloudflareClient } from './cloudflare-client.js'
 import { createError } from './errors.js'
+import { createInstanceAdminCredential, type InstanceAdminCredential } from './instance-admin.js'
 import { adminReleaseManifestUrl, loadDiscoflareAdminRelease } from './release.js'
 import type {
   DiscoflareAdminBootstrapRequest,
   DiscoflareAdminBootstrapResponse,
   DiscoflareAdminRelease,
   InstallerAssetsPayload,
-  ManagedAdminOAuthCredential,
 } from './types.js'
 
 export const adminInstallerMarker = 'discoflare.com/admin-v1'
 
 type WorkerSearchResult = { id?: string, script_name?: string }
 type Binding = { name?: string, type?: string, text?: string }
+
+function randomSecret(bytes = 32) {
+  const value = new Uint8Array(bytes)
+  crypto.getRandomValues(value)
+  let binary = ''
+  for (const byte of value) binary += String.fromCharCode(byte)
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
+}
 
 function textBinding(bindings: Binding[], name: string) {
   return bindings.find(binding => binding.name === name && binding.type === 'plain_text')?.text?.trim() || ''
@@ -24,12 +32,13 @@ function validateRequest(value: DiscoflareAdminBootstrapRequest) {
   const accountId = value.accountId?.trim() || ''
   const accountName = value.accountName?.trim() || ''
   const email = value.email?.trim().toLowerCase() || ''
+  const userId = value.userId?.trim() || ''
   const workerName = value.workerName?.trim() || discoflareAdminWorkerName
   if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Select a Cloudflare account' })
   if (!accountName || accountName.length > 200) throw createError({ statusCode: 400, statusMessage: 'Cloudflare account name is invalid' })
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email)) throw createError({ statusCode: 400, statusMessage: 'Enter the email allowed into Discoflare Admin' })
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email)) throw createError({ statusCode: 400, statusMessage: 'Cloudflare identity email is invalid' })
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName)) throw createError({ statusCode: 400, statusMessage: 'Discoflare Admin Worker name is invalid' })
-  return { accountId, accountName, email, workerName, targetVersion: value.targetVersion?.trim() || undefined }
+  return { accountId, accountName, email, userId, workerName, targetVersion: value.targetVersion?.trim() || undefined }
 }
 
 async function searchWorker(accessToken: string, accountId: string, workerName: string) {
@@ -92,10 +101,15 @@ async function uploadAdminWorker(
   request: ReturnType<typeof validateRequest>,
   release: DiscoflareAdminRelease,
   origin: string,
-  access: { issuer: string, audience: string, applicationId: string },
   assetsJwt: string,
   existing: boolean,
-  managedOAuth?: ManagedAdminOAuthCredential,
+  options: {
+    accountCredential?: InstanceAdminCredential
+    accountTokenId?: string
+    loginOrigin?: string
+    userId?: string
+    sessionSecret?: string
+  },
 ) {
   const bindings: Array<Record<string, unknown>> = [
     { type: 'assets', name: 'ASSETS' },
@@ -106,18 +120,24 @@ async function uploadAdminWorker(
     { type: 'plain_text', name: 'DISCOFLARE_ADMIN_EMAIL', text: request.email },
     { type: 'plain_text', name: 'DISCOFLARE_ADMIN_ORIGIN', text: origin },
     { type: 'plain_text', name: 'DISCOFLARE_ADMIN_WORKER_NAME', text: request.workerName },
-    { type: 'plain_text', name: 'CF_ACCESS_ISS', text: access.issuer },
-    { type: 'plain_text', name: 'CF_ACCESS_AUD', text: access.audience },
-    { type: 'plain_text', name: 'CF_ACCESS_APP_ID', text: access.applicationId },
   ]
-  if (managedOAuth) {
+  if (options.userId) {
+    bindings.push({ type: 'plain_text', name: 'DISCOFLARE_ADMIN_USER_ID', text: options.userId })
+  }
+  if (options.loginOrigin) {
+    bindings.push({ type: 'plain_text', name: 'DISCOFLARE_ADMIN_LOGIN_ORIGIN', text: options.loginOrigin })
+  }
+  if (options.sessionSecret) {
+    bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_SESSION_SECRET', text: options.sessionSecret })
+  }
+  if (options.accountCredential || options.accountTokenId) {
     bindings.push(
-      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_CREDENTIAL_MODE', text: 'managed-oauth' },
-      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN', text: managedOAuth.accessToken },
-      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN', text: managedOAuth.refreshToken },
-      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID', text: managedOAuth.clientId },
-      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT', text: String(managedOAuth.expiresAt) },
+      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_CREDENTIAL_MODE', text: 'account-token' },
+      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_TOKEN_ID', text: options.accountCredential?.id || options.accountTokenId },
     )
+    if (options.accountCredential) {
+      bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_TOKEN', text: options.accountCredential.value })
+    }
   }
   const metadata: Record<string, unknown> = {
     main_module: 'discoflare-admin-worker.mjs',
@@ -145,7 +165,7 @@ async function uploadAdminWorker(
 export async function bootstrapDiscoflareAdmin(
   accessToken: string,
   value: DiscoflareAdminBootstrapRequest,
-  options: { manifestUrl?: string, managedOAuth?: ManagedAdminOAuthCredential } = {},
+  options: { manifestUrl?: string, provisionAccountToken?: boolean, loginOrigin?: string } = {},
 ): Promise<DiscoflareAdminBootstrapResponse> {
   if (!accessToken.trim()) throw createError({ statusCode: 401, statusMessage: 'Cloudflare OAuth token is missing' })
   const request = validateRequest(value)
@@ -161,10 +181,11 @@ export async function bootstrapDiscoflareAdmin(
   const existingWorker = await searchWorker(accessToken, request.accountId, request.workerName)
   const existing = Boolean(existingWorker)
   let workerId = existingWorker?.id
+  let existingBindings: Binding[] = []
   if (existing) {
     const settings = await client.workers.scripts.scriptAndVersionSettings.get(request.workerName, { account_id: request.accountId })
-    const bindings = settings.bindings as Binding[] || []
-    if (textBinding(bindings, 'DISCOFLARE_ADMIN_INSTALLATION') !== adminInstallerMarker) {
+    existingBindings = settings.bindings as Binding[] || []
+    if (textBinding(existingBindings, 'DISCOFLARE_ADMIN_INSTALLATION') !== adminInstallerMarker) {
       throw createError({ statusCode: 409, statusMessage: `Worker ${request.workerName} already exists and is not Discoflare Admin` })
     }
   }
@@ -174,10 +195,42 @@ export async function bootstrapDiscoflareAdmin(
   if (!workerId) throw createError({ statusCode: 502, statusMessage: 'Cloudflare did not return the Discoflare Admin Worker ID' })
 
   const origin = `https://${await ensureWorkersHostname(client, request.accountId, request.workerName)}`
-  const access = await ensureDiscoflareAdminAccess(client, request.accountId, workerId, request.email)
+  const hasAccountToken = existingBindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
+  const hasSessionSecret = existingBindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_SESSION_SECRET' && binding.type === 'secret_text')
+  const existingAccountTokenId = textBinding(existingBindings, 'DISCOFLARE_ADMIN_TOKEN_ID')
+  const userId = request.userId || textBinding(existingBindings, 'DISCOFLARE_ADMIN_USER_ID')
+  const loginOrigin = options.loginOrigin || textBinding(existingBindings, 'DISCOFLARE_ADMIN_LOGIN_ORIGIN') || 'https://discoflare.com'
   const assetsJwt = await uploadAssets(accessToken, request.accountId, request.workerName, release.assets)
-  const managedOAuth = options.managedOAuth
-  await uploadAdminWorker(accessToken, request, release, origin, access, assetsJwt, existing, managedOAuth)
+  let accountCredential: InstanceAdminCredential | undefined
+  try {
+    if (options.provisionAccountToken && !hasAccountToken) {
+      accountCredential = await createInstanceAdminCredential(accessToken, request.accountId)
+    }
+    await uploadAdminWorker(accessToken, request, release, origin, assetsJwt, existing, {
+      accountCredential,
+      accountTokenId: existingAccountTokenId,
+      loginOrigin,
+      userId,
+      sessionSecret: hasSessionSecret ? undefined : randomSecret(),
+    })
+  }
+  catch (error) {
+    if (accountCredential) {
+      await client.accounts.tokens.delete(accountCredential.id, { account_id: request.accountId }).catch(() => undefined)
+    }
+    throw error
+  }
+  if (accountCredential) {
+    const secrets = client.workers.scripts.secrets
+    for (const name of [
+      'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN',
+      'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT',
+      'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN',
+      'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID',
+    ]) {
+      await secrets.delete(name, { account_id: request.accountId, script_name: request.workerName }).catch(() => undefined)
+    }
+  }
   await client.workers.scripts.subdomain.create(request.workerName, {
     account_id: request.accountId,
     enabled: true,
@@ -189,16 +242,13 @@ export async function bootstrapDiscoflareAdmin(
   if (textBinding(bindings, 'DISCOFLARE_ADMIN_VERSION') !== release.manifest.version) {
     throw createError({ statusCode: 502, statusMessage: 'Discoflare Admin deployment could not be verified' })
   }
-  const tokenConnected = bindings.some(binding => (
-    (binding.name === 'DISCOFLARE_ADMIN_TOKEN' || binding.name === 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN')
-    && binding.type === 'secret_text'
-  ))
+  const tokenConnected = bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
   return {
     origin,
     version: release.manifest.version,
     workerName: request.workerName,
     updated: existing,
-    managementMode: managedOAuth ? 'managed' : 'private',
+    managementMode: options.provisionAccountToken ? 'managed' : 'private',
     tokenConnected,
   }
 }

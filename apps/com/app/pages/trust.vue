@@ -12,13 +12,13 @@ const scopeGroups = [
   },
   {
     purpose: 'Choose the account',
-    scopes: ['account-settings.read', 'memberships.read'],
+    scopes: ['account-settings.read', 'user-details.read', 'memberships.read'],
     reason: 'List the Cloudflare accounts you can deploy into so you can pick one.',
   },
   {
-    purpose: 'Protect Discoflare Admin',
-    scopes: ['access.read', 'access.write', 'access-acct.read', 'access-acct.write'],
-    reason: 'Create the one-time-PIN Access application that sits in front of Admin.',
+    purpose: 'Create the Admin credential',
+    scopes: ['account-api-tokens.write'],
+    reason: 'Create one fixed account-owned token directly as the Admin Worker secret.',
   },
 ]
 
@@ -89,7 +89,7 @@ useHead({
     eyebrow="Trust"
     title="Trust and security"
     description="What the guided installer can touch in your Cloudflare account, what leaves a deployment, and how to revoke all of it."
-    effective-date="September 6, 2026"
+    effective-date="September 10, 2026"
   >
     <section>
       <h2>The short version</h2>
@@ -100,8 +100,9 @@ useHead({
     <section>
       <h2>What the installer asks for</h2>
       <p>Connecting Cloudflare grants an OAuth token scoped to the permissions below. The token is kept in an encrypted, HTTP-only session cookie in your browser, is never written to a Discoflare database, and the session expires after one hour. Disconnecting revokes it immediately; you can also revoke it yourself from your Cloudflare account at any time.</p>
-      <p>The bootstrap uses its fixed OAuth scopes only to create or repair the <code>discoflare-admin</code> Worker and its Cloudflare Access policy. It does not deploy workspaces, create their storage, or request a permanent token.</p>
-      <p>Managed Setup transfers a renewable OAuth grant directly into Discoflare Admin and discards the hosted copy. Private Setup lets the operator submit an Account Admin Token directly on the Admin <code>workers.dev</code> origin. Neither credential enters a workspace Worker. Admin uses it only for fixed installation, update, RealtimeKit, email, and repair operations in the selected account.</p>
+      <p>The bootstrap uses its fixed OAuth scopes only to create or repair the <code>discoflare-admin</code> Worker and, in Managed Setup, create its fixed account-owned token. It does not deploy workspaces or create their storage.</p>
+      <p>The temporary OAuth grant is discarded after bootstrap. Private Setup instead lets the operator submit an Account Admin Token directly on the Admin <code>workers.dev</code> origin. The account token never enters a workspace Worker. Admin uses it only for fixed installation, update, RealtimeKit, email, and repair operations in the selected account.</p>
+      <p>Later Admin sign-ins reuse the same OAuth client with only identity, membership, and Worker-verification read scopes. Admin keeps a stateless encrypted cookie; no Cloudflare Access application or Admin database is required.</p>
       <div v-for="group in scopeGroups" :key="group.purpose" class="scope-group">
         <h3>{{ group.purpose }}</h3>
         <p>{{ group.reason }}</p>

@@ -104,7 +104,7 @@ The current release is a web application. Discoflare does not expose an installa
 
 ## Deployment
 
-The managed installer at [discoflare.com/deploy](https://discoflare.com/deploy) creates the account-local Discoflare Admin and transfers a renewable Cloudflare OAuth grant into it. Discoflare.com discards its credential copy after setup. Admin then creates and updates workspaces in the same Cloudflare account. [Private Setup](https://discoflare.com/deploy/private) installs the same Admin but requires the operator to connect an Account Admin Token directly.
+The managed installer at [discoflare.com/deploy](https://discoflare.com/deploy) creates the account-local Discoflare Admin and its fixed account-owned token, then discards temporary OAuth. Admin sign-in uses Cloudflare identity without Access or an Admin database. Admin then creates and updates workspaces in the same Cloudflare account. [Private Setup](https://discoflare.com/deploy/private) installs the same Admin but requires the operator to connect an Account Admin Token directly.
 
 The repository-based Cloudflare Deploy Button remains available for people who prefer to own a GitHub fork. It is a manual path: the operator must configure the Cloudflare resources, bindings, secrets, build commands, hostname, migrations, and optional integrations, then verify the deployed Worker.
 

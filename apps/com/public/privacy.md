@@ -1,6 +1,6 @@
 # Discoflare privacy policy
 
-Effective September 5, 2026.
+Effective September 10, 2026.
 
 ## Scope
 
@@ -14,9 +14,9 @@ The infrastructure serving the site may process basic request data such as IP ad
 
 ## Cloudflare installer
 
-When a visitor connects Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The installer uses it to list accessible accounts and create or update the requested Cloudflare resources. The token is not stored in a Discoflare database, and the session expires after one hour.
+When a visitor connects Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The installer uses it to list accessible accounts and create or repair the account-local Discoflare Admin Worker. In Managed Setup it also creates an account-owned token directly as an encrypted Admin Worker secret. The OAuth token is not stored in a Discoflare database, and the session expires after one hour.
 
-Owner name, email, and password are sent to Cloudflare as encrypted Worker secrets during a first installation. Discoflare.com does not intentionally retain those values after the deployment request. Disconnecting revokes the OAuth token and clears the installer session.
+Discoflare.com does not intentionally retain the Cloudflare owner identity after bootstrap. Later Admin sign-ins use the site only as the registered OAuth callback and hand the short-lived identity grant to the verified Admin origin, which replaces it with its own encrypted session cookie. Private Setup never receives the Account Admin Token that the operator submits directly to Admin.
 
 After a successful guided install or update, the site records a random installation ID, an irreversibly keyed account-and-Worker identifier, release version, timestamps, and aggregate Cloudflare resource types. It does not store the Cloudflare account ID, Worker name, configured domain, owner email, or workspace content.
 

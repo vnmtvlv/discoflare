@@ -175,6 +175,7 @@ export type DiscoflareAdminBootstrapRequest = {
   accountId: string
   accountName: string
   email: string
+  userId?: string
   workerName?: string
   targetVersion?: string
 }
@@ -186,11 +187,4 @@ export type DiscoflareAdminBootstrapResponse = {
   updated: boolean
   managementMode?: 'managed' | 'private'
   tokenConnected?: boolean
-}
-
-export type ManagedAdminOAuthCredential = {
-  accessToken: string
-  refreshToken: string
-  clientId: string
-  expiresAt: number
 }

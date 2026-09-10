@@ -28,6 +28,8 @@ export default defineNuxtConfig({
     adminAccountName: '',
     adminEmail: '',
     adminOrigin: '',
+    adminLoginOrigin: 'https://discoflare.com',
+    adminSessionSecret: 'discoflare-admin-development-session-secret',
     adminWorkerName: '',
     adminManifestUrl: 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-admin-cloudflare-manifest.json',
     workspaceManifestUrl: 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-cloudflare-manifest.json',

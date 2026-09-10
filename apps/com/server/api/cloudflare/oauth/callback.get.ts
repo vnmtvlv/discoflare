@@ -1,9 +1,8 @@
-import { CLOUDFLARE_TOKEN_URL, oauthBasicAuth, oauthConfig } from '../../../utils/cloudflare-oauth'
+import { CLOUDFLARE_TOKEN_URL, oauthConfig } from '../../../utils/cloudflare-oauth'
 import { useInstallerSession } from '../../../utils/installer-session'
 
 type TokenResponse = {
   access_token: string
-  refresh_token?: string
   expires_in?: number
 }
 
@@ -29,20 +28,17 @@ export default defineEventHandler(async (event) => {
     return sendRedirect(event, returnWithError(returnTo, 'oauth_state'))
   }
 
-  const config = oauthConfig(event, undefined, pending.mode)
+  const config = oauthConfig(event)
   const body = new URLSearchParams({
     grant_type: 'authorization_code',
     code: query.code,
     redirect_uri: config.redirectUri,
     code_verifier: pending.verifier,
   })
-  if (config.publicClient) body.set('client_id', config.clientId)
+  body.set('client_id', config.clientId)
   const response = await fetch(CLOUDFLARE_TOKEN_URL, {
     method: 'POST',
-    headers: {
-      ...(config.publicClient ? {} : { Authorization: oauthBasicAuth(config.clientId, config.clientSecret) }),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   })
 
@@ -56,18 +52,13 @@ export default defineEventHandler(async (event) => {
     await session.update({ cloudflare: undefined, oauthPending: undefined })
     return sendRedirect(event, returnWithError(returnTo, 'oauth_token'))
   }
-  if (pending.mode === 'managed' && !token.refresh_token) {
-    await session.update({ cloudflare: undefined, oauthPending: undefined })
-    return sendRedirect(event, returnWithError(returnTo, 'oauth_refresh_token'))
-  }
-
   await session.update({
     oauthPending: undefined,
     cloudflare: {
       accessToken: token.access_token,
-      refreshToken: token.refresh_token,
       expiresAt: Date.now() + Math.max(60, (token.expires_in || 3600) - 30) * 1000,
       mode: pending.mode,
+      ...(pending.adminLogin ? { adminLogin: pending.adminLogin } : {}),
     },
   })
   return sendRedirect(event, returnTo)

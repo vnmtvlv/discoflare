@@ -31,7 +31,7 @@ useHead({
   <LegalPage
     title="Privacy policy"
     description="How discoflare.com and its Cloudflare installer handle information."
-    effective-date="September 5, 2026"
+    effective-date="September 10, 2026"
   >
     <section>
       <h2>What this policy covers</h2>
@@ -46,8 +46,8 @@ useHead({
 
     <section>
       <h2>Cloudflare installer</h2>
-      <p>When you connect Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The bootstrap uses it to list available accounts and create or repair only the account-local Discoflare Admin Worker and its Access policy. The token is not stored in a Discoflare database and the session expires after one hour.</p>
-      <p>The chosen Admin email is sent to Cloudflare as the Access allow policy and as a Worker configuration value. Managed Setup transfers the renewable OAuth grant into the user's own Discoflare Admin Worker and removes it from the installer session. Private Setup never receives the Account Admin Token created and submitted later on the Admin origin.</p>
+      <p>When you connect Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The bootstrap uses it to list available accounts and create or repair only the account-local Discoflare Admin Worker. The token is not stored in a Discoflare database and the session expires after one hour.</p>
+      <p>Managed Setup creates one account-owned token directly as an encrypted Admin Worker secret, then removes the temporary OAuth grant from the installer session. Private Setup never receives the Account Admin Token created and submitted later on the Admin origin. Later Admin sign-ins use discoflare.com only as the callback for a short-lived identity grant; Admin replaces it with its own encrypted session cookie.</p>
     </section>
 
     <section>

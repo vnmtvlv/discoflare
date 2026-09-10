@@ -7,9 +7,9 @@ Stack: Nuxt 4, Nuxt UI, Cloudflare Workers, and `@discoflare/installer-core`.
 Repository invariants:
 
 - One `discoflare-admin` Worker manages Discoflare installations in exactly one Cloudflare account.
-- The broad Cloudflare credential is stored only as this Worker's encrypted secrets: a Managed OAuth Grant or a private Account Admin Token.
+- The broad Cloudflare credential is one account-owned token stored only as this Worker's encrypted secret.
 - The Admin never stores workspace messages, files, member data, Agent state, or arbitrary Cloudflare responses.
-- Managed setup transfers a renewable public-client OAuth grant into this Worker and discards the hosted copy; private setup uses temporary OAuth and never receives the operator's Account Admin Token.
+- Managed setup creates the account token automatically; private setup uses temporary OAuth and never receives the operator-supplied Account Admin Token.
 - Keep the Worker small: fixed deployment and RealtimeKit operations only; no generic Cloudflare API proxy, MCP server, Agents, or user code execution.
 - Runtime RealtimeKit calls always terminate here through a service binding; they never proxy through `discoflare.com`.
-- `workers.dev` plus Cloudflare Access is the canonical production origin. A custom domain is not required.
+- `workers.dev` is the canonical production origin. Cloudflare OAuth authenticates the configured owner and Admin keeps only an encrypted stateless cookie; Access and D1 are not required.

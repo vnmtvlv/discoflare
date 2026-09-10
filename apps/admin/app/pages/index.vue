@@ -2,12 +2,13 @@
 import type { DeployRequest } from '@discoflare/installer-core'
 import type { AdminSession, InstallationList } from '../../shared/types'
 import { isNewerRelease } from '~~/shared/versions'
-import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
+import { ADMIN_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
 import { readDeployStream } from '../utils/deploy-stream'
 import { waitForAdminVersion, waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
 import { verifyWorkspaceDeployment } from '../utils/deployment-health'
 
 const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
+if (sessionFailure.value?.statusCode === 401) await navigateTo('/login', { redirectCode: 302 })
 const toast = useToast()
 const inventory = ref<InstallationList | null>(null)
 const loadingInventory = ref(false)
@@ -66,7 +67,7 @@ const accountMenuItems = computed(() => [
     ...(session.value?.tokenConnected
       ? [{ label: session.value?.credentialMode === 'managed-oauth' ? 'Disconnect managed access' : 'Disconnect account token', icon: 'i-ph-plugs-connected', color: 'error' as const, onSelect: () => { disconnectDialogOpen.value = true } }]
       : []),
-    { label: 'Log out', icon: 'i-ph-sign-out', onSelect: () => navigateTo(ACCESS_LOGOUT_PATH, { external: true }) },
+    { label: 'Log out', icon: 'i-ph-sign-out', onSelect: logOut },
   ],
 ])
 
@@ -92,6 +93,11 @@ async function readFreshSession() {
   session.value = await $fetch<AdminSession>('/api/session', {
     query: { activation: Date.now() },
   })
+}
+
+async function logOut() {
+  await $fetch(ADMIN_LOGOUT_PATH, { method: 'POST' })
+  await navigateTo('/login')
 }
 
 async function loadInventory() {
