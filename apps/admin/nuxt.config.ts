@@ -1,3 +1,5 @@
+const devPublicHost = process.env.DISCOFLARE_DEV_HOST?.trim() || ''
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-09-09',
   devtools: { enabled: false },
@@ -19,7 +21,12 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#f6821f' },
         { name: 'robots', content: 'noindex, nofollow' },
       ],
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+      link: [
+        { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+        { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' },
+        { rel: 'shortcut icon', href: '/favicon.ico' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
     },
   },
   runtimeConfig: {
@@ -33,6 +40,26 @@ export default defineNuxtConfig({
     adminWorkerName: '',
     adminManifestUrl: 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-admin-cloudflare-manifest.json',
     workspaceManifestUrl: 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-cloudflare-manifest.json',
+  },
+  vite: {
+    server: {
+      allowedHosts: [
+        'localhost',
+        '127.0.0.1',
+        ...(devPublicHost
+          ? [devPublicHost, `.${devPublicHost.split('.').slice(1).join('.')}`]
+          : []),
+      ],
+      ...(devPublicHost
+        ? {
+            ws: {
+              protocol: 'wss',
+              host: devPublicHost,
+              clientPort: 443,
+            },
+          }
+        : {}),
+    },
   },
   nitro: {
     preset: 'cloudflare-module',

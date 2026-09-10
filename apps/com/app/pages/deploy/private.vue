@@ -2,6 +2,7 @@
 import { onBeforeRouteLeave } from 'vue-router'
 import type { DiscoflareAdminBootstrapResponse, InstallerSessionResponse } from '~~/shared/installer'
 import { readAdminBootstrapStream } from '../../utils/admin-bootstrap-stream'
+import { installerOAuthError } from '../../utils/oauth-error'
 
 const route = useRoute()
 const workspaceOrigin = typeof route.query.workspace === 'string'
@@ -16,7 +17,7 @@ const { data: session, status, refresh } = await useFetch<InstallerSessionRespon
 const accountId = ref('')
 const installing = ref(false)
 const result = shallowRef<DiscoflareAdminBootstrapResponse | null>(null)
-const error = ref(typeof route.query.error === 'string' ? 'Cloudflare connection was not completed.' : '')
+const error = ref(installerOAuthError(route.query.error))
 
 watch(() => session.value.accounts, (accounts) => {
   if (!accountId.value && accounts[0]) accountId.value = accounts[0].id
@@ -30,7 +31,14 @@ function warnBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
-onMounted(() => window.addEventListener('beforeunload', warnBeforeUnload))
+onMounted(() => {
+  window.addEventListener('beforeunload', warnBeforeUnload)
+  if (typeof route.query.error === 'string') {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('error')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+  }
+})
 onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 onBeforeRouteLeave(() => installing.value ? window.confirm('Discoflare Admin may still be deploying. Keep this page open until it finishes.') : true)
 
