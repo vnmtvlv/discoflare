@@ -42,7 +42,14 @@ export default defineEventHandler(async (event): Promise<DiscoflareAdminBootstra
     loginOrigin: installerConfig(event).installerOrigin,
   })
 
-  const result = { ...installed, managementMode: 'managed' as const, tokenConnected: true }
+  const handoff = new URL('/bootstrap', installed.origin)
+  handoff.hash = new URLSearchParams({ token: accessToken }).toString()
+  const result = {
+    ...installed,
+    managementMode: 'managed' as const,
+    tokenConnected: true,
+    handoffUrl: handoff.toString(),
+  }
   const session = await useInstallerSession(event)
   const managedAdmins = [
     ...(session.data.managedAdmins || []).filter(admin => admin.accountId !== accountId),

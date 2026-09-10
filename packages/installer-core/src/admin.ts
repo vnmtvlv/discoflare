@@ -49,3 +49,18 @@ export async function deriveAdminCapability(
   for (const byte of new Uint8Array(signature)) binary += String.fromCharCode(byte)
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
 }
+
+export async function verifyAdminCapability(
+  key: string,
+  candidate: string,
+  accountId: string,
+  workerName: string,
+): Promise<boolean> {
+  const expected = await deriveAdminCapability(key, accountId, workerName)
+  const encoder = new TextEncoder()
+  const left = encoder.encode(candidate)
+  const right = encoder.encode(expected)
+  if (left.byteLength !== right.byteLength) return false
+  const subtle = crypto.subtle as SubtleCrypto & { timingSafeEqual(left: ArrayBufferView, right: ArrayBufferView): boolean }
+  return subtle.timingSafeEqual(left, right)
+}

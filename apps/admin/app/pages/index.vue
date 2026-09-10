@@ -38,11 +38,11 @@ const form = reactive<DeployRequest>({
   mailEnabled: false,
   mailSubdomain: 'discoflare',
   mailLocalPart: 'inbox',
-  realtimekitEnabled: true,
+  realtimekitEnabled: false,
   realtimekitApiToken: '',
+  agentComputerEnabled: false,
 })
 
-const activeZones = computed(() => inventory.value?.zones.filter(zone => zone.status === 'active') || [])
 const latestVersion = computed(() => inventory.value?.latestVersion || session.value?.latestVersion || null)
 const updateCount = computed(() => latestVersion.value
   ? inventory.value?.installations.filter(item => item.version !== latestVersion.value).length || 0
@@ -75,10 +75,6 @@ watch(() => form.workerName, (value, previous) => {
   if (!form.appSubdomain || form.appSubdomain === previous) form.appSubdomain = value
 })
 
-watch(() => form.zoneId, (zoneId) => {
-  form.zoneName = activeZones.value.find(zone => zone.id === zoneId)?.name || ''
-})
-
 function errorMessage(cause: unknown) {
   if (cause && typeof cause === 'object') {
     const value = cause as { data?: { message?: string }, message?: string }
@@ -106,7 +102,6 @@ async function loadInventory() {
   error.value = ''
   try {
     inventory.value = await $fetch<InstallationList>('/api/installations')
-    if (!form.zoneId) form.zoneId = activeZones.value[0]?.id || ''
   }
   catch (cause) {
     error.value = errorMessage(cause)
@@ -315,7 +310,7 @@ useSeoMeta({
 
           <UCard v-if="showCreate" class="mt-8" :ui="{ body: 'p-6 sm:p-8' }">
             <div class="flex items-start justify-between gap-4">
-              <div><h2 class="text-lg font-semibold text-highlighted">New installation in {{ session.accountName }}</h2><p class="mt-1 text-sm text-muted">Live is enabled automatically. The first domain-backed installation also receives workspace email.</p></div>
+              <div><h2 class="text-lg font-semibold text-highlighted">New installation in {{ session.accountName }}</h2><p class="mt-1 text-sm text-muted">Starts on workers.dev with the base Cloudflare resources. Add capabilities later from Workspace Settings.</p></div>
               <UButton icon="i-ph-x" aria-label="Close" color="neutral" variant="ghost" @click="showCreate = false" />
             </div>
             <form class="mt-6 grid gap-5 sm:grid-cols-2" @submit.prevent="createInstallation">
@@ -323,11 +318,6 @@ useSeoMeta({
               <UFormField label="Workspace name" required><UInput v-model="form.appName" class="w-full" /></UFormField>
               <UFormField label="Owner email" required><UInput v-model="form.adminEmail" type="email" class="w-full" /></UFormField>
               <UFormField label="Registration" required><USelect v-model="form.registrationMode" :items="[{ label: 'Invite only', value: 'invite_only' }, { label: 'Open signup', value: 'open' }]" value-key="value" class="w-full" /></UFormField>
-              <div class="sm:col-span-2"><USwitch v-model="form.customDomainEnabled" label="Custom domain" description="Otherwise this installation uses workers.dev." /></div>
-              <template v-if="form.customDomainEnabled">
-                <UFormField label="Cloudflare domain" required><USelect v-model="form.zoneId" :items="activeZones.map(zone => ({ label: zone.name, value: zone.id }))" value-key="value" class="w-full" /></UFormField>
-                <UFormField label="Subdomain" required><UInput v-model="form.appSubdomain" class="w-full"><template #trailing><span v-if="form.zoneName" class="text-xs text-muted">.{{ form.zoneName }}</span></template></UInput></UFormField>
-              </template>
               <div class="flex justify-end gap-3 border-t border-muted pt-5 sm:col-span-2">
                 <UButton type="button" color="neutral" variant="ghost" label="Cancel" @click="showCreate = false" />
                 <UButton type="submit" label="Deploy Discoflare" trailing-icon="i-ph-arrow-right" :loading="mutating === 'create'" />
@@ -349,6 +339,7 @@ useSeoMeta({
                   <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
                     <span>Discoflare {{ installation.version || 'legacy' }}</span>
                     <span>{{ installation.configuration.realtimekitEnabled ? 'Live enabled' : 'Live off' }}</span>
+                    <span>{{ installation.configuration.agentComputerEnabled ? 'Computer enabled' : 'Computer off' }}</span>
                     <span>{{ installation.configuration.mailEnabled ? installation.resources.mailDomain : 'No email' }}</span>
                   </div>
                 </div>

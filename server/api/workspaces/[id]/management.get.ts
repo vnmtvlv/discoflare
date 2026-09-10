@@ -1,6 +1,7 @@
 import type { InstallationManagementStatusDTO } from '../../../../shared/releases'
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
+import { agentComputerConfigured } from '../../../../workers/env'
 
 export default defineEventHandler(async (event): Promise<InstallationManagementStatusDTO> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -28,11 +29,12 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
     adminOrigin: adminManaged ? env.DISCOFLARE_ADMIN_ORIGIN!.trim() : null,
     workerName: workerName || null,
     hostname: hostname || null,
+    customDomainEnabled: env.DISCOFLARE_CUSTOM_DOMAIN === 'true',
     tokenTemplateUrl: null,
     huddlesEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
+    agentComputerEnabled: agentComputerConfigured(env),
     emailEnabled: Boolean(env.MAIL_ZONE_ID && emailDomain),
     emailDomain,
-    emailEligible: env.DISCOFLARE_PRIMARY === 'true'
-      && Boolean(env.DISCOFLARE_ZONE_ID && env.DISCOFLARE_ZONE_NAME),
+    emailEligible: env.DISCOFLARE_PRIMARY === 'true',
   }
 })

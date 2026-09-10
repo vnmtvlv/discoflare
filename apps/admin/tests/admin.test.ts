@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accountAdminTokenTemplateUrl, deriveAdminCapability } from '@discoflare/installer-core'
+import { accountAdminTokenTemplateUrl, deriveAdminCapability, verifyAdminCapability } from '@discoflare/installer-core'
 import { ADMIN_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../app/utils/account-controls'
 import { isNewerRelease } from '../shared/versions'
 
@@ -16,6 +16,8 @@ describe('Discoflare Admin authority', () => {
     const second = await deriveAdminCapability('account-admin-token', accountId, 'workspace-two')
     expect(first).not.toBe(second)
     expect(first).toHaveLength(43)
+    await expect(verifyAdminCapability('account-admin-token', first, accountId, 'workspace-one')).resolves.toBe(true)
+    await expect(verifyAdminCapability('rotated-oauth-token', first, accountId, 'workspace-one')).resolves.toBe(false)
   })
 
   it('keeps account controls on canonical destinations', () => {

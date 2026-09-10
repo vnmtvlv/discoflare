@@ -18,19 +18,19 @@ type VerificationOptions = {
   wait?: (delayMs: number) => Promise<void>
 }
 
-function healthyForAdmin(health: WorkspaceHealth, version: string) {
+function healthyForAdmin(health: WorkspaceHealth, deployment: Pick<DeployResponse, 'version' | 'realtimekitEnabled'>) {
   const usable = health.ready
     || health.authMode === 'access'
     || (health.ownerSetup === true && health.users === 0)
-  return health.version === version
+  return health.version === deployment.version
     && health.ok === true
     && health.migrated === true
-    && health.realtimekit === true
+    && (!deployment.realtimekitEnabled || health.realtimekit === true)
     && usable
 }
 
 export async function verifyWorkspaceDeployment(
-  deployment: Pick<DeployResponse, 'url' | 'version'>,
+  deployment: Pick<DeployResponse, 'url' | 'version' | 'realtimekitEnabled'>,
   options: VerificationOptions = {},
 ): Promise<void> {
   const attempts = options.attempts ?? 30
@@ -53,7 +53,7 @@ export async function verifyWorkspaceDeployment(
         continue
       }
       const health = await response.json() as WorkspaceHealth
-      if (healthyForAdmin(health, deployment.version)) return
+      if (healthyForAdmin(health, deployment)) return
       lastFailure = `health response was not ready for Discoflare ${deployment.version}`
     }
     catch (cause) {

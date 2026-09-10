@@ -23,6 +23,9 @@ export function parseDeployRequest(value: unknown): DeployRequest {
   const mailLocalPart = String(body.mailLocalPart || '').trim().toLowerCase()
   const realtimekitEnabled = body.realtimekitEnabled === true
   const realtimekitApiToken = String(body.realtimekitApiToken || '').trim()
+  const agentComputerEnabled = body.agentComputerEnabled === undefined
+    ? true
+    : body.agentComputerEnabled === true
   if (!/^[0-9a-f]{32}$/u.test(accountId)) installerError(400, 'Select a Cloudflare account')
   if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u.test(workerName)) installerError(400, 'Worker name must use lowercase letters, numbers, and hyphens')
   if (managementMode === 'admin' && (!adminOrigin || !adminWorkerName)) installerError(400, 'Discoflare Admin identity is required')
@@ -67,6 +70,7 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     mailLocalPart,
     realtimekitEnabled,
     realtimekitApiToken,
+    agentComputerEnabled,
     targetVersion,
   }
 }

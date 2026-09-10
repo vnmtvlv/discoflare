@@ -1,4 +1,4 @@
-import { deriveAdminCapability } from './admin.js'
+import { verifyAdminCapability } from './admin.js'
 import { cloudflareApi, cloudflareClient } from './cloudflare-client.js'
 import { installerMarker, type ExistingWorkerBinding } from './deploy.js'
 import { createError } from './errors.js'
@@ -31,23 +31,19 @@ function validRequest(value: AdminRealtimeRequest) {
     && allowedOperations.some(operation => operation.method === value.method && operation.path.test(value.path))
 }
 
-async function equalSecret(left: string, right: string) {
-  const encoder = new TextEncoder()
-  const a = encoder.encode(left)
-  const b = encoder.encode(right)
-  if (a.byteLength !== b.byteLength) return false
-  const subtle = crypto.subtle as SubtleCrypto & { timingSafeEqual(left: ArrayBufferView, right: ArrayBufferView): boolean }
-  return subtle.timingSafeEqual(a, b)
-}
-
 export async function proxyAdminRealtimeKit(
   accountAdminToken: string,
+  capabilityKey: string,
   capability: string,
   request: AdminRealtimeRequest,
 ): Promise<unknown> {
   if (!validRequest(request)) throw createError({ statusCode: 400, statusMessage: 'RealtimeKit operation is invalid' })
-  const expected = await deriveAdminCapability(accountAdminToken, request.accountId, request.workerName)
-  if (!await equalSecret(capability, expected)) throw createError({ statusCode: 403, statusMessage: 'Installation capability is invalid' })
+  const stable = await verifyAdminCapability(capabilityKey, capability, request.accountId, request.workerName)
+  const legacy = capabilityKey !== accountAdminToken
+    && await verifyAdminCapability(accountAdminToken, capability, request.accountId, request.workerName)
+  if (!stable && !legacy) {
+    throw createError({ statusCode: 403, statusMessage: 'Installation capability is invalid' })
+  }
 
   const client = cloudflareClient(accountAdminToken)
   const settings = await client.workers.scripts.scriptAndVersionSettings.get(request.workerName, { account_id: request.accountId })

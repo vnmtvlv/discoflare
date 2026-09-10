@@ -10,6 +10,8 @@ const result: DeployResponse = {
   updated: true,
   appliedMigrations: [],
   verified: true,
+  realtimekitEnabled: true,
+  agentComputerEnabled: true,
   telemetry: { installationId: 'installation', token: 'token' },
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   accountAdminTokenTemplateUrl,
+  agentComputerDeploymentMetadata,
   adminReleaseManifestUrl,
   deriveAdminCapability,
   durableObjectMigrations,
@@ -36,6 +37,7 @@ const request = {
   mailLocalPart: 'inbox',
   realtimekitEnabled: false,
   realtimekitApiToken: '',
+  agentComputerEnabled: true,
 } as const
 
 const manifest = {
@@ -71,6 +73,23 @@ describe('installer-core', () => {
   it('normalizes managed RealtimeKit as an explicit opt-in', () => {
     expect(parseDeployRequest({ ...request, realtimekitEnabled: true }).realtimekitEnabled).toBe(true)
     expect(parseDeployRequest({ ...request, realtimekitEnabled: 'yes' }).realtimekitEnabled).toBe(false)
+  })
+
+  it('keeps older installer requests on the full Agent Computer profile', () => {
+    const { agentComputerEnabled: _agentComputerEnabled, ...legacyRequest } = request
+    expect(parseDeployRequest(legacyRequest).agentComputerEnabled).toBe(true)
+    expect(parseDeployRequest({ ...request, agentComputerEnabled: false }).agentComputerEnabled).toBe(false)
+  })
+
+  it('omits paid Worker resources from the base Installation metadata', () => {
+    expect(agentComputerDeploymentMetadata({ ...request, agentComputerEnabled: false }, manifest)).toEqual({
+      bindings: [],
+      containers: undefined,
+    })
+    expect(agentComputerDeploymentMetadata(request, manifest)).toMatchObject({
+      bindings: [{ type: 'workflow', name: 'AGENT_TASK_WORKFLOW' }],
+      containers: [{ name: 'discoflare-hq-computer' }],
+    })
   })
 
   it('defaults older installer requests to manual management', () => {
@@ -139,7 +158,7 @@ describe('installer-core', () => {
   })
 
   it('rejects RealtimeKit operations outside the Admin allowlist before provider access', async () => {
-    await expect(proxyAdminRealtimeKit('account-token', 'capability', {
+    await expect(proxyAdminRealtimeKit('account-token', 'capability-key', 'capability', {
       accountId: request.accountId,
       workerName: request.workerName,
       appId: '019c8d30-bf29-7000-8000-000000000001',

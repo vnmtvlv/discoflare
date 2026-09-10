@@ -62,6 +62,9 @@ export function managedUpdateRequest(env: DiscoflareEnv, targetVersion: string):
     mailLocalPart: env.MAIL_DEFAULT_LOCAL_PART?.trim() || 'inbox',
     realtimekitEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
     realtimekitApiToken: '',
+    agentComputerEnabled: env.DISCOFLARE_AGENT_COMPUTER_ENABLED
+      ? env.DISCOFLARE_AGENT_COMPUTER_ENABLED === 'true'
+      : Boolean(env.AGENT_TASK_WORKFLOW),
     targetVersion,
   }
 }

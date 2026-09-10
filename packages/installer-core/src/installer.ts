@@ -11,6 +11,7 @@ export type InstallDiscoflareOptions = {
   report?: DeployProgressReporter
   managedCredential?: InstanceAdminCredential
   verification?: 'server' | 'client'
+  adminCapabilityKey?: string
 }
 
 /** Complete install/update operation. Credential acquisition and UI stay in the caller. */
@@ -59,6 +60,7 @@ export async function installDiscoflare(
     options.report,
     options.managedCredential,
     options.verification,
+    options.adminCapabilityKey,
   )
   const { telemetry: _telemetry, ...response } = deployed
   return response

@@ -10,6 +10,7 @@ import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
 import { parseBody } from '../../../utils/validate'
 import { signalMembersChanged } from '../../../../workers/member-events'
+import { agentComputerConfigured } from '../../../../workers/env'
 
 const bodySchema = z.object({
   displayName: z.string().trim().min(1).max(80),
@@ -22,6 +23,9 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
   const actor = await requireMember(event, workspaceId, Permission.manageWorkspace)
   const body = parseBody(bodySchema, await readBody(event))
   const { env, waitUntil } = cf(event)
+  if (!agentComputerConfigured(env)) {
+    fail(409, 'agent_computer_disabled', 'Enable Agent Computer in Workspace Settings before creating an agent')
+  }
   const db = getDb(env.DB)
   const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
   if (!memberRole) fail(409, 'workspace_incomplete', 'Member role not found')

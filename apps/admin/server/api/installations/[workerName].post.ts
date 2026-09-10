@@ -8,7 +8,7 @@ export default defineEventHandler(async (event) => {
   assertAdminMutation(event)
   await requireAdminIdentity(event)
   const token = await requireAccountToken(event)
-  const { accountId, origin, workerName: adminWorkerName } = requireAdminConfig(event)
+  const { accountId, origin, sessionSecret, workerName: adminWorkerName } = requireAdminConfig(event)
   const workerName = getRouterParam(event, 'workerName') || ''
   const installation = (await listDiscoflareInstallations(token, accountId))
     .find(candidate => candidate.workerName === workerName)
@@ -25,9 +25,6 @@ export default defineEventHandler(async (event) => {
     managementMode: 'admin',
     adminOrigin: origin,
     adminWorkerName,
-    realtimekitEnabled: true,
-    mailEnabled: installation.configuration.mailEnabled
-      || (installation.resources.primary && installation.configuration.customDomainEnabled),
     targetVersion,
-  }, { report, verification: 'client' })))
+  }, { report, verification: 'client', adminCapabilityKey: sessionSecret })))
 })

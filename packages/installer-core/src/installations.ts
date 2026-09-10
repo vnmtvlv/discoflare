@@ -62,6 +62,10 @@ function installationConfiguration(
       || managementMode === 'admin'
     ),
   )
+  const declaredAgentComputer = textBinding(bindings, 'DISCOFLARE_AGENT_COMPUTER_ENABLED')
+  const agentComputerEnabled = declaredAgentComputer
+    ? declaredAgentComputer === 'true'
+    : bindings.some(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')
 
   return {
     accountId,
@@ -85,6 +89,7 @@ function installationConfiguration(
     mailLocalPart: textBinding(bindings, 'MAIL_DEFAULT_LOCAL_PART') || 'inbox',
     realtimekitEnabled,
     realtimekitApiToken: '',
+    agentComputerEnabled,
   }
 }
 
@@ -112,6 +117,7 @@ function installationFromBindings(
       kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id || null,
       workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${workerName}-agent-tasks`,
       containerName: `${workerName}-computer`,
+      agentComputerEnabled: configuration.agentComputerEnabled,
       mailZoneId: textBinding(bindings, 'MAIL_ZONE_ID') || null,
       mailDomain: textBinding(bindings, 'MAIL_DOMAIN') || null,
       telemetryId: textBinding(bindings, 'DISCOFLARE_TELEMETRY_ID') || null,
@@ -190,6 +196,7 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id || null,
           workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${worker.id}-agent-tasks`,
           containerName: `${worker.id}-computer`,
+          agentComputerEnabled: configuration.agentComputerEnabled,
           mailZoneId: textBinding(bindings, 'MAIL_ZONE_ID') || null,
           mailDomain: textBinding(bindings, 'MAIL_DOMAIN') || null,
           telemetryId: textBinding(bindings, 'DISCOFLARE_TELEMETRY_ID') || null,

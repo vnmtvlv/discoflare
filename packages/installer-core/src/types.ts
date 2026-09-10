@@ -32,6 +32,7 @@ export type DeployRequest = {
   mailLocalPart: string
   realtimekitEnabled: boolean
   realtimekitApiToken: string
+  agentComputerEnabled: boolean
   targetVersion?: string
 }
 
@@ -43,6 +44,8 @@ export type DeployResponse = {
   updated: boolean
   appliedMigrations: string[]
   verified: boolean
+  realtimekitEnabled: boolean
+  agentComputerEnabled: boolean
 }
 
 export type CloudflareInstallation = {
@@ -58,6 +61,7 @@ export type CloudflareInstallation = {
     kvId: string | null
     workflowName: string
     containerName: string
+    agentComputerEnabled: boolean
     mailZoneId: string | null
     mailDomain: string | null
     telemetryId: string | null
@@ -187,6 +191,7 @@ export type DiscoflareAdminBootstrapResponse = {
   updated: boolean
   managementMode?: 'managed' | 'private'
   tokenConnected?: boolean
+  handoffUrl?: string
 }
 
 export type ManagedAdminOAuthCredential = {

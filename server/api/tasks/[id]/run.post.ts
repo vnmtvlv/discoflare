@@ -5,7 +5,7 @@ import { Permission } from '../../../../shared/permissions'
 import { canRunTask } from '../../../../shared/task-status'
 import type { TaskStatus } from '../../../../shared/types'
 import { signalTasksChanged } from '../../../../workers/task-events'
-import { asRpc } from '../../../../workers/env'
+import { agentComputerConfigured, asRpc } from '../../../../workers/env'
 import { requireMember } from '../../../utils/guards'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -16,6 +16,9 @@ export default defineEventHandler(async (event) => {
   const actor = await requireMember(event, WORKSPACE_ID, Permission.manageTasks)
   const taskReference = getRouterParam(event, 'id')!
   const { env, waitUntil } = cf(event)
+  if (!agentComputerConfigured(env)) {
+    fail(409, 'agent_computer_disabled', 'Enable Agent Computer in Workspace Settings before running agent tasks')
+  }
   const db = getDb(env.DB)
   const task = await requireTask(env, taskReference)
   const taskId = task.id
