@@ -1,5 +1,7 @@
 import { readdirSync } from 'node:fs'
 
+const devPublicHost = process.env.DISCOFLARE_DEV_HOST?.trim() || ''
+
 const docsRoutes = readdirSync(new URL('./content/docs', import.meta.url), { recursive: true, encoding: 'utf8' })
   .filter(path => path.endsWith('.md'))
   .map((path) => {
@@ -48,6 +50,26 @@ export default defineNuxtConfig({
     installerOrigin: 'https://discoflare.com',
     adminInstallerManifestUrl: 'https://github.com/vnmtvlv/discoflare/releases/latest/download/discoflare-admin-cloudflare-manifest.json',
     telemetryHashSecret: '',
+  },
+  vite: {
+    server: {
+      allowedHosts: [
+        'localhost',
+        '127.0.0.1',
+        ...(devPublicHost
+          ? [devPublicHost, `.${devPublicHost.split('.').slice(1).join('.')}`]
+          : []),
+      ],
+      ...(devPublicHost
+        ? {
+            ws: {
+              protocol: 'wss',
+              host: devPublicHost,
+              clientPort: 443,
+            },
+          }
+        : {}),
+    },
   },
   nitro: {
     preset: 'cloudflare-module',
