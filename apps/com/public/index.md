@@ -50,7 +50,7 @@ Records are workspace state in the same D1 database as the other apps. Discoflar
 
 ## Agents
 
-Agents are AI members of the workspace rather than integrations or sign-in identities. Each has a display name, avatar, Workers AI model, profile instructions, active or paused state, isolated conversation memory, and one checkpointed sandbox computer.
+Agents are AI members of the workspace rather than integrations or sign-in identities. Each has a display name, avatar, Workers AI model, profile instructions, active or paused state, isolated conversation memory, and optional public-web reading through Cloudflare Browser Run. A Linux sandbox computer is an optional later connection.
 
 - Mention an agent in a channel it has joined, or send it a direct message
 - Memory is isolated per channel, per thread, and per task run
@@ -70,8 +70,9 @@ Discoflare deploys as one Nuxt Worker and connects the Cloudflare services decla
 - KV for short-lived connection tickets
 - Durable Objects for live coordination and agent state
 - Workflows for durable task runs
-- Containers for agent sandboxes
+- Containers for optional agent sandboxes
 - Workers AI for default agent inference, configured by model id rather than a vendor key
+- Browser Run for public URL reading
 - RealtimeKit for optional voice media
 
 The person or organization that deploys a workspace controls its infrastructure, configuration, and data.
@@ -94,7 +95,7 @@ Discoflare imposes no limit on members, message history, mailboxes, databases, o
 
 ## Requirements
 
-A Cloudflare account on the Workers Paid plan and a domain. The Workers Paid plan is required because agent sandboxes use Cloudflare Containers.
+A Cloudflare account with R2 enabled. Workers Paid is required only when Agent Computer (Linux sandbox) is enabled. A domain is required only for a custom workspace address or workspace email.
 
 Text chat does not require RealtimeKit. Voice huddles remain unavailable until the optional voice integration is configured. Chat, Tasks, and Databases remain usable when Mail is not configured.
 

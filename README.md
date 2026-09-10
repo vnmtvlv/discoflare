@@ -59,13 +59,15 @@ One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Eac
 | App and API | Workers | Serve the frontend, handle API requests, and receive routed email. |
 | Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data app content, Agents, boards, Tasks, Task Runs, and Agent Computer files. R2 stores attachments and raw email. |
 | Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation and Task Run. KV holds short-lived WebSocket tickets. |
-| Agent execution | Workflows, Computer, Containers, Workers AI | Orchestrate Task Runs, persist each Agent's filesystem, execute commands, and run model inference. |
+| Agent execution | Workers AI, Browser Run, optional Workflows / Computer / Containers | Chat and public-web reading on the base workspace; Linux command execution after Agent Computer. |
 | Voice and video | RealtimeKit | Carry optional huddle media. |
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
         ──WS /ws/channel/:id──► Channel DO (messages and typing)
         ──WS /ws/workspace/:id► Workspace DO (presence)
+Chat ──► Agent DO + Think ──► Workers AI
+                    └───────────► Browser Run (public URLs)
 Task ──► Agent DO + Computer ──► Workflow ──► Workers AI
                     └───────────► Container runtime
 Huddle media ────────────────► RealtimeKit

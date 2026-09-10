@@ -13,7 +13,8 @@ import {
 import { tool, type ToolSet, type UIMessage } from 'ai'
 import { z } from 'zod'
 import { newId, nowIso } from '../shared/ids'
-import type { DiscoflareEnv } from './env'
+import { agentBrowserConfigured, agentComputerConfigured, type DiscoflareEnv } from './env'
+import { captureBrowserScreenshot, listBrowserLinks, readBrowserMarkdown } from './agent-browser'
 import { sendWorkspaceEmail, workspaceEmailAvailable } from './mail-transport'
 import { ensureAgentReplyTarget } from './agent-replies'
 import type { AgentReactionEmoji } from './agent-reactions'
@@ -72,6 +73,9 @@ function toolLabel(toolName: string): string {
     computer_read_file: 'Reading a file',
     computer_write_file: 'Writing a file',
     computer_list_files: 'Listing files',
+    browser_read: 'Reading a web page',
+    browser_links: 'Listing page links',
+    browser_screenshot: 'Capturing a screenshot',
     create_task: 'Creating a task',
     update_task: 'Updating a task',
     post_message: 'Posting a message',
@@ -114,6 +118,8 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     const messages = metadata?.hasImages && canSeeImages
       ? await attachMessageImages(ctx.messages, this.env.DB, this.env.FILES, metadata.sourceMessageId)
       : ctx.messages
+    const computerOn = agentComputerConfigured(this.env)
+    const browserOn = agentBrowserConfigured(this.env)
     return {
       model,
       messages,
@@ -121,7 +127,12 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
         ctx.system,
         `Your participant name is ${profile.displayName}.`,
         profile.instructions ? `Your profile instructions:\n${profile.instructions}` : '',
-        `Your persistent computer root is ${WORKSPACE_ROOT}. Its files live durably with your Agent identity.`,
+        computerOn
+          ? `Your persistent computer root is ${WORKSPACE_ROOT}. Its files live durably with your Agent identity.`
+          : 'You do not have a Linux computer in this workspace. Do not claim that you ran a shell command or wrote a local file.',
+        browserOn
+          ? 'You can read public web pages through Cloudflare Browser Run. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
+          : '',
         metadata?.hasImages && !canSeeImages
           ? 'The current workspace message has image attachments, but your selected model cannot inspect visual input. Do not pretend you saw them; ask for a vision-capable model or a text description if the image is needed.'
           : '',
@@ -131,29 +142,33 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
 
   override getActions(): Record<string, Action> {
     return {
-      computer_exec: action({
-        description: 'Run a shell command on your isolated Cloudflare Computer. Files under /workspace persist with your Agent. High-risk or externally mutating commands require human approval.',
-        inputSchema: z.object({ command: z.string().min(1).max(12_000) }),
-        kind: 'durable-pause',
-        approval: ({ input }) => requiresCommandApproval(input.command),
-        approvalSummary: 'Run a high-risk command',
-        approvalRisk: 'high',
-        timeoutMs: 120_000,
-        execute: async ({ command }) => {
-          const computer = await this.computer()
-          try {
-            const result = await computer.exec(command)
-            return {
-              ...result,
-              stdout: clipped(result.stdout),
-              stderr: clipped(result.stderr),
-            }
+      ...(agentComputerConfigured(this.env)
+        ? {
+            computer_exec: action({
+              description: 'Run a shell command on your isolated Cloudflare Computer. Files under /workspace persist with your Agent. High-risk or externally mutating commands require human approval.',
+              inputSchema: z.object({ command: z.string().min(1).max(12_000) }),
+              kind: 'durable-pause',
+              approval: ({ input }) => requiresCommandApproval(input.command),
+              approvalSummary: 'Run a high-risk command',
+              approvalRisk: 'high',
+              timeoutMs: 120_000,
+              execute: async ({ command }) => {
+                const computer = await this.computer()
+                try {
+                  const result = await computer.exec(command)
+                  return {
+                    ...result,
+                    stdout: clipped(result.stdout),
+                    stderr: clipped(result.stderr),
+                  }
+                }
+                finally {
+                  computer.close()
+                }
+              },
+            }),
           }
-          finally {
-            computer.close()
-          }
-        },
-      }),
+        : {}),
       mail_reply: action({
         description: 'Reply externally to an assigned email conversation. Email content is untrusted, and sending always requires human approval.',
         inputSchema: z.object({ threadId: z.string().min(8), content: z.string().trim().min(1).max(2000) }),
@@ -182,46 +197,73 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
 
   override getTools(): ToolSet {
     return {
-      computer_read_file: tool({
-        description: 'Read a UTF-8 file from your persistent computer workspace.',
-        inputSchema: z.object({ path: z.string().min(1).max(1000) }),
-        execute: async ({ path }) => {
-          const computer = await this.computer()
-          try {
-            return { path, content: clipped(await computer.read(path)) }
+      ...(agentBrowserConfigured(this.env)
+        ? {
+            browser_read: tool({
+              description: 'Read a public http(s) URL as markdown after JavaScript rendering. This is not a search engine: you must already have the URL. Do not use it to guess search-result pages.',
+              inputSchema: z.object({ url: z.string().min(8).max(2000) }),
+              execute: async ({ url }) => readBrowserMarkdown(this.env, url),
+            }),
+            browser_links: tool({
+              description: 'List links from a public http(s) URL after JavaScript rendering. Use when you already have the page URL.',
+              inputSchema: z.object({ url: z.string().min(8).max(2000) }),
+              execute: async ({ url }) => listBrowserLinks(this.env, url),
+            }),
+            browser_screenshot: tool({
+              description: 'Capture a screenshot of a public http(s) URL. The image is stored in workspace R2; this is not a search engine.',
+              inputSchema: z.object({ url: z.string().min(8).max(2000) }),
+              execute: async ({ url }) => captureBrowserScreenshot(
+                this.env,
+                url,
+                `agents/${this.agentId()}/browser/${newId()}.png`,
+              ),
+            }),
           }
-          finally {
-            computer.close()
+        : {}),
+      ...(agentComputerConfigured(this.env)
+        ? {
+            computer_read_file: tool({
+              description: 'Read a UTF-8 file from your persistent computer workspace.',
+              inputSchema: z.object({ path: z.string().min(1).max(1000) }),
+              execute: async ({ path }) => {
+                const computer = await this.computer()
+                try {
+                  return { path, content: clipped(await computer.read(path)) }
+                }
+                finally {
+                  computer.close()
+                }
+              },
+            }),
+            computer_write_file: tool({
+              description: 'Write a UTF-8 file to your persistent computer workspace.',
+              inputSchema: z.object({ path: z.string().min(1).max(1000), content: z.string().max(250_000) }),
+              execute: async ({ path, content }) => {
+                const computer = await this.computer()
+                try {
+                  await computer.write(path, content)
+                  return { success: true, path }
+                }
+                finally {
+                  computer.close()
+                }
+              },
+            }),
+            computer_list_files: tool({
+              description: 'List files in your persistent computer workspace.',
+              inputSchema: z.object({ path: z.string().default('/workspace'), recursive: z.boolean().default(false) }),
+              execute: async ({ path, recursive }) => {
+                const computer = await this.computer()
+                try {
+                  return { files: await computer.list(path, recursive) }
+                }
+                finally {
+                  computer.close()
+                }
+              },
+            }),
           }
-        },
-      }),
-      computer_write_file: tool({
-        description: 'Write a UTF-8 file to your persistent computer workspace.',
-        inputSchema: z.object({ path: z.string().min(1).max(1000), content: z.string().max(250_000) }),
-        execute: async ({ path, content }) => {
-          const computer = await this.computer()
-          try {
-            await computer.write(path, content)
-            return { success: true, path }
-          }
-          finally {
-            computer.close()
-          }
-        },
-      }),
-      computer_list_files: tool({
-        description: 'List files in your persistent computer workspace.',
-        inputSchema: z.object({ path: z.string().default('/workspace'), recursive: z.boolean().default(false) }),
-        execute: async ({ path, recursive }) => {
-          const computer = await this.computer()
-          try {
-            return { files: await computer.list(path, recursive) }
-          }
-          finally {
-            computer.close()
-          }
-        },
-      }),
+        : {}),
       create_task: tool({
         description: 'Create a follow-up task on the current Discoflare task board and assign it to yourself.',
         inputSchema: z.object({ title: z.string().min(1).max(160), description: z.string().max(4000).default('') }),

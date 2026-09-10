@@ -469,6 +469,7 @@ async function uploadWorker(
     { type: 'r2_bucket', name: 'FILES', bucket_name: resources.bucketName },
     { type: 'kv_namespace', name: 'TICKETS', namespace_id: resources.kvId },
     { type: 'ai', name: 'AI' },
+    { type: 'browser', name: 'BROWSER' },
     { type: 'assets', name: 'ASSETS' },
     { type: 'plain_text', name: 'PUBLIC_ORIGIN', text: resources.origin },
     { type: 'plain_text', name: 'APP_NAME', text: request.appName },

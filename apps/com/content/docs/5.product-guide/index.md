@@ -13,7 +13,7 @@ One Discoflare deployment creates one workspace. Members move between built-in a
 | Workspace | The membership, roles, settings, audit history, and shared data owned by one deployment. |
 | App | A top-level workspace surface. The released apps are Chat, Tasks, Mail, and Databases. |
 | Human member | A person with a sign-in identity, membership status, Role, and session. |
-| Agent member | A configured AI participant with a model, instructions, permissions, conversation memory, and a computer. It cannot sign in. |
+| Agent member | A configured AI participant with a model, instructions, permissions, conversation memory, and optional connections such as Browser Run or a Linux computer. It cannot sign in. |
 | Integration | An optional external capability, such as RealtimeKit for Huddles or an authentication provider. |
 
 An app is not a separate deployment. Chat messages, Task records, Mail conversations, Database Records, members, and authorization facts live in the same D1 database; files and raw email live in the same protected R2 boundary.
