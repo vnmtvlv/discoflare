@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeRouteLeave } from 'vue-router'
 import type { DiscoflareAdminBootstrapResponse, InstallerSessionResponse } from '~~/shared/installer'
+import { readAdminBootstrapStream } from '../../utils/admin-bootstrap-stream'
 
 const route = useRoute()
 const workspaceOrigin = typeof route.query.workspace === 'string'
@@ -50,10 +51,12 @@ async function install() {
   error.value = ''
   result.value = null
   try {
-    result.value = await $fetch<DiscoflareAdminBootstrapResponse>('/api/cloudflare/admin', {
+    const response = await fetch('/api/cloudflare/admin', {
       method: 'POST',
-      body: { accountId: accountId.value, email: email.value.trim() },
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ accountId: accountId.value, email: email.value.trim() }),
     })
+    result.value = await readAdminBootstrapStream(response)
   }
   catch (cause) {
     const value = cause as { data?: { statusMessage?: string }, statusMessage?: string, message?: string }
