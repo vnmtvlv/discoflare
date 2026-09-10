@@ -10,17 +10,17 @@ Four explicit boundaries touch anything belonging to a deployer: the temporary b
 
 ## What the installer asks for
 
-Connecting Cloudflare grants an OAuth token scoped to the permissions below. The token is kept in an encrypted, HTTP-only session cookie in the browser, is never written to a Discoflare database, and the session expires after one hour. Disconnecting revokes it, and it can also be revoked from the Cloudflare account at any time.
+During bootstrap, discoflare.com keeps the OAuth access token in an encrypted, HTTP-only session cookie that expires after one hour and is never written to a Discoflare database.
 
-Managed Setup requests only the scopes needed to identify the owner, create or repair Admin, and create its account-owned token. Private Setup omits token creation. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
+Managed Setup requests the scopes needed to identify the owner, create or repair Admin, and operate managed installations. It stores the returned renewable credential only as encrypted Admin Worker secrets, then removes the website session. Private Setup retains no renewable credential. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
 
 | Purpose | Scopes |
 | --- | --- |
 | Create or repair Discoflare Admin | `workers-scripts.read`, `workers-scripts.write` |
 | Identify the owner and selected account | `account-settings.read`, `user-details.read`, `memberships.read` |
-| Create the Admin account token in Managed Setup | `account-api-tokens.write` |
+| Operate managed installations | `d1.read`, `d1.write`, `containers.read`, `containers.write`, `workers-kv-storage.read`, `workers-kv-storage.write`, `workers-r2.read`, `workers-r2.write`, `realtime.read`, `realtime.write`, `realtime.admin`, `zone.read`, `zone-settings.read`, `zone-settings.write`, `dns.read`, `dns.write`, `workers-routes.read`, `workers-routes.write`, `email-routing-rule.read`, `email-routing-rule.write`, `email-sending.read`, `email-sending.write` |
 
-The bootstrap does not create Cloudflare Access, a workspace, or workspace storage. Its temporary OAuth grant is discarded after bootstrap. The account token stays only as an encrypted Admin Worker secret and never enters a workspace Worker. Admin login uses a stateless encrypted cookie and needs no Admin database.
+The bootstrap does not create Cloudflare Access, an API token, a workspace, or workspace storage. Private Setup lets the operator submit an Account Admin Token directly to Admin. Neither credential enters a workspace Worker. Admin login uses a stateless encrypted cookie and needs no Admin database.
 
 ## What leaves a deployment
 

@@ -14,7 +14,7 @@ The infrastructure serving the site may process basic request data such as IP ad
 
 ## Cloudflare installer
 
-When a visitor connects Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The installer uses it to list accessible accounts and create or repair the account-local Discoflare Admin Worker. In Managed Setup it also creates an account-owned token directly as an encrypted Admin Worker secret. The OAuth token is not stored in a Discoflare database, and the session expires after one hour.
+When a visitor connects Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The installer uses it to list accessible accounts and create or repair the account-local Discoflare Admin Worker. In Managed Setup it stores the returned renewable OAuth credential as encrypted Admin Worker secrets. The OAuth credential is not stored in a Discoflare database, and the website session expires after one hour or is removed after bootstrap.
 
 Discoflare.com does not intentionally retain the Cloudflare owner identity after bootstrap. Later Admin sign-ins use the site only as the registered OAuth callback and hand the short-lived identity grant to the verified Admin origin, which replaces it with its own encrypted session cookie. Private Setup never receives the Account Admin Token that the operator submits directly to Admin.
 

@@ -14,7 +14,28 @@ export const CLOUDFLARE_OAUTH_SCOPES = [
 
 export const CLOUDFLARE_MANAGED_OAUTH_SCOPES = [
   CLOUDFLARE_OAUTH_SCOPES,
-  'account-api-tokens.write',
+  'd1.read',
+  'd1.write',
+  'containers.read',
+  'containers.write',
+  'workers-kv-storage.read',
+  'workers-kv-storage.write',
+  'workers-r2.read',
+  'workers-r2.write',
+  'realtime.read',
+  'realtime.write',
+  'realtime.admin',
+  'zone.read',
+  'zone-settings.read',
+  'zone-settings.write',
+  'dns.read',
+  'dns.write',
+  'workers-routes.read',
+  'workers-routes.write',
+  'email-routing-rule.read',
+  'email-routing-rule.write',
+  'email-sending.read',
+  'email-sending.write',
 ].join(' ')
 
 export const CLOUDFLARE_LOGIN_OAUTH_SCOPES = [
