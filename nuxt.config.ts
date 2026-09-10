@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 
+const devPublicHost = process.env.DISCOFLARE_DEV_HOST?.trim() || ''
 const requestedClientMode = process.env.DISCOFLARE_CLIENT_MODE
 const clientMode = requestedClientMode === 'native' || requestedClientMode === 'extension'
   ? requestedClientMode
@@ -100,6 +101,24 @@ export default defineNuxtConfig({
   vite: {
     optimizeDeps: {
       include: ['@cloudflare/realtimekit'],
+    },
+    server: {
+      allowedHosts: [
+        'localhost',
+        '127.0.0.1',
+        ...(devPublicHost
+          ? [devPublicHost, `.${devPublicHost.split('.').slice(1).join('.')}`]
+          : []),
+      ],
+      ...(devPublicHost
+        ? {
+            ws: {
+              protocol: 'wss',
+              host: devPublicHost,
+              clientPort: 443,
+            },
+          }
+        : {}),
     },
   },
   router: {
