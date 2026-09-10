@@ -188,3 +188,10 @@ export type DiscoflareAdminBootstrapResponse = {
   managementMode?: 'managed' | 'private'
   tokenConnected?: boolean
 }
+
+export type ManagedAdminOAuthCredential = {
+  accessToken: string
+  refreshToken: string
+  clientId: string
+  expiresAt: number
+}

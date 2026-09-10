@@ -6,13 +6,15 @@ import {
 } from '../server/utils/cloudflare-oauth'
 
 describe('managed OAuth permissions', () => {
-  it('can bootstrap Admin and create its account-owned token', () => {
+  it('covers the Admin runtime without token creation or Access', () => {
     const scopes = CLOUDFLARE_MANAGED_OAUTH_SCOPES.split(' ')
     expect(scopes).toContain('workers-scripts.write')
-    expect(scopes).toContain('account-api-tokens.write')
+    expect(scopes).toContain('d1.write')
+    expect(scopes).toContain('realtime.admin')
+    expect(scopes).toContain('email-sending.write')
+    expect(scopes).not.toContain('account-api-tokens.write')
     expect(scopes).not.toContain('offline_access')
     expect(scopes).not.toContain('access.write')
-    expect(scopes).not.toContain('d1.write')
   })
 
   it('uses only identity and Admin verification scopes for later sign-ins', () => {

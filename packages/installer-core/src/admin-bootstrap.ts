@@ -2,13 +2,13 @@ import { ensureWorkersHostname } from './access.js'
 import { discoflareAdminWorkerName } from './admin.js'
 import { cloudflareApi, cloudflareClient } from './cloudflare-client.js'
 import { createError } from './errors.js'
-import { createInstanceAdminCredential, type InstanceAdminCredential } from './instance-admin.js'
 import { adminReleaseManifestUrl, loadDiscoflareAdminRelease } from './release.js'
 import type {
   DiscoflareAdminBootstrapRequest,
   DiscoflareAdminBootstrapResponse,
   DiscoflareAdminRelease,
   InstallerAssetsPayload,
+  ManagedAdminOAuthCredential,
 } from './types.js'
 
 export const adminInstallerMarker = 'discoflare.com/admin-v1'
@@ -104,8 +104,9 @@ async function uploadAdminWorker(
   assetsJwt: string,
   existing: boolean,
   options: {
-    accountCredential?: InstanceAdminCredential
+    managedOAuth?: ManagedAdminOAuthCredential
     accountTokenId?: string
+    preserveAccountToken?: boolean
     loginOrigin?: string
     userId?: string
     sessionSecret?: string
@@ -130,14 +131,22 @@ async function uploadAdminWorker(
   if (options.sessionSecret) {
     bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_SESSION_SECRET', text: options.sessionSecret })
   }
-  if (options.accountCredential || options.accountTokenId) {
+  if (options.preserveAccountToken) {
     bindings.push(
       { type: 'plain_text', name: 'DISCOFLARE_ADMIN_CREDENTIAL_MODE', text: 'account-token' },
-      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_TOKEN_ID', text: options.accountCredential?.id || options.accountTokenId },
     )
-    if (options.accountCredential) {
-      bindings.push({ type: 'secret_text', name: 'DISCOFLARE_ADMIN_TOKEN', text: options.accountCredential.value })
+    if (options.accountTokenId) {
+      bindings.push({ type: 'plain_text', name: 'DISCOFLARE_ADMIN_TOKEN_ID', text: options.accountTokenId })
     }
+  }
+  else if (options.managedOAuth) {
+    bindings.push(
+      { type: 'plain_text', name: 'DISCOFLARE_ADMIN_CREDENTIAL_MODE', text: 'managed-oauth' },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN', text: options.managedOAuth.accessToken },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN', text: options.managedOAuth.refreshToken },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID', text: options.managedOAuth.clientId },
+      { type: 'secret_text', name: 'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT', text: String(options.managedOAuth.expiresAt) },
+    )
   }
   const metadata: Record<string, unknown> = {
     main_module: 'discoflare-admin-worker.mjs',
@@ -165,7 +174,7 @@ async function uploadAdminWorker(
 export async function bootstrapDiscoflareAdmin(
   accessToken: string,
   value: DiscoflareAdminBootstrapRequest,
-  options: { manifestUrl?: string, provisionAccountToken?: boolean, loginOrigin?: string } = {},
+  options: { manifestUrl?: string, managedOAuth?: ManagedAdminOAuthCredential, loginOrigin?: string } = {},
 ): Promise<DiscoflareAdminBootstrapResponse> {
   if (!accessToken.trim()) throw createError({ statusCode: 401, statusMessage: 'Cloudflare OAuth token is missing' })
   const request = validateRequest(value)
@@ -201,36 +210,14 @@ export async function bootstrapDiscoflareAdmin(
   const userId = request.userId || textBinding(existingBindings, 'DISCOFLARE_ADMIN_USER_ID')
   const loginOrigin = options.loginOrigin || textBinding(existingBindings, 'DISCOFLARE_ADMIN_LOGIN_ORIGIN') || 'https://discoflare.com'
   const assetsJwt = await uploadAssets(accessToken, request.accountId, request.workerName, release.assets)
-  let accountCredential: InstanceAdminCredential | undefined
-  try {
-    if (options.provisionAccountToken && !hasAccountToken) {
-      accountCredential = await createInstanceAdminCredential(accessToken, request.accountId)
-    }
-    await uploadAdminWorker(accessToken, request, release, origin, assetsJwt, existing, {
-      accountCredential,
-      accountTokenId: existingAccountTokenId,
-      loginOrigin,
-      userId,
-      sessionSecret: hasSessionSecret ? undefined : randomSecret(),
-    })
-  }
-  catch (error) {
-    if (accountCredential) {
-      await client.accounts.tokens.delete(accountCredential.id, { account_id: request.accountId }).catch(() => undefined)
-    }
-    throw error
-  }
-  if (accountCredential) {
-    const secrets = client.workers.scripts.secrets
-    for (const name of [
-      'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN',
-      'DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT',
-      'DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN',
-      'DISCOFLARE_ADMIN_OAUTH_CLIENT_ID',
-    ]) {
-      await secrets.delete(name, { account_id: request.accountId, script_name: request.workerName }).catch(() => undefined)
-    }
-  }
+  await uploadAdminWorker(accessToken, request, release, origin, assetsJwt, existing, {
+    managedOAuth: hasAccountToken ? undefined : options.managedOAuth,
+    accountTokenId: existingAccountTokenId,
+    preserveAccountToken: hasAccountToken,
+    loginOrigin,
+    userId,
+    sessionSecret: hasSessionSecret ? undefined : randomSecret(),
+  })
   await client.workers.scripts.subdomain.create(request.workerName, {
     account_id: request.accountId,
     enabled: true,
@@ -242,13 +229,16 @@ export async function bootstrapDiscoflareAdmin(
   if (textBinding(bindings, 'DISCOFLARE_ADMIN_VERSION') !== release.manifest.version) {
     throw createError({ statusCode: 502, statusMessage: 'Discoflare Admin deployment could not be verified' })
   }
-  const tokenConnected = bindings.some(binding => binding.name === 'DISCOFLARE_ADMIN_TOKEN' && binding.type === 'secret_text')
+  const tokenConnected = bindings.some(binding => (
+    (binding.name === 'DISCOFLARE_ADMIN_TOKEN' || binding.name === 'DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN')
+    && binding.type === 'secret_text'
+  ))
   return {
     origin,
     version: release.manifest.version,
     workerName: request.workerName,
     updated: existing,
-    managementMode: options.provisionAccountToken ? 'managed' : 'private',
+    managementMode: options.managedOAuth ? 'managed' : 'private',
     tokenConnected,
   }
 }

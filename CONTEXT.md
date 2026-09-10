@@ -143,19 +143,23 @@ The single small Worker that discovers and operates every Discoflare Installatio
 _Avoid_: Management mode, installer workspace, admin instance
 
 **Account Admin Token**:
-The account-owned Cloudflare credential used by Discoflare Admin. Managed Setup creates it automatically; in Private Setup the operator creates and pastes it directly. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account and is stored only as an Admin Worker secret.
+The account-owned Cloudflare credential an operator can create and paste directly into Discoflare Admin in Private Setup. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account and is stored only as an Admin Worker secret.
 _Avoid_: Instance Admin Token, installer token, workspace token
 
-**Installer OAuth Grant**:
-The short-lived Cloudflare OAuth credential held by discoflare.com only during Admin bootstrap or repair. Managed Setup uses its Token Write permission to create the Account Admin Token directly inside the user's Cloudflare account, then discards the OAuth grant. It is not an Admin runtime credential.
-_Avoid_: Managed OAuth Grant, hosted runtime token, workspace OAuth
+**Managed Admin OAuth Credential**:
+The renewable Cloudflare OAuth credential stored only as encrypted Discoflare Admin Worker secrets by Managed Setup. It authorizes the same fixed infrastructure operations as a Private Setup Account Admin Token. Cloudflare does not expose Account API Tokens Write to OAuth clients, so it cannot mint an account-owned token.
+_Avoid_: Installer token, login token, workspace OAuth
+
+**Installer OAuth Session**:
+The short-lived Cloudflare OAuth access credential held by discoflare.com during Admin bootstrap or repair. Managed Setup transfers the accompanying renewable credential into Admin, then discards the website session. Private Setup retains no renewable credential.
+_Avoid_: Admin login session, hosted runtime token, workspace OAuth
 
 **Installation Capability**:
 A narrow per-Installation secret derived by Discoflare Admin and stored in that workspace Worker. It authenticates only the fixed internal operations exposed through the Admin service binding and is not general Cloudflare API authority.
 _Avoid_: Account Admin Token, Member Grant, MCP Access Token
 
 **Bootstrap Installer**:
-The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Setup also creates and installs its Account Admin Token; Private Setup leaves credential connection to the operator. Neither flow creates a workspace or a Cloudflare Access application.
+The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Setup installs its renewable OAuth credential; Private Setup leaves Account Admin Token connection to the operator. Neither flow creates a workspace or a Cloudflare Access application.
 _Avoid_: Hosted control plane, workspace installer, runtime proxy
 
 **Login Method**:

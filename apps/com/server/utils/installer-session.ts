@@ -14,6 +14,7 @@ type InstallerSessionData = {
   }
   cloudflare?: {
     accessToken: string
+    refreshToken?: string
     expiresAt: number
     mode: 'managed' | 'private' | 'login'
     adminLogin?: {
@@ -65,14 +66,14 @@ export async function requireCloudflareToken(event: H3Event) {
   return cloudflare.accessToken
 }
 
-export async function requireManagedCloudflareToken(event: H3Event) {
+export async function requireManagedCloudflareCredential(event: H3Event) {
   const session = await useInstallerSession(event)
   const cloudflare = session.data.cloudflare
-  if (!cloudflare || cloudflare.expiresAt <= Date.now() || cloudflare.mode !== 'managed') {
+  if (!cloudflare || cloudflare.expiresAt <= Date.now() || cloudflare.mode !== 'managed' || !cloudflare.refreshToken) {
     await session.update({ cloudflare: undefined })
     throw createError({ statusCode: 401, statusMessage: 'Connect Cloudflare with the managed installer' })
   }
-  return cloudflare.accessToken
+  return { ...cloudflare, refreshToken: cloudflare.refreshToken }
 }
 
 export async function consumeAdminLoginCredential(event: H3Event) {

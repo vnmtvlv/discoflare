@@ -5,11 +5,12 @@ import {
 } from '@discoflare/installer-core'
 import { installerConfig } from '../../utils/installer-config'
 import { assertInstallerMutation } from '../../utils/installer-security'
-import { requireManagedCloudflareToken, useInstallerSession } from '../../utils/installer-session'
+import { requireManagedCloudflareCredential, useInstallerSession } from '../../utils/installer-session'
 
 export default defineEventHandler(async (event): Promise<DiscoflareAdminBootstrapResponse> => {
   assertInstallerMutation(event)
-  const accessToken = await requireManagedCloudflareToken(event)
+  const credential = await requireManagedCloudflareCredential(event)
+  const accessToken = credential.accessToken
   const body = await readBody<{ accountId?: unknown }>(event)
   const accountId = typeof body?.accountId === 'string' ? body.accountId.trim() : ''
   if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Select a Cloudflare account' })
@@ -32,7 +33,12 @@ export default defineEventHandler(async (event): Promise<DiscoflareAdminBootstra
     userId: user.id,
   }, {
     manifestUrl,
-    provisionAccountToken: true,
+    managedOAuth: {
+      accessToken,
+      refreshToken: credential.refreshToken,
+      clientId: installerConfig(event).cloudflareOAuthClientId,
+      expiresAt: credential.expiresAt,
+    },
     loginOrigin: installerConfig(event).installerOrigin,
   })
 

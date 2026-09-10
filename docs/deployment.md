@@ -2,15 +2,15 @@
 
 ## Discoflare installer
 
-The managed installer at `discoflare.com/deploy` uses public-client PKCE OAuth to create or repair one `discoflare-admin` Worker on the account's `workers.dev` hostname. It creates a fixed account-owned token as an encrypted Admin Worker secret and immediately discards the temporary OAuth grant. It does not create Cloudflare Access, a workspace, storage, RealtimeKit app, or mail route.
+The managed installer at `discoflare.com/deploy` uses public-client PKCE OAuth to create or repair one `discoflare-admin` Worker on the account's `workers.dev` hostname. It stores the renewable OAuth credential as encrypted Admin Worker secrets and immediately discards the website session. It does not create Cloudflare Access, a workspace, storage, RealtimeKit app, or mail route.
 
-Managed Setup requires a Cloudflare Super Administrator because Cloudflare restricts account-owned token creation to that role. Private Setup remains available when the operator prefers to create the token manually.
+Cloudflare's public OAuth scope catalog does not expose Account API Tokens Write, so Managed Setup cannot mint an account-owned token. Private Setup remains available when the operator prefers to create and control that token manually.
 
-Admin uses that account token to discover marked Discoflare Installations and becomes the only guided control plane for workspace creation, updates, repair, RealtimeKit, and eligible email infrastructure. The broad credential never enters a workspace Worker. Later Admin sign-ins use the same discoflare.com OAuth client only as a callback broker for Cloudflare identity; no renewable OAuth grant is stored. Operators who want to supply the account token themselves use `discoflare.com/deploy/private`, then paste it directly into the same Admin binary.
+Admin uses the stored managed OAuth credential to discover marked Discoflare Installations and becomes the only guided control plane for workspace creation, updates, repair, RealtimeKit, and eligible email infrastructure. The broad credential never enters a workspace Worker. Later Admin sign-ins use the same discoflare.com OAuth client only as a callback broker for Cloudflare identity. Operators who want to avoid a renewable OAuth credential use `discoflare.com/deploy/private`, then paste an Account Admin Token directly into the same Admin binary.
 
 An Admin-created Installation receives its D1, R2, KV, Durable Objects, Workflow, Container, Workers AI, optional custom domain, and owner setup claim. Huddles are enabled by default. The first eligible domain-backed Installation becomes Primary and receives the zone's catch-all Email Routing and Email Sending configuration. Each workspace holds only a service binding to Admin and a derived capability accepted by Admin's fixed RealtimeKit allowlist.
 
-Cloudflare grants are account- and zone-scoped rather than bound to one Worker. A compromised Discoflare Admin can therefore exercise every permission granted to its Account Admin Token across the selected account. Use a separate Cloudflare account for the strongest isolation; using an existing paid account avoids another account-level Workers Paid subscription but shares that security boundary.
+Cloudflare grants are account- and zone-scoped rather than bound to one Worker. A compromised Discoflare Admin can therefore exercise every permission granted to its managed OAuth credential or Account Admin Token across the selected account. Use a separate Cloudflare account for the strongest isolation; using an existing paid account avoids another account-level Workers Paid subscription but shares that security boundary.
 
 Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 

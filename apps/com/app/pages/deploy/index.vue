@@ -81,7 +81,7 @@ useSeoMeta({
           <div class="text-center">
             <p class="text-sm font-medium text-primary">Managed setup</p>
             <h1 class="display-title mt-3 text-4xl font-semibold text-highlighted sm:text-5xl">Deploy Discoflare</h1>
-            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Discoflare.com installs your account-local Admin and connects its token automatically. Your workspaces and huddles keep running from your Cloudflare account.</p>
+            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Discoflare.com installs your account-local Admin and connects its Cloudflare credential automatically. Your workspaces and huddles keep running from your Cloudflare account.</p>
           </div>
 
           <ClientOnly>
@@ -94,7 +94,7 @@ useSeoMeta({
               <div v-else-if="result" class="py-3 text-center">
                 <div class="mx-auto flex size-12 items-center justify-center rounded-full bg-success/15"><UIcon name="i-ph-check" class="size-7 text-success" /></div>
                 <h2 class="mt-5 text-xl font-semibold text-highlighted">Discoflare Admin {{ result.version }} is ready</h2>
-                <p class="mt-2 text-sm leading-6 text-muted">A dedicated account token is stored directly as an encrypted Worker secret. The temporary installer login has been discarded.</p>
+                <p class="mt-2 text-sm leading-6 text-muted">The renewable OAuth credential is stored directly as encrypted Worker secrets. The discoflare.com installer session has been discarded.</p>
                 <UButton class="mt-6" :to="result.origin" target="_blank" label="Manage workspaces" trailing-icon="i-ph-arrow-up-right" size="lg" />
                 <div class="-mx-6 -mb-6 mt-8 flex items-center justify-between gap-3 border-t border-muted px-6 py-5 text-left sm:-mx-8 sm:-mb-8 sm:px-8">
                   <p class="text-xs text-muted">Runtime calls, including RealtimeKit, go from each workspace to your Admin.</p>
@@ -108,7 +108,7 @@ useSeoMeta({
                   <UButton type="button" label="Sign out" color="neutral" variant="ghost" size="sm" @click="disconnect" />
                 </div>
                 <UFormField label="Cloudflare account" required><USelect v-model="accountId" :items="session.accounts.map(account => ({ label: account.name, value: account.id }))" value-key="value" class="w-full" /></UFormField>
-                <UAlert color="neutral" variant="subtle" title="What managed means" description="OAuth installs Admin and creates its fixed account token automatically. Future Admin sign-ins use your Cloudflare identity; Cloudflare Access is not installed." />
+                <UAlert color="neutral" variant="subtle" title="What managed means" description="OAuth installs Admin and stores its renewable Cloudflare credential there. Future Admin sign-ins use your Cloudflare identity; Cloudflare Access is not installed." />
                 <UAlert v-if="error" color="error" variant="subtle" title="Installation stopped" :description="error" />
                 <UButton type="submit" label="Install managed Discoflare" trailing-icon="i-ph-arrow-right" size="lg" block :disabled="!ready" :loading="installing" />
               </form>

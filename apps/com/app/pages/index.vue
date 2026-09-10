@@ -217,7 +217,7 @@ const costRows = [
 ]
 
 const deploySteps = [
-  { number: '01', title: 'Install Admin', description: 'Temporary Cloudflare OAuth creates one small Worker and its account-owned token.' },
+  { number: '01', title: 'Install Admin', description: 'Cloudflare OAuth creates one small account-local control Worker.' },
   { number: '02', title: 'Open your Admin', description: 'Sign in with Cloudflare; no Access application or Admin database is required.' },
   { number: '03', title: 'Create workspaces', description: 'Admin provisions each complete Discoflare Installation and its owner setup link.' },
   { number: '04', title: 'Operate everything', description: 'Admin discovers installations, enables Huddles, connects eligible email, and applies updates.' },

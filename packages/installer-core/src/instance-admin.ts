@@ -50,12 +50,6 @@ function permissionName(value: string) {
   return value.trim().toLowerCase().replaceAll(/[^a-z0-9]/gu, '')
 }
 
-function statusCode(error: unknown) {
-  if (!error || typeof error !== 'object') return 0
-  const value = error as { status?: unknown, statusCode?: unknown }
-  return Number(value.statusCode || value.status || 0)
-}
-
 export function instanceAdminTokenPolicies(accountId: string, groups: AccountTokenPermissionGroup[]) {
   const byName = new Map(groups
     .filter((group): group is AccountTokenPermissionGroup & { id: string, name: string } => Boolean(group.id && group.name))
@@ -91,29 +85,6 @@ export function instanceAdminTokenPolicies(accountId: string, groups: AccountTok
         }]
       : []),
   ]
-}
-
-export async function createInstanceAdminCredential(accessToken: string, accountId: string): Promise<InstanceAdminCredential> {
-  try {
-    const client = cloudflareClient(accessToken)
-    const groups: AccountTokenPermissionGroup[] = []
-    for await (const group of client.accounts.tokens.permissionGroups.list({ account_id: accountId })) groups.push(group)
-    const created = await client.accounts.tokens.create({
-      account_id: accountId,
-      name: 'Discoflare Admin',
-      policies: instanceAdminTokenPolicies(accountId, groups),
-    })
-    const id = created.id?.trim() || ''
-    const value = typeof created.value === 'string' ? created.value.trim() : ''
-    if (!id || !value) throw createError({ statusCode: 502, statusMessage: 'Cloudflare did not return the new Discoflare Admin token' })
-    return { id, value }
-  }
-  catch (error) {
-    if (statusCode(error) === 403) {
-      throw createError({ statusCode: 403, statusMessage: 'Managed Setup requires Super Administrator access to create the Discoflare Admin account token' })
-    }
-    throw error
-  }
 }
 
 export function instanceAdminTokenTemplateUrl(workerName: string) {
