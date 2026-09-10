@@ -25,7 +25,7 @@ Cloudflare Workers Builds deploys the site automatically when a commit is pushed
 
 - Root directory: repository root
 - Build command: `pnpm com:build`
-- Deploy command: `pnpm --filter @discoflare/com deploy`
+- Deploy command: `pnpm --filter @discoflare/com run deploy`
 - Include paths: `apps/com/**`, `packages/installer-core/**`, `package.json`, `pnpm-workspace.yaml`, `pnpm-lock.yaml`
 
 Changes confined to the workspace Worker, Admin, or native client shells should not trigger a website deployment. Keep the Workers Builds include paths above aligned with the website's actual workspace dependencies.
