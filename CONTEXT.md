@@ -139,23 +139,23 @@ The private, deployment-issued permission for the intended Owner email to create
 _Avoid_: First user wins, installer password, permanent setup token
 
 **Discoflare Admin**:
-The single small, Cloudflare Access-protected Worker that discovers and operates every Discoflare Installation in one Cloudflare account. It is an account-local control plane, not a workspace and not a hosted Discoflare service.
+The single small Worker that discovers and operates every Discoflare Installation in one Cloudflare account. It authenticates its operator through Cloudflare OAuth and keeps a stateless encrypted session cookie. It is an account-local control plane, not a workspace and not a hosted Discoflare service.
 _Avoid_: Management mode, installer workspace, admin instance
 
 **Account Admin Token**:
-The account-owned Cloudflare credential manually created for a Private Admin. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account and is stored only as an Admin Worker secret.
+The account-owned Cloudflare credential used by Discoflare Admin. Managed Setup creates it automatically; in Private Setup the operator creates and pastes it directly. It authorizes fixed installation, update, RealtimeKit, email, and repair operations in that Cloudflare account and is stored only as an Admin Worker secret.
 _Avoid_: Instance Admin Token, installer token, workspace token
 
-**Managed OAuth Grant**:
-The renewable Cloudflare OAuth credential transferred by the Managed Installer into Discoflare Admin. Admin refreshes it locally and uses it for the same fixed account operations as an Account Admin Token. Discoflare.com discards its copy after bootstrap.
-_Avoid_: Hosted runtime token, workspace OAuth, discoflare.com admin token
+**Installer OAuth Grant**:
+The short-lived Cloudflare OAuth credential held by discoflare.com only during Admin bootstrap or repair. Managed Setup uses its Token Write permission to create the Account Admin Token directly inside the user's Cloudflare account, then discards the OAuth grant. It is not an Admin runtime credential.
+_Avoid_: Managed OAuth Grant, hosted runtime token, workspace OAuth
 
 **Installation Capability**:
 A narrow per-Installation secret derived by Discoflare Admin and stored in that workspace Worker. It authenticates only the fixed internal operations exposed through the Admin service binding and is not general Cloudflare API authority.
 _Avoid_: Account Admin Token, Member Grant, MCP Access Token
 
 **Bootstrap Installer**:
-The flow on discoflare.com that creates or repairs Discoflare Admin and protects it with Cloudflare Access. Managed Setup transfers a renewable OAuth grant into Admin; Private Setup uses temporary OAuth and leaves credential connection to the operator. Neither flow creates a workspace.
+The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Setup also creates and installs its Account Admin Token; Private Setup leaves credential connection to the operator. Neither flow creates a workspace or a Cloudflare Access application.
 _Avoid_: Hosted control plane, workspace installer, runtime proxy
 
 **Login Method**:

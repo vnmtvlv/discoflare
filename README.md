@@ -84,11 +84,11 @@ Chat may be ready several minutes before the first Agent Task can start, while t
 
 ### Guided installation
 
-1. Open the [managed installer](https://discoflare.com/deploy), choose the account, and enter the email allowed into Admin.
-2. Cloudflare OAuth creates or repairs `discoflare-admin`, protects it with Cloudflare Access, and transfers the renewable grant into that Worker as encrypted secrets.
-3. The installer discards its copy. Open your account-local Admin to create, adopt, update, and repair workspace Installations. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
+1. Open the [managed installer](https://discoflare.com/deploy), sign in with Cloudflare, and choose the account.
+2. The temporary OAuth grant creates or repairs `discoflare-admin` and creates its fixed account-owned token as an encrypted Worker secret.
+3. The installer discards the OAuth grant. Open your account-local Admin with Cloudflare login to create, adopt, update, and repair workspace Installations. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
 
-The OAuth grant stays in Discoflare Admin and refreshes there; `discoflare.com` is not in the runtime path. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without transferring OAuth, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
+The account token stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without creating a token, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
 
 ### Manual deployment
 

@@ -8,38 +8,19 @@ export const CLOUDFLARE_OAUTH_SCOPES = [
   'workers-scripts.read',
   'workers-scripts.write',
   'account-settings.read',
-  'access.read',
-  'access.write',
-  'access-acct.read',
-  'access-acct.write',
+  'user-details.read',
   'memberships.read',
 ].join(' ')
 
 export const CLOUDFLARE_MANAGED_OAUTH_SCOPES = [
   CLOUDFLARE_OAUTH_SCOPES,
-  'offline_access',
-  'd1.read',
-  'd1.write',
-  'containers.read',
-  'containers.write',
-  'workers-kv-storage.read',
-  'workers-kv-storage.write',
-  'workers-r2.read',
-  'workers-r2.write',
-  'realtime.read',
-  'realtime.write',
-  'realtime.admin',
-  'zone.read',
-  'zone-settings.read',
-  'zone-settings.write',
-  'dns.read',
-  'dns.write',
-  'workers-routes.read',
-  'workers-routes.write',
-  'email-routing-rule.read',
-  'email-routing-rule.write',
-  'email-sending.read',
-  'email-sending.write',
+  'account-api-tokens.write',
+].join(' ')
+
+export const CLOUDFLARE_LOGIN_OAUTH_SCOPES = [
+  'workers-scripts.read',
+  'user-details.read',
+  'memberships.read',
 ].join(' ')
 
 export const CLOUDFLARE_UNINSTALL_SCOPES = [
@@ -57,7 +38,24 @@ export const CLOUDFLARE_UNINSTALL_SCOPES = [
   'zone-settings.write',
   'dns.read',
   'dns.write',
+  'access.read',
+  'access.write',
+  'access-acct.read',
+  'access-acct.write',
 ].join(' ')
+
+export function adminLoginTarget(originValue: unknown, accountIdValue: unknown) {
+  if (typeof originValue !== 'string' || typeof accountIdValue !== 'string' || !/^[0-9a-f]{32}$/u.test(accountIdValue)) return null
+  try {
+    const origin = new URL(originValue)
+    if (origin.protocol !== 'https:' || origin.username || origin.password || origin.port || origin.pathname !== '/' || origin.search || origin.hash) return null
+    if (!/^discoflare-admin\.[a-z0-9-]+\.workers\.dev$/u.test(origin.hostname)) return null
+    return { origin: origin.origin, accountId: accountIdValue }
+  }
+  catch {
+    return null
+  }
+}
 
 export function installerOrigin(event: H3Event) {
   const origin = installerConfig(event).installerOrigin
@@ -72,18 +70,14 @@ export function installerOrigin(event: H3Event) {
 export function oauthConfig(
   event: H3Event,
   scopes = CLOUDFLARE_OAUTH_SCOPES,
-  mode: 'managed' | 'private' = 'private',
 ) {
   const config = installerConfig(event)
-  const clientId = mode === 'managed' ? config.cloudflareManagedOAuthClientId : config.cloudflareOAuthClientId
-  const clientSecret = mode === 'managed' ? '' : config.cloudflareOAuthClientSecret
-  if (!clientId || (mode === 'private' && !clientSecret)) {
+  const clientId = config.cloudflareOAuthClientId
+  if (!clientId) {
     throw createError({ statusCode: 503, statusMessage: 'Cloudflare OAuth is not configured' })
   }
   return {
     clientId,
-    clientSecret,
-    publicClient: mode === 'managed',
     scopes,
     redirectUri: `${installerOrigin(event)}/api/cloudflare/oauth/callback`,
   }
@@ -98,10 +92,6 @@ export function randomBase64Url(bytes = 32) {
 export async function sha256Base64Url(value: string) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
   return bytesToBase64Url(new Uint8Array(digest))
-}
-
-export function oauthBasicAuth(clientId: string, clientSecret: string) {
-  return `Basic ${btoa(`${clientId}:${clientSecret}`)}`
 }
 
 function bytesToBase64Url(value: Uint8Array) {

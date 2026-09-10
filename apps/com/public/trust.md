@@ -1,29 +1,26 @@
 # Discoflare trust and security
 
-Effective September 6, 2026.
+Effective September 10, 2026.
 
 ## The short version
 
 Discoflare is MIT-licensed software that runs in the workspace owner's Cloudflare account. There is no Discoflare server between an owner and their workspace, no vendor database holding workspace messages, and no subprocessor list for workspace data, because no Discoflare service processes it.
 
-Three places touch anything belonging to a deployer: the guided installer on discoflare.com, an anonymous deployment heartbeat, and the source that is deployed.
+Four explicit boundaries touch anything belonging to a deployer: the temporary bootstrap on discoflare.com, Discoflare Admin in the owner's account, an anonymous deployment heartbeat, and the source that is deployed.
 
 ## What the installer asks for
 
 Connecting Cloudflare grants an OAuth token scoped to the permissions below. The token is kept in an encrypted, HTTP-only session cookie in the browser, is never written to a Discoflare database, and the session expires after one hour. Disconnecting revokes it, and it can also be revoked from the Cloudflare account at any time.
 
-The installer requests one fixed set of scopes at connection time, including scopes for optional features. Declining workspace email or Cloudflare Access leaves those scopes unused rather than unrequested.
+Managed Setup requests only the scopes needed to identify the owner, create or repair Admin, and create its account-owned token. Private Setup omits token creation. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
 
 | Purpose | Scopes |
 | --- | --- |
-| Deploy the workspace Worker and its Agent sandbox containers | `workers-scripts.read`, `workers-scripts.write`, `containers.read`, `containers.write` |
-| Create the D1 database, R2 buckets, and KV namespace, and apply migrations | `d1.read`, `d1.write`, `workers-r2.read`, `workers-r2.write`, `workers-kv-storage.read`, `workers-kv-storage.write` |
-| List the accounts available for deployment | `account-settings.read`, `memberships.read` |
-| Attach the workspace hostname to the Worker | `zone.read`, `zone-settings.read`, `zone-settings.write`, `dns.read`, `dns.write` |
-| Optional workspace email routing and sending | `email-routing-rule.read`, `email-routing-rule.write`, `email-sending.read`, `email-sending.write` |
-| Optional Cloudflare Access sign-in application | `access.read`, `access.write`, `access-acct.read`, `access-acct.write` |
+| Create or repair Discoflare Admin | `workers-scripts.read`, `workers-scripts.write` |
+| Identify the owner and selected account | `account-settings.read`, `user-details.read`, `memberships.read` |
+| Create the Admin account token in Managed Setup | `account-api-tokens.write` |
 
-The installer requests no billing, audit log, account member management, or Zero Trust device permissions, and cannot read Worker code or data in accounts that were not selected.
+The bootstrap does not create Cloudflare Access, a workspace, or workspace storage. Its temporary OAuth grant is discarded after bootstrap. The account token stays only as an encrypted Admin Worker secret and never enters a workspace Worker. Admin login uses a stateless encrypted cookie and needs no Admin database.
 
 ## What leaves a deployment
 

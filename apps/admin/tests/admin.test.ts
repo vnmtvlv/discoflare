@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { accountAdminTokenTemplateUrl, deriveAdminCapability } from '@discoflare/installer-core'
-import { ACCESS_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../app/utils/account-controls'
+import { ADMIN_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../app/utils/account-controls'
 import { isNewerRelease } from '../shared/versions'
 
 describe('Discoflare Admin authority', () => {
@@ -19,7 +19,7 @@ describe('Discoflare Admin authority', () => {
   })
 
   it('keeps account controls on canonical destinations', () => {
-    expect(ACCESS_LOGOUT_PATH).toBe('/cdn-cgi/access/logout')
+    expect(ADMIN_LOGOUT_PATH).toBe('/api/auth/logout')
     expect(GITHUB_RELEASES_URL).toBe('https://github.com/vnmtvlv/discoflare/releases')
   })
 

@@ -10,7 +10,6 @@ const { data: session, status, refresh } = await useFetch<InstallerSessionRespon
 })
 
 const accountId = ref('')
-const email = ref('')
 const installing = ref(false)
 const result = shallowRef<DiscoflareAdminBootstrapResponse | null>(null)
 const error = ref(typeof route.query.error === 'string' ? 'Cloudflare connection was not completed.' : '')
@@ -19,10 +18,7 @@ watch(() => session.value.accounts, (accounts) => {
   if (!accountId.value && accounts[0]) accountId.value = accounts[0].id
 }, { immediate: true })
 
-const ready = computed(() => Boolean(
-  accountId.value
-  && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim()),
-))
+const ready = computed(() => Boolean(accountId.value))
 
 function warnBeforeUnload(event: BeforeUnloadEvent) {
   if (!installing.value) return
@@ -49,7 +45,7 @@ async function install() {
   try {
     result.value = await $fetch<DiscoflareAdminBootstrapResponse>('/api/cloudflare/managed-admin', {
       method: 'POST',
-      body: { accountId: accountId.value, email: email.value.trim() },
+      body: { accountId: accountId.value },
     })
     await refresh()
   }
@@ -98,7 +94,7 @@ useSeoMeta({
               <div v-else-if="result" class="py-3 text-center">
                 <div class="mx-auto flex size-12 items-center justify-center rounded-full bg-success/15"><UIcon name="i-ph-check" class="size-7 text-success" /></div>
                 <h2 class="mt-5 text-xl font-semibold text-highlighted">Discoflare Admin {{ result.version }} is ready</h2>
-                <p class="mt-2 text-sm leading-6 text-muted">The renewable OAuth credential is stored directly as encrypted Worker secrets. Discoflare.com has already discarded its copy.</p>
+                <p class="mt-2 text-sm leading-6 text-muted">A dedicated account token is stored directly as an encrypted Worker secret. The temporary installer login has been discarded.</p>
                 <UButton class="mt-6" :to="result.origin" target="_blank" label="Manage workspaces" trailing-icon="i-ph-arrow-up-right" size="lg" />
                 <div class="-mx-6 -mb-6 mt-8 flex items-center justify-between gap-3 border-t border-muted px-6 py-5 text-left sm:-mx-8 sm:-mb-8 sm:px-8">
                   <p class="text-xs text-muted">Runtime calls, including RealtimeKit, go from each workspace to your Admin.</p>
@@ -112,8 +108,7 @@ useSeoMeta({
                   <UButton type="button" label="Sign out" color="neutral" variant="ghost" size="sm" @click="disconnect" />
                 </div>
                 <UFormField label="Cloudflare account" required><USelect v-model="accountId" :items="session.accounts.map(account => ({ label: account.name, value: account.id }))" value-key="value" class="w-full" /></UFormField>
-                <UFormField label="Admin email" required hint="Cloudflare Access sends a one-time code to this address."><UInput v-model="email" type="email" autocomplete="email" class="w-full" /></UFormField>
-                <UAlert color="neutral" variant="subtle" title="What managed means" description="OAuth installs Admin and transfers a renewable credential directly into that Worker. Discoflare.com discards the credential after setup and keeps only this browser's Admin link." />
+                <UAlert color="neutral" variant="subtle" title="What managed means" description="OAuth installs Admin and creates its fixed account token automatically. Future Admin sign-ins use your Cloudflare identity; Cloudflare Access is not installed." />
                 <UAlert v-if="error" color="error" variant="subtle" title="Installation stopped" :description="error" />
                 <UButton type="submit" label="Install managed Discoflare" trailing-icon="i-ph-arrow-right" size="lg" block :disabled="!ready" :loading="installing" />
               </form>

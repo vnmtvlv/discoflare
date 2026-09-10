@@ -6,10 +6,14 @@ export type AdminEnv = {
   DISCOFLARE_ADMIN_ACCOUNT_ID?: string
   DISCOFLARE_ADMIN_ACCOUNT_NAME?: string
   DISCOFLARE_ADMIN_EMAIL?: string
+  DISCOFLARE_ADMIN_USER_ID?: string
   DISCOFLARE_ADMIN_ORIGIN?: string
+  DISCOFLARE_ADMIN_LOGIN_ORIGIN?: string
+  DISCOFLARE_ADMIN_SESSION_SECRET?: string
   DISCOFLARE_ADMIN_VERSION?: string
   DISCOFLARE_ADMIN_WORKER_NAME?: string
   DISCOFLARE_ADMIN_TOKEN?: string
+  DISCOFLARE_ADMIN_TOKEN_ID?: string
   DISCOFLARE_ADMIN_CREDENTIAL_MODE?: string
   DISCOFLARE_ADMIN_OAUTH_ACCESS_TOKEN?: string
   DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN?: string
@@ -44,15 +48,21 @@ export function requireAdminConfig(event: H3Event) {
     || 'discoflare-admin'
   const origin = env.DISCOFLARE_ADMIN_ORIGIN?.trim()
     || String(development?.adminOrigin || '').trim()
+  const loginOrigin = env.DISCOFLARE_ADMIN_LOGIN_ORIGIN?.trim()
+    || String(development?.adminLoginOrigin || '').trim()
+    || 'https://discoflare.com'
+  const sessionSecret = env.DISCOFLARE_ADMIN_SESSION_SECRET?.trim()
+    || (import.meta.dev ? String(development?.adminSessionSecret || '').trim() : '')
+  const userId = env.DISCOFLARE_ADMIN_USER_ID?.trim() || ''
   const email = (env.DISCOFLARE_ADMIN_EMAIL?.trim()
     || String(development?.adminEmail || '').trim()).toLowerCase()
   const accountName = env.DISCOFLARE_ADMIN_ACCOUNT_NAME?.trim()
     || String(development?.adminAccountName || '').trim()
     || 'Cloudflare account'
-  if (!/^[0-9a-f]{32}$/u.test(accountId) || !origin || !email) {
+  if (!/^[0-9a-f]{32}$/u.test(accountId) || !origin || !email || sessionSecret.length < 32) {
     throw createError({ statusCode: 503, statusMessage: 'Discoflare Admin bootstrap is incomplete' })
   }
-  return { env, accountId, accountName, workerName, origin, email }
+  return { env, accountId, accountName, workerName, origin, loginOrigin, sessionSecret, userId, email }
 }
 
 type OAuthRefreshResponse = {

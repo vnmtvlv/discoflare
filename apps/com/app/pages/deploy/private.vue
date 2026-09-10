@@ -14,7 +14,6 @@ const { data: session, status, refresh } = await useFetch<InstallerSessionRespon
 })
 
 const accountId = ref('')
-const email = ref('')
 const installing = ref(false)
 const result = shallowRef<DiscoflareAdminBootstrapResponse | null>(null)
 const error = ref(typeof route.query.error === 'string' ? 'Cloudflare connection was not completed.' : '')
@@ -23,10 +22,7 @@ watch(() => session.value.accounts, (accounts) => {
   if (!accountId.value && accounts[0]) accountId.value = accounts[0].id
 }, { immediate: true })
 
-const ready = computed(() => Boolean(
-  accountId.value
-  && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.value.trim()),
-))
+const ready = computed(() => Boolean(accountId.value))
 
 function warnBeforeUnload(event: BeforeUnloadEvent) {
   if (!installing.value) return
@@ -54,7 +50,7 @@ async function install() {
     const response = await fetch('/api/cloudflare/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountId: accountId.value, email: email.value.trim() }),
+      body: JSON.stringify({ accountId: accountId.value }),
     })
     result.value = await readAdminBootstrapStream(response)
   }
@@ -112,7 +108,7 @@ useSeoMeta({
                   </div>
                   <div class="flex gap-4 rounded-xl border border-default p-4">
                     <UIcon name="i-ph-shield-check" class="mt-0.5 size-5 shrink-0 text-primary" />
-                    <div><p class="text-sm font-medium text-highlighted">Protected by Cloudflare Access</p><p class="mt-1 text-sm text-muted">Only the email you choose can open this account-local Admin.</p></div>
+                    <div><p class="text-sm font-medium text-highlighted">Cloudflare sign-in</p><p class="mt-1 text-sm text-muted">Admin verifies the Cloudflare identity that performed this bootstrap. No Access application is installed.</p></div>
                   </div>
                   <div class="flex gap-4 rounded-xl border border-default p-4">
                     <UIcon name="i-ph-key" class="mt-0.5 size-5 shrink-0 text-primary" />
@@ -127,7 +123,7 @@ useSeoMeta({
               <div v-else-if="result" class="py-3 text-center">
                 <div class="mx-auto flex size-12 items-center justify-center rounded-full bg-success/15"><UIcon name="i-ph-check" class="size-7 text-success" /></div>
                 <h2 class="mt-5 text-xl font-semibold text-highlighted">Discoflare Admin {{ result.version }} is ready</h2>
-                <p class="mt-2 text-sm leading-6 text-muted">Open it through Cloudflare Access, then connect the Account Admin Token on that private origin.</p>
+                <p class="mt-2 text-sm leading-6 text-muted">Sign in with Cloudflare, then connect the Account Admin Token on that private origin.</p>
                 <UButton class="mt-6" :to="result.origin" target="_blank" label="Open Discoflare Admin" trailing-icon="i-ph-arrow-up-right" size="lg" />
                 <div class="-mx-6 -mb-6 mt-8 flex items-center justify-between gap-3 border-t border-muted px-6 py-5 text-left sm:-mx-8 sm:-mb-8 sm:px-8">
                   <p class="text-xs text-muted">Discoflare.com no longer has authority over your account.</p>
@@ -141,8 +137,7 @@ useSeoMeta({
                   <UButton type="button" label="Sign out" color="neutral" variant="ghost" size="sm" @click="disconnect" />
                 </div>
                 <UFormField label="Cloudflare account" required><USelect v-model="accountId" :items="session.accounts.map(account => ({ label: account.name, value: account.id }))" value-key="value" class="w-full" /></UFormField>
-                <UFormField label="Admin email" required hint="Cloudflare Access sends a one-time code to this address."><UInput v-model="email" type="email" autocomplete="email" class="w-full" /></UFormField>
-                <UAlert color="neutral" variant="subtle" title="What is installed" description="A small workers.dev Worker plus one Cloudflare Access application. No workspace, D1, R2, KV, RealtimeKit app, email route, or permanent token is created here." />
+                <UAlert color="neutral" variant="subtle" title="What is installed" description="One small workers.dev Worker. No Access application, workspace, D1, R2, KV, RealtimeKit app, email route, or permanent token is created here." />
                 <UAlert v-if="error" color="error" variant="subtle" title="Installation stopped" :description="error" />
                 <UButton type="submit" label="Install Discoflare Admin" trailing-icon="i-ph-arrow-right" size="lg" block :disabled="!ready" :loading="installing" />
               </form>
