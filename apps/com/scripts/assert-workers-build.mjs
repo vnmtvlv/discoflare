@@ -5,3 +5,7 @@ export function assertWorkersBuild(env) {
   if (env.DISCOFLARE_RELEASE_DEPLOY === '1') return
   throw new Error('Production deploys are only allowed from Cloudflare Workers Builds on main or the release deploy workflow.')
 }
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  assertWorkersBuild(process.env)
+}
