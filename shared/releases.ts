@@ -25,8 +25,10 @@ export type InstallationManagementStatusDTO = {
   adminOrigin: string | null
   workerName: string | null
   hostname: string | null
+  customDomainEnabled: boolean
   tokenTemplateUrl: string | null
   huddlesEnabled: boolean
+  agentComputerEnabled: boolean
   emailEnabled: boolean
   emailDomain: string | null
   emailEligible: boolean

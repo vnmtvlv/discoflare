@@ -8,6 +8,7 @@ import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
 import { version as packageVersion } from '../../../package.json'
 import { authMode } from '../../utils/cloudflare-access'
 import { allowedAdminHealthOrigin } from '../../utils/health-cors'
+import { agentComputerConfigured } from '../../../workers/env'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -48,8 +49,8 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     rateLimitDo: Boolean(env.RATE_LIMIT_DO),
     notificationDo: Boolean(env.NOTIFICATION_DO),
     agentDo: Boolean(env.AGENT_DO),
-    agentComputer: Boolean(env.AGENT_DO),
-    agentWorkflow: Boolean(env.AGENT_TASK_WORKFLOW),
+    agentComputer: agentComputerConfigured(env),
+    agentWorkflow: agentComputerConfigured(env),
     workersAi: Boolean(env.AI),
   }
 

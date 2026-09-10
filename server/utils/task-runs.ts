@@ -12,7 +12,9 @@ export async function reconcileTaskRun(
   run: typeof taskRuns.$inferSelect,
 ): Promise<WorkflowState> {
   if (!run.workflowId) throw new Error('Workflow has not been attached to this run')
-  const state = await (await env.AGENT_TASK_WORKFLOW.get(run.workflowId)).status()
+  const workflow = env.AGENT_TASK_WORKFLOW
+  if (!workflow) throw new Error('Agent Computer is not enabled')
+  const state = await (await workflow.get(run.workflowId)).status()
   const now = nowIso()
   const db = getDb(env.DB)
   if (state.status === 'complete') {

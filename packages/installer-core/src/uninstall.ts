@@ -140,8 +140,10 @@ export async function uninstallDiscoflare(
     }
   }
 
-  await cleanup(`container ${installation.resources.containerName}`, () => deleteContainer(accessToken, installation, deleted))
-  await cleanup(`workflow ${installation.resources.workflowName}`, () => deleteWorkflow(accessToken, installation, deleted))
+  if (installation.resources.agentComputerEnabled) {
+    await cleanup(`container ${installation.resources.containerName}`, () => deleteContainer(accessToken, installation, deleted))
+    await cleanup(`workflow ${installation.resources.workflowName}`, () => deleteWorkflow(accessToken, installation, deleted))
+  }
   if (installation.resources.adminTokenId) remaining.push(`Account API token ${installation.resources.adminTokenId} (revoke it in Cloudflare)`)
   if (installation.resources.realtimekitManaged && installation.resources.realtimekitAppId) {
     remaining.push(`RealtimeKit app ${installation.resources.realtimekitAppId}`)

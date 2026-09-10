@@ -21,7 +21,7 @@ export type DiscoflareEnv = {
   NOTIFICATION_DO: DurableObjectNamespace
   AGENT_DO: DurableObjectNamespace
   AGENT_THINK: DurableObjectNamespace
-  AGENT_TASK_WORKFLOW: Workflow<AgentTaskWorkflowParams>
+  AGENT_TASK_WORKFLOW?: Workflow<AgentTaskWorkflowParams>
   AI: Ai
   EMAIL?: SendEmail
   MAIL_EMAIL?: SendEmail
@@ -77,6 +77,7 @@ export type DiscoflareEnv = {
   DISCOFLARE_WORKER_NAME?: string
   DISCOFLARE_MANAGEMENT_MODE?: string
   DISCOFLARE_CUSTOM_DOMAIN?: string
+  DISCOFLARE_AGENT_COMPUTER_ENABLED?: string
   DISCOFLARE_ZONE_ID?: string
   DISCOFLARE_ZONE_NAME?: string
   DISCOFLARE_APP_SUBDOMAIN?: string
@@ -87,4 +88,10 @@ export type DiscoflareEnv = {
   DISCOFLARE_TELEMETRY_ID?: string
   DISCOFLARE_TELEMETRY_TOKEN?: string
   DISCOFLARE_TELEMETRY_ENDPOINT?: string
+}
+
+export function agentComputerConfigured(env: DiscoflareEnv): boolean {
+  return env.DISCOFLARE_AGENT_COMPUTER_ENABLED
+    ? env.DISCOFLARE_AGENT_COMPUTER_ENABLED === 'true' && Boolean(env.AGENT_TASK_WORKFLOW)
+    : Boolean(env.AGENT_TASK_WORKFLOW)
 }

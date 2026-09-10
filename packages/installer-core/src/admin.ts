@@ -49,3 +49,28 @@ export async function deriveAdminCapability(
   for (const byte of new Uint8Array(signature)) binary += String.fromCharCode(byte)
   return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/u, '')
 }
+
+export async function verifyAdminCapability(
+  key: string,
+  candidate: string,
+  accountId: string,
+  workerName: string,
+): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{43}$/u.test(candidate)) return false
+  const encoded = candidate.replaceAll('-', '+').replaceAll('_', '/')
+  const binary = atob(`${encoded}${'='.repeat((4 - encoded.length % 4) % 4)}`)
+  const signature = Uint8Array.from(binary, character => character.charCodeAt(0))
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  )
+  return crypto.subtle.verify(
+    'HMAC',
+    material,
+    signature,
+    new TextEncoder().encode(`discoflare-admin-v1\n${accountId}\n${workerName}`),
+  )
+}

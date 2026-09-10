@@ -78,17 +78,19 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 ### Requirements
 
 - A Cloudflare account to host the workspace and its resources.
-- For Agents, a Workers Paid account with Containers enabled. The default Workers AI model needs no model API key.
+- R2 enabled on that account. Cloudflare requires completing the R2 subscription checkout even when usage remains inside its free tier.
+- A Workers Paid plan only when the Owner enables Agent Computer (Containers and Task Workflows). The default Workers AI model needs no model API key.
 
-Chat may be ready several minutes before the first Agent Task can start, while the first container image finishes provisioning.
+After Agent Computer is enabled, its first Container image may need several minutes before the first Agent Task can start; chat remains available throughout.
 
 ### Guided installation
 
 1. Open the [managed installer](https://discoflare.com/deploy), sign in with Cloudflare, and choose the account.
 2. The OAuth grant creates or repairs `discoflare-admin`; Managed Setup stores its renewable credential there as encrypted Worker secrets.
-3. The installer discards its own session. Open your account-local Admin with Cloudflare login to create, adopt, update, and repair workspace Installations. Huddles are enabled by default; the first eligible domain-backed Installation also receives workspace email.
+3. Admin immediately creates the first `discoflare` workspace on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim. The installer discards its own session before the Owner enters the workspace.
+4. Enable Agent Computer, Huddles, custom domains, and email later from Workspace Settings when the account is ready for them.
 
-The broad Cloudflare credential stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without a renewable OAuth grant, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
+The broad Cloudflare credential stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. The operator does not register another OAuth client and Managed Setup neither requests Account API Token Write nor creates an Account Admin Token. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without a renewable OAuth grant, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
 
 ### Manual deployment
 
@@ -138,7 +140,7 @@ The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deploy
 
 For guided Installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the Installation through temporary Cloudflare authorization.
 
-A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, Workflow, Container application, owned Access applications, optional custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
+A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, optional Agent Workflow and Container application, owned Access applications, optional custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
 
 Manual deployments show Cloudflare cleanup guidance because Discoflare cannot prove that their bound resources are not shared.
 

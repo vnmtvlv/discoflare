@@ -63,6 +63,7 @@ describe('agent message ingress', () => {
     const env = {
       DB: db,
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
+      AGENT_TASK_WORKFLOW: {},
     }
 
     await signalAgentsForMessage(env as never, {
@@ -92,6 +93,7 @@ describe('agent message ingress', () => {
     const env = {
       DB: db,
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
+      AGENT_TASK_WORKFLOW: {},
     }
 
     await signalAgentsForMessage(env as never, {
@@ -115,6 +117,7 @@ describe('agent message ingress', () => {
     const env = {
       DB: db,
       AGENT_DO: { getByName: () => ({ receiveMessage }) },
+      AGENT_TASK_WORKFLOW: {},
     }
 
     await signalAgentsForMessage(env as never, {

@@ -47,6 +47,7 @@ type ExistingWorker = {
   mailZoneId?: string
   mailDomain?: string
   appHostname?: string
+  customDomainEnabled?: boolean
   databaseId?: string
   bucketName?: string
   kvId?: string
@@ -69,6 +70,7 @@ type ExistingWorker = {
   realtimekitAvPreset?: string
   realtimekitApiTokenConfigured?: boolean
   realtimekitManaged?: boolean
+  agentComputerEnabled?: boolean
 }
 
 type EmailRoutingSettings = { enabled?: boolean; status?: string }
@@ -151,6 +153,22 @@ export function isDiscoflareWorker(bindings: ExistingWorkerBinding[]) {
   )))
 }
 
+export function agentComputerDeploymentMetadata(
+  request: Pick<DeployRequest, 'workerName' | 'agentComputerEnabled'>,
+  manifest: Pick<InstallerReleaseManifest, 'workflow' | 'container'>,
+) {
+  if (!request.agentComputerEnabled) return { bindings: [], containers: undefined }
+  return {
+    bindings: [{
+      type: 'workflow',
+      name: manifest.workflow.binding,
+      workflow_name: `${request.workerName}-agent-tasks`,
+      class_name: manifest.workflow.className,
+    }],
+    containers: [{ name: `${request.workerName}-computer`, class_name: manifest.container.className }],
+  }
+}
+
 async function inspectWorker(client: Cloudflare, accountId: string, workerName: string): Promise<ExistingWorker> {
   for await (const worker of client.workers.scripts.list({ account_id: accountId })) {
     if (worker.id !== workerName) continue
@@ -168,6 +186,7 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       mailZoneId: text('MAIL_ZONE_ID'),
       mailDomain: text('MAIL_DOMAIN'),
       appHostname: text('DISCOFLARE_APP_HOSTNAME') || text('MAIL_APP_HOSTNAME'),
+      customDomainEnabled: text('DISCOFLARE_CUSTOM_DOMAIN') === 'true',
       databaseId: bindings.find(binding => binding.name === 'DB' && binding.type === 'd1')?.database_id,
       bucketName: bindings.find(binding => binding.name === 'FILES' && binding.type === 'r2_bucket')?.bucket_name,
       kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id,
@@ -192,6 +211,9 @@ async function inspectWorker(client: Cloudflare, accountId: string, workerName: 
       realtimekitAvPreset: text('REALTIMEKIT_PRESET_AV'),
       realtimekitApiTokenConfigured: bindings.some(binding => binding.name === 'REALTIMEKIT_API_KEY' && binding.type === 'secret_text'),
       realtimekitManaged: ['true', 'admin'].includes(text('DISCOFLARE_REALTIMEKIT_MANAGED') || ''),
+      agentComputerEnabled: text('DISCOFLARE_AGENT_COMPUTER_ENABLED')
+        ? text('DISCOFLARE_AGENT_COMPUTER_ENABLED') === 'true'
+        : bindings.some(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow'),
     }
   }
   return { exists: false }
@@ -441,13 +463,13 @@ async function uploadWorker(
   realtimekit: ManagedRealtimeKit | null,
 ) {
   const hostname = new URL(resources.origin).hostname
+  const computer = agentComputerDeploymentMetadata(request, manifest)
   const bindings: Array<Record<string, unknown>> = [
     { type: 'd1', name: 'DB', database_id: resources.databaseId },
     { type: 'r2_bucket', name: 'FILES', bucket_name: resources.bucketName },
     { type: 'kv_namespace', name: 'TICKETS', namespace_id: resources.kvId },
     { type: 'ai', name: 'AI' },
     { type: 'assets', name: 'ASSETS' },
-    { type: 'workflow', name: manifest.workflow.binding, workflow_name: `${request.workerName}-agent-tasks`, class_name: manifest.workflow.className },
     { type: 'plain_text', name: 'PUBLIC_ORIGIN', text: resources.origin },
     { type: 'plain_text', name: 'APP_NAME', text: request.appName },
     { type: 'plain_text', name: 'ADMIN_WORKSPACE', text: request.appName },
@@ -461,6 +483,7 @@ async function uploadWorker(
     { type: 'plain_text', name: 'DISCOFLARE_WORKER_NAME', text: request.workerName },
     { type: 'plain_text', name: 'DISCOFLARE_MANAGEMENT_MODE', text: management.mode },
     { type: 'plain_text', name: 'DISCOFLARE_CUSTOM_DOMAIN', text: request.customDomainEnabled ? 'true' : 'false' },
+    { type: 'plain_text', name: 'DISCOFLARE_AGENT_COMPUTER_ENABLED', text: request.agentComputerEnabled ? 'true' : 'false' },
     { type: 'plain_text', name: 'DISCOFLARE_INSTALLATION', text: installerMarker },
     { type: 'plain_text', name: 'DISCOFLARE_VERSION', text: manifest.version },
     { type: 'plain_text', name: 'DISCOFLARE_TELEMETRY_ID', text: telemetry.installationId },
@@ -468,6 +491,7 @@ async function uploadWorker(
     { type: 'secret_text', name: 'DISCOFLARE_TELEMETRY_TOKEN', text: telemetry.token },
     ...manifest.durableObjects.map(item => ({ type: 'durable_object_namespace', name: item.binding, class_name: item.className })),
   ]
+  bindings.push(...computer.bindings)
   if (request.customDomainEnabled || request.mailEnabled) {
     bindings.push(
       { type: 'plain_text', name: 'DISCOFLARE_ZONE_ID', text: request.zoneId },
@@ -537,7 +561,6 @@ async function uploadWorker(
     compatibility_date: manifest.compatibilityDate,
     compatibility_flags: manifest.compatibilityFlags,
     bindings,
-    containers: [{ name: `${request.workerName}-computer`, class_name: manifest.container.className }],
     assets: { jwt: resources.assetsJwt },
     observability: { enabled: true },
     annotations: {
@@ -545,6 +568,7 @@ async function uploadWorker(
       'workers/tag': `discoflare-${manifest.version}`,
     },
   }
+  if (computer.containers) metadata.containers = computer.containers
   if (migrations) metadata.migrations = migrations
   if (existing.exists) metadata.keep_bindings = ['secret_text']
 
@@ -693,6 +717,7 @@ export async function deployDiscoflare(
   report?: DeployProgressReporter,
   managedCredential?: InstanceAdminCredential,
   verification: DeploymentVerification = 'server',
+  adminCapabilityKey?: string,
 ) {
   const progress = async (step: DeployProgressStep, state: 'active' | 'complete', detail?: string) => {
     await report?.({ type: 'progress', step, state, detail })
@@ -731,10 +756,11 @@ export async function deployDiscoflare(
     ? await readDeploymentHealth(origin)
     : null
   const provisionInfrastructure = requiresInitialInfrastructureProvisioning(existing.exists)
+  const provisionDomain = request.customDomainEnabled && !existing.customDomainEnabled
   const provisionMail = request.mailEnabled && !existing.mailZoneId
-  if (provisionInfrastructure || provisionMail) await assertDomainAvailable(accessToken, request)
+  if (provisionInfrastructure || provisionDomain || provisionMail) await assertDomainAvailable(accessToken, request)
   const requestedMailDomain = mailDomain(request)
-  if (existing.appHostname && existing.appHostname !== requestedHostname) {
+  if (existing.appHostname && existing.appHostname !== requestedHostname && !provisionDomain) {
     throw createError({
       statusCode: 409,
       statusMessage: `This Discoflare installation already owns ${existing.appHostname}. Domain moves require removing the old Cloudflare route first.`,
@@ -744,6 +770,12 @@ export async function deployDiscoflare(
     throw createError({
       statusCode: 409,
       statusMessage: 'Disconnecting workspace email requires a manual migration.',
+    })
+  }
+  if (existing.exists && existing.agentComputerEnabled && !request.agentComputerEnabled) {
+    throw createError({
+      statusCode: 409,
+      statusMessage: 'Disabling Agent Computer requires a manual migration.',
     })
   }
   if (request.mailEnabled && existing.mailZoneId && (
@@ -913,7 +945,7 @@ export async function deployDiscoflare(
     ? {
         origin: request.adminOrigin!,
         workerName: request.adminWorkerName!,
-        capability: await deriveAdminCapability(accessToken, request.accountId, request.workerName),
+        capability: await deriveAdminCapability(adminCapabilityKey || accessToken, request.accountId, request.workerName),
       }
     : undefined
   const uploaded: WorkerUploadResult = await uploadWorker(accessToken, request.accountId, request, release.manifest, release.worker, {
@@ -941,7 +973,7 @@ export async function deployDiscoflare(
     enabled: !request.customDomainEnabled,
     previews_enabled: false,
   })
-  if (request.customDomainEnabled && provisionInfrastructure) await attachAppDomain(accessToken, request)
+  if (request.customDomainEnabled && (provisionInfrastructure || provisionDomain)) await attachAppDomain(accessToken, request)
   await progress('domain', 'complete', requestedHostname)
 
   await progress('mail', 'active')
@@ -957,8 +989,10 @@ export async function deployDiscoflare(
   await progress('mail', 'complete', mailDetail)
 
   await progress('computer', 'active')
-  await deployContainer(accessToken, request.accountId, request.workerName, uploaded.deployment_id || uploaded.id, release.manifest)
-  await progress('computer', 'complete')
+  if (request.agentComputerEnabled) {
+    await deployContainer(accessToken, request.accountId, request.workerName, uploaded.deployment_id || uploaded.id, release.manifest)
+  }
+  await progress('computer', 'complete', request.agentComputerEnabled ? 'Enabled' : 'Skipped')
 
   await progress('schedule', 'active')
   await client.workers.scripts.schedules.update(request.workerName, {
@@ -990,6 +1024,8 @@ export async function deployDiscoflare(
     updated: existing.exists,
     appliedMigrations,
     verified: serverVerified,
+    realtimekitEnabled: request.realtimekitEnabled,
+    agentComputerEnabled: request.agentComputerEnabled,
     telemetry,
   }
 }

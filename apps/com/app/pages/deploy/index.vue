@@ -10,12 +10,20 @@ const { data: session, status, refresh } = await useFetch<InstallerSessionRespon
 })
 
 const accountId = ref('')
+const attemptedAccountId = ref('')
 const installing = ref(false)
 const result = shallowRef<DiscoflareAdminBootstrapResponse | null>(null)
 const error = ref(typeof route.query.error === 'string' ? 'Cloudflare connection was not completed.' : '')
 
 watch(() => session.value.accounts, (accounts) => {
-  if (!accountId.value && accounts[0]) accountId.value = accounts[0].id
+  if (!accountId.value && accounts.length === 1) accountId.value = accounts[0]!.id
+  if (accountId.value && !accounts.some(account => account.id === accountId.value)) accountId.value = ''
+}, { immediate: true })
+
+watch([() => session.value.connected, accountId], ([connected, selectedAccountId]) => {
+  if (!connected || !selectedAccountId || attemptedAccountId.value === selectedAccountId) return
+  attemptedAccountId.value = selectedAccountId
+  void install()
 }, { immediate: true })
 
 const ready = computed(() => Boolean(accountId.value))
@@ -32,6 +40,8 @@ onBeforeRouteLeave(() => installing.value ? window.confirm('Discoflare Admin may
 
 async function disconnect() {
   await $fetch('/api/cloudflare/logout', { method: 'POST' })
+  attemptedAccountId.value = ''
+  accountId.value = ''
   result.value = null
   error.value = ''
   await refresh()
@@ -43,11 +53,14 @@ async function install() {
   error.value = ''
   result.value = null
   try {
-    result.value = await $fetch<DiscoflareAdminBootstrapResponse>('/api/cloudflare/managed-admin', {
+    const installed = await $fetch<DiscoflareAdminBootstrapResponse>('/api/cloudflare/managed-admin', {
       method: 'POST',
       body: { accountId: accountId.value },
     })
-    await refresh()
+    if (!installed.handoffUrl) throw new Error('Discoflare Admin handoff was not returned.')
+    const handoffUrl = installed.handoffUrl
+    result.value = { ...installed, handoffUrl: undefined }
+    window.location.replace(handoffUrl)
   }
   catch (cause) {
     const value = cause as { data?: { statusMessage?: string }, statusMessage?: string, message?: string }
@@ -81,7 +94,7 @@ useSeoMeta({
           <div class="text-center">
             <p class="text-sm font-medium text-primary">Managed setup</p>
             <h1 class="display-title mt-3 text-4xl font-semibold text-highlighted sm:text-5xl">Deploy Discoflare</h1>
-            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Discoflare.com installs your account-local Admin and connects its Cloudflare credential automatically. Your workspaces and huddles keep running from your Cloudflare account.</p>
+            <p class="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted sm:text-base">Choose a Cloudflare account. Discoflare installs the account-local Admin, creates your first workspace, and opens Owner setup.</p>
           </div>
 
           <ClientOnly>
@@ -93,25 +106,29 @@ useSeoMeta({
 
               <div v-else-if="result" class="py-3 text-center">
                 <div class="mx-auto flex size-12 items-center justify-center rounded-full bg-success/15"><UIcon name="i-ph-check" class="size-7 text-success" /></div>
-                <h2 class="mt-5 text-xl font-semibold text-highlighted">Discoflare Admin {{ result.version }} is ready</h2>
-                <p class="mt-2 text-sm leading-6 text-muted">The renewable OAuth credential is stored directly as encrypted Worker secrets. The discoflare.com installer session has been discarded.</p>
-                <UButton class="mt-6" :to="result.origin" target="_blank" label="Manage workspaces" trailing-icon="i-ph-arrow-up-right" size="lg" />
+                <h2 class="mt-5 text-xl font-semibold text-highlighted">Opening your workspace</h2>
+                <p class="mt-2 text-sm leading-6 text-muted">Discoflare Admin is ready. The first workspace will be created next.</p>
+                <UButton class="mt-6" :to="result.origin" external label="Open Admin" trailing-icon="i-ph-arrow-right" size="lg" />
                 <div class="-mx-6 -mb-6 mt-8 flex items-center justify-between gap-3 border-t border-muted px-6 py-5 text-left sm:-mx-8 sm:-mb-8 sm:px-8">
                   <p class="text-xs text-muted">Runtime calls, including RealtimeKit, go from each workspace to your Admin.</p>
                   <UButton type="button" label="Back to profile" color="neutral" variant="ghost" @click="result = null" />
                 </div>
               </div>
 
-              <form v-else-if="session.connected" class="space-y-6" @submit.prevent="install">
+              <div v-else-if="session.connected" class="space-y-6">
                 <div class="flex items-start justify-between gap-4">
                   <div><h2 class="text-lg font-semibold text-highlighted">Choose your Cloudflare account</h2><p class="mt-1 text-sm text-muted">The managed installer creates one discoflare-admin Worker for this account.</p></div>
-                  <UButton type="button" label="Sign out" color="neutral" variant="ghost" size="sm" @click="disconnect" />
+                  <UButton type="button" label="Sign out" color="neutral" variant="ghost" size="sm" :disabled="installing" @click="disconnect" />
                 </div>
                 <UFormField label="Cloudflare account" required><USelect v-model="accountId" :items="session.accounts.map(account => ({ label: account.name, value: account.id }))" value-key="value" class="w-full" /></UFormField>
-                <UAlert color="neutral" variant="subtle" title="What managed means" description="OAuth installs Admin and stores its renewable Cloudflare credential there. Future Admin sign-ins use your Cloudflare identity; Cloudflare Access is not installed." />
+                <UAlert color="neutral" variant="subtle" title="What is created" description="OAuth installs Admin and a base workers.dev workspace with D1, R2, and KV. R2 must already be enabled; Workers Paid is only needed later for Agent Computer. Cloudflare Access is not installed." />
                 <UAlert v-if="error" color="error" variant="subtle" title="Installation stopped" :description="error" />
-                <UButton type="submit" label="Install managed Discoflare" trailing-icon="i-ph-arrow-right" size="lg" block :disabled="!ready" :loading="installing" />
-              </form>
+                <UButton v-if="error" type="button" label="Try again" leading-icon="i-ph-arrow-clockwise" size="lg" block :disabled="!ready" @click="install" />
+                <div v-else class="flex items-center justify-center gap-3 py-2 text-sm text-muted">
+                  <UIcon name="i-ph-spinner-gap" class="size-5 animate-spin" />
+                  {{ installing ? 'Installing Discoflare Admin' : 'Waiting for an account' }}
+                </div>
+              </div>
 
               <div v-else class="space-y-6">
                 <div>
@@ -125,6 +142,7 @@ useSeoMeta({
                   </div>
                 </div>
                 <UAlert v-if="error" color="error" variant="subtle" :title="error" />
+                <UAlert color="neutral" variant="subtle" title="Before you continue" description="R2 must be enabled on the Cloudflare account. Workers Paid is not required for the base workspace." />
                 <UButton :to="oauthStartUrl" external label="Connect Cloudflare" trailing-icon="i-ph-arrow-right" size="xl" block />
                 <p class="text-center text-xs text-muted">Want zero discoflare.com state? Use the <NuxtLink to="/deploy/private" class="text-primary hover:underline">private installer</NuxtLink>.</p>
               </div>

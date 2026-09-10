@@ -5,7 +5,7 @@ export default defineEventHandler(async (event): Promise<{ result: unknown }> =>
   const capability = getHeader(event, 'authorization')?.replace(/^Bearer\s+/iu, '').trim() || ''
   const request = await readBody<AdminRealtimeRequest>(event)
   const token = await requireAccountToken(event)
-  const { accountId } = requireAdminConfig(event)
+  const { accountId, sessionSecret } = requireAdminConfig(event)
   if (request.accountId !== accountId) throw createError({ statusCode: 403, statusMessage: 'Cloudflare account mismatch' })
-  return { result: await proxyAdminRealtimeKit(token, capability, request) }
+  return { result: await proxyAdminRealtimeKit(token, sessionSecret, capability, request) }
 })

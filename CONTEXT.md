@@ -159,8 +159,12 @@ A narrow per-Installation secret derived by Discoflare Admin and stored in that 
 _Avoid_: Account Admin Token, Member Grant, MCP Access Token
 
 **Bootstrap Installer**:
-The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Setup installs its renewable OAuth credential; Private Setup leaves Account Admin Token connection to the operator. Neither flow creates a workspace or a Cloudflare Access application.
+The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Setup installs its renewable OAuth credential and immediately asks Admin to create the first base Installation; Private Setup leaves Account Admin Token connection and workspace creation to the operator. Neither flow creates a Cloudflare Access application.
 _Avoid_: Hosted control plane, workspace installer, runtime proxy
+
+**Base Installation**:
+The first usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Huddles, custom domain, and email are not enabled until the Owner requests them from Workspace Settings.
+_Avoid_: Trial workspace, incomplete installation, free workspace
 
 **Login Method**:
 An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.

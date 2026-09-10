@@ -218,9 +218,9 @@ const costRows = [
 
 const deploySteps = [
   { number: '01', title: 'Install Admin', description: 'Cloudflare OAuth creates one small account-local control Worker.' },
-  { number: '02', title: 'Open your Admin', description: 'Sign in with Cloudflare; no Access application or Admin database is required.' },
-  { number: '03', title: 'Create workspaces', description: 'Admin provisions each complete Discoflare Installation and its owner setup link.' },
-  { number: '04', title: 'Operate everything', description: 'Admin discovers installations, enables Huddles, connects eligible email, and applies updates.' },
+  { number: '02', title: 'Create the workspace', description: 'Admin provisions the first workers.dev workspace with D1, R2, KV, and its Owner setup link.' },
+  { number: '03', title: 'Start chatting', description: 'Create the Owner and enter the workspace without configuring Access, a domain, email, or Containers.' },
+  { number: '04', title: 'Add capabilities', description: 'Enable Agent Computer, Huddles, custom domains, and email later from Workspace Settings.' },
 ]
 
 const faqItems: AccordionItem[] = [
@@ -234,7 +234,7 @@ const faqItems: AccordionItem[] = [
   },
   {
     label: 'What do I need to run it?',
-    content: 'A Cloudflare account on the Workers Paid plan. A domain is needed only for a custom workspace address or workspace email. The guided installer provisions the Worker and its Cloudflare resources without GitHub. The alternative repository-based flow requires a GitHub account and manual resource, binding, secret, hostname, and migration setup.',
+    content: 'A Cloudflare account with R2 enabled. Cloudflare asks you to complete R2 subscription checkout even if your storage remains within its free tier. Workers Paid is needed only when you enable Agent Computer and its Container backend. A domain is needed only for a custom workspace address or workspace email.',
   },
   {
     label: 'Where is workspace data stored?',
@@ -733,7 +733,7 @@ useHead({
             <div class="text-center">
               <h3 class="display-title text-2xl font-semibold text-highlighted sm:text-3xl">So what does Cloudflare bill?</h3>
               <p class="mx-auto mt-4 max-w-2xl text-sm leading-6 text-muted sm:text-base">
-                One recurring number: the $5 per month Workers Paid minimum, which Agent Computers require for Container execution. Everything else has an included allowance first, and a published rate after it.
+                The base workspace can start without Workers Paid, but R2 must be enabled on the account. Agent Computer adds the $5 per month Workers Paid minimum because it uses Container execution.
               </p>
             </div>
 

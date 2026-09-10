@@ -58,4 +58,14 @@ describe('anonymous telemetry', () => {
     }))
     expect(heartbeat?.capabilities.huddles).toBe(true)
   })
+
+  it('does not report Agents when the base Installation explicitly omits Agent Computer', () => {
+    const heartbeat = telemetryHeartbeat(env({ DISCOFLARE_AGENT_COMPUTER_ENABLED: 'false' }))
+    expect(heartbeat?.capabilities.agents).toBe(false)
+  })
+
+  it('does not infer Agent Computer from the Durable Object binding alone', () => {
+    const heartbeat = telemetryHeartbeat(env({ AGENT_TASK_WORKFLOW: undefined }))
+    expect(heartbeat?.capabilities.agents).toBe(false)
+  })
 })

@@ -19,6 +19,7 @@ describe('Admin browser deployment verification', () => {
     await expect(verifyWorkspaceDeployment({
       url: 'https://workspace.example.com',
       version: '0.7.6',
+      realtimekitEnabled: true,
     }, {
       fetch: fetcher,
       wait: async () => {},
@@ -36,6 +37,7 @@ describe('Admin browser deployment verification', () => {
     await expect(verifyWorkspaceDeployment({
       url: 'https://workspace.example.com',
       version: '0.7.6',
+      realtimekitEnabled: true,
     }, {
       fetch: async () => Response.json({
         version: '0.7.5',

@@ -20,7 +20,9 @@ export default defineEventHandler(async (event) => {
   if (!task.activeRunId || task.status !== 'running') fail(409, 'not_running', 'Task is not running')
   const run = (await db.select().from(taskRuns).where(eq(taskRuns.id, task.activeRunId)).limit(1))[0]
   if (!run?.workflowId) fail(409, 'workflow_missing', 'Running task has no workflow')
-  const instance = await env.AGENT_TASK_WORKFLOW.get(run.workflowId)
+  const workflow = env.AGENT_TASK_WORKFLOW
+  if (!workflow) fail(409, 'workflow_missing', 'Agent Computer is not enabled')
+  const instance = await workflow.get(run.workflowId)
   try {
     await instance.terminate()
   }
