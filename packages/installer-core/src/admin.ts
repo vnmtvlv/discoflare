@@ -56,11 +56,21 @@ export async function verifyAdminCapability(
   accountId: string,
   workerName: string,
 ): Promise<boolean> {
-  const expected = await deriveAdminCapability(key, accountId, workerName)
-  const encoder = new TextEncoder()
-  const left = encoder.encode(candidate)
-  const right = encoder.encode(expected)
-  if (left.byteLength !== right.byteLength) return false
-  const subtle = crypto.subtle as SubtleCrypto & { timingSafeEqual(left: ArrayBufferView, right: ArrayBufferView): boolean }
-  return subtle.timingSafeEqual(left, right)
+  if (!/^[A-Za-z0-9_-]{43}$/u.test(candidate)) return false
+  const encoded = candidate.replaceAll('-', '+').replaceAll('_', '/')
+  const binary = atob(`${encoded}${'='.repeat((4 - encoded.length % 4) % 4)}`)
+  const signature = Uint8Array.from(binary, character => character.charCodeAt(0))
+  const material = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(key),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  )
+  return crypto.subtle.verify(
+    'HMAC',
+    material,
+    signature,
+    new TextEncoder().encode(`discoflare-admin-v1\n${accountId}\n${workerName}`),
+  )
 }

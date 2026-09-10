@@ -18,6 +18,7 @@ describe('Discoflare Admin authority', () => {
     expect(first).toHaveLength(43)
     await expect(verifyAdminCapability('account-admin-token', first, accountId, 'workspace-one')).resolves.toBe(true)
     await expect(verifyAdminCapability('rotated-oauth-token', first, accountId, 'workspace-one')).resolves.toBe(false)
+    await expect(verifyAdminCapability('account-admin-token', 'invalid', accountId, 'workspace-one')).resolves.toBe(false)
   })
 
   it('keeps account controls on canonical destinations', () => {
