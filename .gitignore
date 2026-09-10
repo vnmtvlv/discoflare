@@ -41,3 +41,6 @@ apps/desktop/src-tauri/target
 *.xcuserstate
 xcuserdata/
 DerivedData/
+
+# Local stage deployment configs
+wrangler.stage.local.jsonc
