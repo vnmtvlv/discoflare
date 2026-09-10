@@ -6,15 +6,19 @@
     "node": ">=24.20.0"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @discoflare/installer-core build",
     "build": "nuxt build",
     "deploy": "node scripts/assert-workers-build.mjs && pnpm run db:migrate && wrangler deploy",
     "db:create": "wrangler d1 create discoflare-com-telemetry",
     "db:migrate": "node scripts/assert-workers-build.mjs && wrangler d1 migrations apply TELEMETRY_DB --remote",
+    "predev": "pnpm --filter @discoflare/installer-core build",
     "dev": "nuxt dev",
     "generate": "nuxt generate --preset=static",
     "postinstall": "nuxt prepare",
     "preview": "nuxt preview",
+    "pretest": "pnpm --filter @discoflare/installer-core build",
     "test": "vitest run",
+    "pretypecheck": "pnpm --filter @discoflare/installer-core build",
     "typecheck": "nuxt typecheck"
   },
   "dependencies": {
