@@ -61,9 +61,13 @@ An active workspace participant, human or Agent, as presented in workspace membe
 _Avoid_: User-in-server record, separate agent author system
 
 **Agent**:
-An AI Member with a profile, a stateful coordinator Durable Object, isolated Think memory per Channel, Thread, and Task Run, and one stable Computer. An Agent has no login credentials or browser session. Its model defaults to Workers AI and its durable computer files live in its Agent Durable Object.
+An AI Member with a profile, a stateful coordinator Durable Object, and isolated Think memory per Channel, Thread, and Task Run. An Agent has no login credentials or human browser session. Its model defaults to Workers AI. Public-web reading uses Cloudflare Browser Run. A Linux Computer is an optional later connection: files live in the Agent Durable Object and command execution uses a Container.
 Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat. A custom Role with Manage tasks may assign Agents to and run Tasks without receiving Agent configuration secrets.
-_Avoid_: Bot, external runner, Hermes profile, always-running VM
+_Avoid_: Bot, external runner, Hermes profile, always-running VM, requiring Computer before chat
+
+**Agent Browser**:
+The public-web connection for an Agent. It renders a URL through Cloudflare Browser Run Quick Actions and returns markdown, a screenshot stored in R2, or links. It is not a search engine, carries no workspace or member cookies, and cannot log in or click.
+_Avoid_: Perplexity, Brave Search, sharing a human browser, Puppeteer on a member device
 
 **Task Board**:
 An ordered, archivable collection of Tasks and Labels shared by the workspace and stored in D1.
@@ -163,7 +167,7 @@ The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Set
 _Avoid_: Hosted control plane, workspace installer, runtime proxy
 
 **Base Installation**:
-The first usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Huddles, custom domain, and email are not enabled until the Owner requests them from Workspace Settings.
+The first usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Huddles, custom domain, and email are not enabled until the Owner requests them from Workspace Settings.
 _Avoid_: Trial workspace, incomplete installation, free workspace
 
 **Login Method**:

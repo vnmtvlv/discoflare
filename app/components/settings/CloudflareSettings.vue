@@ -115,7 +115,7 @@ async function configureDomain() {
         <div class="mt-6 grid gap-3 border-t border-default pt-5 sm:grid-cols-3">
           <div class="rounded-md border border-default p-4">
             <p class="text-sm font-medium text-highlighted">Agent Computer</p>
-            <p class="mt-1 text-sm text-muted">{{ status.agentComputerEnabled ? 'Containers and task workflows are enabled.' : 'Requires the Workers Paid plan.' }}</p>
+            <p class="mt-1 text-sm text-muted">{{ status.agentComputerEnabled ? 'Linux sandbox and task workflows are enabled.' : 'Optional Linux connection. Requires the Workers Paid plan. Chat agents work without it.' }}</p>
             <UButton
               v-if="!status.agentComputerEnabled && status.managementMode === 'admin'"
               class="mt-3"

@@ -23,6 +23,9 @@ export type DiscoflareEnv = {
   AGENT_THINK: DurableObjectNamespace
   AGENT_TASK_WORKFLOW?: Workflow<AgentTaskWorkflowParams>
   AI: Ai
+  BROWSER?: {
+    quickAction: (action: 'markdown' | 'screenshot' | 'links', options: { url: string }) => Promise<Response>
+  }
   EMAIL?: SendEmail
   MAIL_EMAIL?: SendEmail
   MAIL_GATEWAY?: Fetcher
@@ -94,4 +97,12 @@ export function agentComputerConfigured(env: DiscoflareEnv): boolean {
   return env.DISCOFLARE_AGENT_COMPUTER_ENABLED
     ? env.DISCOFLARE_AGENT_COMPUTER_ENABLED === 'true' && Boolean(env.AGENT_TASK_WORKFLOW)
     : Boolean(env.AGENT_TASK_WORKFLOW)
+}
+
+export function agentBrowserConfigured(env: DiscoflareEnv): boolean {
+  return Boolean(env.BROWSER)
+}
+
+export function agentRuntimeConfigured(env: DiscoflareEnv): boolean {
+  return Boolean(env.AI && env.AGENT_DO)
 }

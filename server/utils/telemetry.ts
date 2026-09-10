@@ -1,5 +1,5 @@
 import type { TelemetryHeartbeat } from '../../shared/telemetry'
-import { agentComputerConfigured, type DiscoflareEnv } from '../../workers/env'
+import { agentRuntimeConfigured, type DiscoflareEnv } from '../../workers/env'
 import { workspaceEmailAvailable } from '../../workers/mail-transport'
 
 const DEFAULT_ENDPOINT = 'https://discoflare.com/api/telemetry/heartbeat'
@@ -31,7 +31,7 @@ export function telemetryHeartbeat(env: DiscoflareEnv, sentAt = new Date().toISO
       kv: Boolean(env.TICKETS),
       customDomain: Boolean(env.DISCOFLARE_APP_HOSTNAME),
       email: Boolean(env.MAIL_DOMAIN && (workspaceEmailAvailable(env) || env.EMAIL)),
-      agents: agentComputerConfigured(env) && Boolean(env.AI && env.AGENT_DO),
+      agents: agentRuntimeConfigured(env),
       huddles: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID && (env.REALTIMEKIT_API_KEY || env.DISCOFLARE_ADMIN_TOKEN || env.DISCOFLARE_ADMIN)),
     },
   }

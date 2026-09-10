@@ -18,6 +18,7 @@
     { "pattern": "sandbox.discoflare.com", "custom_domain": true }
   ],
   "ai": { "binding": "AI" },
+  "browser": { "binding": "BROWSER" },
   "workflows": [
     { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-sandbox-agent-tasks", "class_name": "AgentTaskWorkflow" }
   ],
