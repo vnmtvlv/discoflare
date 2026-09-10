@@ -4,8 +4,10 @@ import type { AdminSession, InstallationList } from '../../shared/types'
 import { isNewerRelease } from '~~/shared/versions'
 import { ADMIN_LOGOUT_PATH, GITHUB_RELEASES_URL } from '../utils/account-controls'
 import { readDeployStream } from '../utils/deploy-stream'
+import type { DeployProgress } from '../utils/deploy-progress'
 import { waitForAdminVersion, waitForConnectedSession, waitForDisconnectedSession } from '../utils/session-activation'
 import { verifyWorkspaceDeployment } from '../utils/deployment-health'
+import { openWorkspaceOrigin } from '../utils/workspace-origin'
 
 const { data: session, error: sessionFailure } = await useFetch<AdminSession>('/api/session')
 if (sessionFailure.value?.statusCode === 401) await navigateTo('/login', { redirectCode: 302 })
@@ -21,6 +23,8 @@ const error = ref('')
 const showCreate = ref(false)
 const tokenDialogOpen = ref(false)
 const disconnectDialogOpen = ref(false)
+const lastSetupUrl = ref('')
+const progress = ref<DeployProgress | null>(null)
 
 const form = reactive<DeployRequest>({
   accountId: '',
@@ -180,8 +184,13 @@ async function updateAdmin() {
   }
 }
 
+function reportProgress(event: DeployProgress) {
+  progress.value = event
+}
+
 async function createInstallation() {
   mutating.value = 'create'
+  progress.value = null
   error.value = ''
   try {
     const response = await fetch('/api/installations', {
@@ -190,22 +199,28 @@ async function createInstallation() {
       headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
       body: JSON.stringify(form),
     })
-    const deployed = await readDeployStream(response)
-    if (!deployed.verified) await verifyWorkspaceDeployment(deployed)
+    const deployed = await readDeployStream(response, reportProgress)
+    if (!deployed.verified) {
+      reportProgress({ type: 'progress', step: 'verify', state: 'active', detail: 'Waiting for workspace health' })
+      await verifyWorkspaceDeployment(deployed)
+    }
     showCreate.value = false
+    lastSetupUrl.value = deployed.setupUrl || ''
     await loadInventory()
-    await navigateTo(deployed.setupUrl || deployed.url, { external: true, open: { target: '_blank' } })
+    openWorkspaceOrigin(deployed.setupUrl || deployed.url)
   }
   catch (cause) {
     error.value = errorMessage(cause)
   }
   finally {
     mutating.value = null
+    progress.value = null
   }
 }
 
 async function updateInstallation(workerName: string) {
   mutating.value = workerName
+  progress.value = null
   error.value = ''
   try {
     const response = await fetch(`/api/installations/${encodeURIComponent(workerName)}`, {
@@ -214,8 +229,11 @@ async function updateInstallation(workerName: string) {
       headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
       body: JSON.stringify({ targetVersion: latestVersion.value ? `v${latestVersion.value}` : undefined }),
     })
-    const deployed = await readDeployStream(response)
-    if (!deployed.verified) await verifyWorkspaceDeployment(deployed)
+    const deployed = await readDeployStream(response, reportProgress)
+    if (!deployed.verified) {
+      reportProgress({ type: 'progress', step: 'verify', state: 'active', detail: 'Waiting for workspace health' })
+      await verifyWorkspaceDeployment(deployed)
+    }
     await loadInventory()
   }
   catch (cause) {
@@ -223,10 +241,21 @@ async function updateInstallation(workerName: string) {
   }
   finally {
     mutating.value = null
+    progress.value = null
   }
 }
 
-onMounted(loadInventory)
+function warnBeforeUnload(event: BeforeUnloadEvent) {
+  if (!mutating.value) return
+  event.preventDefault()
+  event.returnValue = ''
+}
+
+onMounted(() => {
+  window.addEventListener('beforeunload', warnBeforeUnload)
+  void loadInventory()
+})
+onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 
 useSeoMeta({
   title: 'Discoflare Admin',
@@ -260,10 +289,21 @@ useSeoMeta({
             <h1 class="mt-2 text-3xl font-semibold tracking-tight text-highlighted sm:text-4xl">Your Discoflare installations</h1>
             <p class="mt-3 max-w-2xl text-muted">One Cloudflare credential stays in this small Worker. Workspace Workers never receive it.</p>
           </div>
-          <UButton v-if="session?.tokenConnected" label="New installation" leading-icon="i-ph-plus" size="lg" @click="showCreate = !showCreate" />
+          <UButton v-if="session?.tokenConnected" label="New installation" leading-icon="i-ph-plus" size="lg" :disabled="Boolean(mutating)" @click="showCreate = !showCreate" />
         </div>
 
         <UAlert v-if="sessionError || error" class="mt-6" color="error" variant="subtle" title="Operation stopped" :description="sessionError || error" />
+
+        <UAlert
+          v-if="lastSetupUrl"
+          class="mt-6"
+          color="primary"
+          variant="subtle"
+          icon="i-ph-key"
+          title="Finish owner setup"
+          description="This private link is shown once. Opening the workspace origin without it cannot create the Owner."
+          :actions="[{ label: 'Open owner setup', onClick: () => openWorkspaceOrigin(lastSetupUrl) }]"
+        />
 
         <UAlert
           v-if="session?.tokenConnected && adminUpdateAvailable"
@@ -311,16 +351,22 @@ useSeoMeta({
           <UCard v-if="showCreate" class="mt-8" :ui="{ body: 'p-6 sm:p-8' }">
             <div class="flex items-start justify-between gap-4">
               <div><h2 class="text-lg font-semibold text-highlighted">New installation in {{ session.accountName }}</h2><p class="mt-1 text-sm text-muted">Starts on workers.dev with the base Cloudflare resources. Add capabilities later from Workspace Settings.</p></div>
-              <UButton icon="i-ph-x" aria-label="Close" color="neutral" variant="ghost" @click="showCreate = false" />
+              <UButton icon="i-ph-x" aria-label="Close" color="neutral" variant="ghost" :disabled="mutating === 'create'" @click="showCreate = false" />
             </div>
-            <form class="mt-6 grid gap-5 sm:grid-cols-2" @submit.prevent="createInstallation">
+            <DeployProgress
+              v-if="mutating === 'create'"
+              class="mt-6"
+              :event="progress"
+              :title="`Creating ${form.appName || form.workerName}`"
+            />
+            <form v-else class="mt-6 grid gap-5 sm:grid-cols-2" @submit.prevent="createInstallation">
               <UFormField label="Worker name" required><UInput v-model="form.workerName" class="w-full" /></UFormField>
               <UFormField label="Workspace name" required><UInput v-model="form.appName" class="w-full" /></UFormField>
               <UFormField label="Owner email" required><UInput v-model="form.adminEmail" type="email" class="w-full" /></UFormField>
               <UFormField label="Registration" required><USelect v-model="form.registrationMode" :items="[{ label: 'Invite only', value: 'invite_only' }, { label: 'Open signup', value: 'open' }]" value-key="value" class="w-full" /></UFormField>
               <div class="flex justify-end gap-3 border-t border-muted pt-5 sm:col-span-2">
                 <UButton type="button" color="neutral" variant="ghost" label="Cancel" @click="showCreate = false" />
-                <UButton type="submit" label="Deploy Discoflare" trailing-icon="i-ph-arrow-right" :loading="mutating === 'create'" />
+                <UButton type="submit" label="Deploy Discoflare" trailing-icon="i-ph-arrow-right" />
               </div>
             </form>
           </UCard>
@@ -348,9 +394,16 @@ useSeoMeta({
                   :color="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'neutral' : 'primary'"
                   :variant="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'outline' : 'solid'"
                   :loading="mutating === installation.workerName"
+                  :disabled="Boolean(mutating)"
                   @click="updateInstallation(installation.workerName)"
                 />
               </div>
+              <DeployProgress
+                v-if="mutating === installation.workerName"
+                class="mt-5"
+                :event="progress"
+                :title="`${installation.version === latestVersion ? 'Repairing' : 'Updating'} ${installation.configuration.appName}`"
+              />
             </UCard>
             <UCard v-if="inventory && !inventory.installations.length"><div class="py-10 text-center"><UIcon name="i-ph-cloud" class="mx-auto size-8 text-muted" /><p class="mt-3 font-medium text-highlighted">No Discoflare installations yet</p><p class="mt-1 text-sm text-muted">Create the first workspace in this account.</p></div></UCard>
           </div>

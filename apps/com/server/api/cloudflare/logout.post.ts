@@ -16,6 +16,6 @@ export default defineEventHandler(async (event) => {
       body,
     }).catch(() => undefined)
   }
-  await session.update({ cloudflare: undefined, oauthPending: undefined })
+  await session.update({ cloudflare: undefined, oauthPending: undefined, managedAdmins: [] })
   return { ok: true }
 })

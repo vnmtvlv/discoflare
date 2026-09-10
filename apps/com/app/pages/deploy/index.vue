@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeRouteLeave } from 'vue-router'
 import type { DiscoflareAdminBootstrapResponse, InstallerSessionResponse } from '~~/shared/installer'
+import { installerOAuthError } from '../../utils/oauth-error'
 
 const route = useRoute()
 const oauthStartUrl = `/api/cloudflare/oauth/start?returnTo=${encodeURIComponent('/deploy')}`
@@ -13,7 +14,7 @@ const accountId = ref('')
 const attemptedAccountId = ref('')
 const installing = ref(false)
 const result = shallowRef<DiscoflareAdminBootstrapResponse | null>(null)
-const error = ref(typeof route.query.error === 'string' ? 'Cloudflare connection was not completed.' : '')
+const error = ref(installerOAuthError(route.query.error))
 
 watch(() => session.value.accounts, (accounts) => {
   if (!accountId.value && accounts.length === 1) accountId.value = accounts[0]!.id
@@ -34,7 +35,14 @@ function warnBeforeUnload(event: BeforeUnloadEvent) {
   event.returnValue = ''
 }
 
-onMounted(() => window.addEventListener('beforeunload', warnBeforeUnload))
+onMounted(() => {
+  window.addEventListener('beforeunload', warnBeforeUnload)
+  if (typeof route.query.error === 'string') {
+    const url = new URL(window.location.href)
+    url.searchParams.delete('error')
+    window.history.replaceState({}, '', `${url.pathname}${url.search}`)
+  }
+})
 onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 onBeforeRouteLeave(() => installing.value ? window.confirm('Discoflare Admin may still be deploying. Keep this page open until it finishes.') : true)
 
@@ -131,9 +139,20 @@ useSeoMeta({
               </div>
 
               <div v-else class="space-y-6">
-                <div>
-                  <h2 class="text-lg font-semibold text-highlighted">Your managed installations</h2>
-                  <p class="mt-1 text-sm text-muted">Reconnect Cloudflare to install or repair Admin. Existing workspaces remain independent of discoflare.com.</p>
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 class="text-lg font-semibold text-highlighted">Your managed installations</h2>
+                    <p class="mt-1 text-sm text-muted">Reconnect Cloudflare to install or repair Admin. Existing workspaces remain independent of discoflare.com.</p>
+                  </div>
+                  <UButton
+                    v-if="session.managedAdmins.length"
+                    type="button"
+                    label="Sign out"
+                    color="neutral"
+                    variant="ghost"
+                    size="sm"
+                    @click="disconnect"
+                  />
                 </div>
                 <div v-if="session.managedAdmins.length" class="space-y-3">
                   <div v-for="admin in session.managedAdmins" :key="admin.accountId" class="flex items-center justify-between gap-4 rounded-xl border border-default p-4">
