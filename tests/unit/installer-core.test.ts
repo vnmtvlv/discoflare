@@ -70,6 +70,13 @@ describe('installer-core', () => {
     expect(() => parseDeployRequest({ ...request, accountId: 'wrong' })).toThrow(InstallerError)
   })
 
+  it('accepts pre-release versions as explicit install targets', () => {
+    expect(parseDeployRequest({ ...request, targetVersion: 'v0.10.0-rc.1' }).targetVersion).toBe('v0.10.0-rc.1')
+    expect(parseDeployRequest({ ...request, targetVersion: '0.10.0' }).targetVersion).toBe('0.10.0')
+    expect(() => parseDeployRequest({ ...request, targetVersion: 'latest' })).toThrow('Invalid Discoflare release version')
+    expect(() => parseDeployRequest({ ...request, targetVersion: '../v0.10.0' })).toThrow('Invalid Discoflare release version')
+  })
+
   it('normalizes managed RealtimeKit as an explicit opt-in', () => {
     expect(parseDeployRequest({ ...request, realtimekitEnabled: true }).realtimekitEnabled).toBe(true)
     expect(parseDeployRequest({ ...request, realtimekitEnabled: 'yes' }).realtimekitEnabled).toBe(false)
