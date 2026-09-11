@@ -1,5 +1,3 @@
-import { installerConfig } from '../../utils/installer-config'
-
 let cache: { version: string | null, fetchedAt: number } | null = null
 const CACHE_MS = 5 * 60 * 1000
 
