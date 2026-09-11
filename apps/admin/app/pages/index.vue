@@ -218,16 +218,19 @@ async function createInstallation() {
   }
 }
 
-async function updateInstallation(workerName: string) {
+async function updateInstallation(workerName: string, version?: string) {
   mutating.value = workerName
   progress.value = null
   error.value = ''
   try {
+    const targetVersion = version
+      ? `v${version.replace(/^v/u, '')}`
+      : latestVersion.value ? `v${latestVersion.value}` : undefined
     const response = await fetch(`/api/installations/${encodeURIComponent(workerName)}`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { Accept: 'application/x-ndjson', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ targetVersion: latestVersion.value ? `v${latestVersion.value}` : undefined }),
+      body: JSON.stringify({ targetVersion }),
     })
     const deployed = await readDeployStream(response, reportProgress)
     if (!deployed.verified) {
@@ -249,6 +252,35 @@ function warnBeforeUnload(event: BeforeUnloadEvent) {
   if (!mutating.value) return
   event.preventDefault()
   event.returnValue = ''
+}
+
+const versionDialog = ref<{ workerName: string, appName: string } | null>(null)
+const versionInput = ref('')
+const versionBusy = ref(false)
+const versionError = ref('')
+
+function openVersionDialog(workerName: string, appName: string) {
+  versionInput.value = ''
+  versionError.value = ''
+  versionDialog.value = { workerName, appName }
+}
+
+async function submitVersionDialog() {
+  const target = versionDialog.value
+  if (!target) return
+  const version = versionInput.value.trim().replace(/^v/u, '')
+  if (!/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/u.test(version)) {
+    versionError.value = 'Enter a release version like 0.10.0 or 0.10.0-rc.1'
+    return
+  }
+  versionBusy.value = true
+  try {
+    versionDialog.value = null
+    await updateInstallation(target.workerName, version)
+  }
+  finally {
+    versionBusy.value = false
+  }
 }
 
 onMounted(() => {
@@ -389,14 +421,22 @@ useSeoMeta({
                     <span>{{ installation.configuration.mailEnabled ? installation.resources.mailDomain : 'No email' }}</span>
                   </div>
                 </div>
-                <UButton
-                  :label="installation.configuration.managementMode !== 'admin' ? 'Connect and update' : installation.version === latestVersion ? 'Repair' : `Update to ${latestVersion}`"
-                  :color="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'neutral' : 'primary'"
-                  :variant="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'outline' : 'solid'"
-                  :loading="mutating === installation.workerName"
-                  :disabled="Boolean(mutating)"
-                  @click="updateInstallation(installation.workerName)"
-                />
+                <div class="flex items-center gap-2">
+                  <UButton
+                    :label="installation.configuration.managementMode !== 'admin' ? 'Connect and update' : installation.version === latestVersion ? 'Repair' : `Update to ${latestVersion}`"
+                    :color="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'neutral' : 'primary'"
+                    :variant="installation.version === latestVersion && installation.configuration.managementMode === 'admin' ? 'outline' : 'solid'"
+                    :loading="mutating === installation.workerName"
+                    :disabled="Boolean(mutating)"
+                    @click="updateInstallation(installation.workerName)"
+                  />
+                  <UDropdownMenu
+                    v-if="installation.configuration.managementMode === 'admin'"
+                    :items="[[{ label: 'Update to specific version…', icon: 'i-ph-tag', onSelect: () => openVersionDialog(installation.workerName, installation.configuration.appName) }]]"
+                  >
+                    <UButton icon="i-ph-dots-three" color="neutral" variant="ghost" square :disabled="Boolean(mutating)" aria-label="More update options" />
+                  </UDropdownMenu>
+                </div>
               </div>
               <DeployProgress
                 v-if="mutating === installation.workerName"
@@ -410,6 +450,26 @@ useSeoMeta({
         </template>
       </UContainer>
     </main>
+
+    <UModal
+      :open="Boolean(versionDialog)"
+      title="Update to specific version"
+      :description="`Install an exact published release on ${versionDialog?.appName || 'this installation'}. Use it to test pre-releases before they become the latest release.`"
+      @update:open="value => { if (!value) versionDialog = null }"
+    >
+      <template #body>
+        <form id="specific-version-form" class="space-y-4" @submit.prevent="submitVersionDialog">
+          <UFormField label="Release version" required hint="For example 0.10.0-rc.1">
+            <UInput v-model="versionInput" placeholder="0.10.0-rc.1" autofocus class="w-full" />
+          </UFormField>
+          <UAlert v-if="versionError" color="error" variant="subtle" :title="versionError" />
+          <div class="flex justify-end gap-3">
+            <UButton type="button" label="Cancel" color="neutral" variant="ghost" @click="versionDialog = null" />
+            <UButton type="submit" label="Update installation" :loading="versionBusy" />
+          </div>
+        </form>
+      </template>
+    </UModal>
 
     <UModal v-model:open="tokenDialogOpen" title="Replace Account Admin Token" description="The new token replaces the encrypted secret stored in this Worker.">
       <template #body>
