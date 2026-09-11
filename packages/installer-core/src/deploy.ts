@@ -377,9 +377,8 @@ async function applyD1Migrations(accessToken: string, accountId: string, databas
       method: 'POST',
       body: JSON.stringify({ sql }),
     })
-    if (results.length !== pending.length) {
-      throw createError({ statusCode: 502, statusMessage: 'Discoflare migrations did not all complete' })
-    }
+    // D1 returns one result per SQL statement (each migration holds many), so
+    // only inspect per-statement success here.
     if (results.some(statement => statement.success === false)) {
       throw createError({ statusCode: 502, statusMessage: 'Discoflare migration did not complete' })
     }
