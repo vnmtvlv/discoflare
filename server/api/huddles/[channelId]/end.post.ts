@@ -12,9 +12,9 @@ export default defineEventHandler(async (event) => {
     endHuddle: (actor: typeof member.user) => Promise<unknown>
   }>(env.CHANNEL_DO.getByName(`channel:${channelId}`))
   const huddle = await stub.getHuddle()
-  if (!huddle.active) fail(404, 'not_found', 'No huddle to end')
+  if (!huddle.active) fail(404, 'not_found', 'No live session to end')
   const canManage = member.isOwner || hasPermission(member.perms, Permission.manageChannels)
-  if (huddle.startedBy !== member.user.id && !canManage) fail(403, 'forbidden', 'Only the starter or a channel manager can end this huddle')
+  if (huddle.startedBy !== member.user.id && !canManage) fail(403, 'forbidden', 'Only the starter or a channel manager can end this live session')
   await stub.endHuddle(member.user)
   await writeAudit(env, { workspaceId: member.workspaceId, actorId: member.user.id, action: 'huddle.end', targetType: 'channel', targetId: channelId })
   return { ok: true }

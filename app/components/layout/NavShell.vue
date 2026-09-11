@@ -318,7 +318,7 @@ watch(nav.inviteOpen, (open) => {
         <UIcon :name="huddle.currentKind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" class="size-3.5" />
         Connected
       </p>
-      <p class="truncate text-[11px] text-muted">{{ huddle.currentTitle || 'Huddle' }}</p>
+      <p class="truncate text-[11px] text-muted">{{ huddle.currentTitle || 'Live' }}</p>
     </button>
     <LayoutUserPanel />
     <SettingsWorkspaceSettings v-if="canOpenWorkspaceSettings" v-model:open="nav.workspaceSettingsOpen.value" :workspace-id="workspaceId" />

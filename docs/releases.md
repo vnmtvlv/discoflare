@@ -104,7 +104,7 @@ migrations, and any manual actions required by GitHub/Workers Builds users.
 
 ## Known limitations
 
-- Live huddles require RealtimeKit and internet connectivity.
+- Live sessions require RealtimeKit and internet connectivity.
 
 **Full changelog:** v0.0.1...v0.0.2
 ```

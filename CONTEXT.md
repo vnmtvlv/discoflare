@@ -1,6 +1,6 @@
 # Discoflare
 
-Self-hosted team chat that runs on a Cloudflare account. One operator, many members, text plus optional realtime calls and huddles.
+Self-hosted team chat that runs on a Cloudflare account. One operator, many members, text plus optional realtime calls and live sessions.
 
 ## Language
 
@@ -32,20 +32,20 @@ _Avoid_: Email chain as a second conversation model, showing quoted replies as n
 A private Channel among workspace members. Two members is 1:1; three to twenty-five is a group.
 _Avoid_: Friend chat, private message, Group DM as a separate kind, DM voice channel
 
-**Huddle**:
-A live session in a workspace Channel or group Direct Message. It starts as audio and participants may turn on camera or share their screen. The parent conversation owns access and there is at most one active Huddle per conversation.
-_Avoid_: Permanent audio room, meeting as a second conversation entity
+**Live**:
+A live session in a workspace Channel or group Direct Message. It starts as audio and participants may turn on camera or share their screen. The parent conversation owns access and there is at most one active Live session per conversation.
+_Avoid_: Huddle, permanent audio room, meeting as a second conversation entity
 
 **Call**:
-The 1:1 Direct Message presentation of a live session. A Call rings the other participant; it uses the same lifecycle and RealtimeKit media plane as a Huddle.
+The 1:1 Direct Message presentation of a live session. A Call rings the other participant; it uses the same lifecycle and RealtimeKit media plane as a Live session.
 _Avoid_: Separate call store, separate call permissions
 
-**Scheduled Huddle**:
+**Scheduled Live**:
 A D1-backed event attached to a Channel or Direct Message. At its start time it becomes ready and notifies eligible participants; the first participant starts the live session.
 _Avoid_: Calendar as a separate product, scheduled RealtimeKit meeting as source of truth
 
 **Voice channel**:
-A legacy workspace Channel type retained for existing installations. New Channels are ordinary text Channels because every Channel can host a Huddle.
+A legacy workspace Channel type retained for existing installations. New Channels are ordinary text Channels because every Channel can host a Live session.
 _Avoid_: Creating a new permanent voice-only taxonomy
 
 **Thread**:
@@ -123,7 +123,7 @@ _Avoid_: Permanent VM, implying the container process runs forever
 
 **Role**:
 Named reusable set of workspace Grants assigned to Members. Owner, Admin, and Member are protected system Roles; operators may add custom Roles.
-Owner and Admin receive every Grant. Member is chat-only by default: it may send Messages, attach files, and start Huddles, but it cannot see or operate workspace settings, Agent configuration, Task Boards, Tasks, or Task Runs. Administrative access may be delegated only by assigning an explicit custom Role Grant.
+Owner and Admin receive every Grant. Member is chat-only by default: it may send Messages, attach files, and start Live sessions, but it cannot see or operate workspace settings, Agent configuration, Task Boards, Tasks, or Task Runs. Administrative access may be delegated only by assigning an explicit custom Role Grant.
 _Avoid_: Rank, group
 
 **Grant**:
@@ -167,7 +167,7 @@ The flow on discoflare.com that creates or repairs Discoflare Admin. Managed Set
 _Avoid_: Hosted control plane, workspace installer, runtime proxy
 
 **Base Installation**:
-The first usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Huddles, custom domain, and email are not enabled until the Owner requests them from Workspace Settings.
+The first usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Live, custom domain, and email are not enabled until the Owner requests them from Workspace Settings.
 _Avoid_: Trial workspace, incomplete installation, free workspace
 
 **Login Method**:
@@ -179,7 +179,7 @@ An immutable, owner-published bundle of Terms, Privacy policy, and Workspace rul
 _Avoid_: External policy URL, mutable acceptance, forcing existing Members to re-accept
 
 **Message**:
-A chat or email event in a Channel containing written content, Attachments, or both. A recorded audio message is a Message with an audio Attachment, not a Huddle. Email-specific sender, recipient, threading, and delivery fields live in a companion record; Internal Notes need none.
+A chat or email event in a Channel containing written content, Attachments, or both. A recorded audio message is a Message with an audio Attachment, not a Live session. Email-specific sender, recipient, threading, and delivery fields live in a companion record; Internal Notes need none.
 _Avoid_: Post, comment
 
 **Attachment**:
@@ -191,5 +191,5 @@ A Member's ephemeral online, idle, or offline state.
 _Avoid_: User status, membership status, availability
 
 **Push Subscription**:
-A Member's opt-in browser endpoint for mentions, Direct Messages, and newly started Huddles. It belongs to one browser installation, not to the Member profile globally.
+A Member's opt-in browser endpoint for mentions, Direct Messages, and newly started Live sessions. It belongs to one browser installation, not to the Member profile globally.
 _Avoid_: Notification permission as a workspace Role, VAPID endpoint as a public URL

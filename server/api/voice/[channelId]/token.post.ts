@@ -14,9 +14,9 @@ export default defineEventHandler(async (event) => {
     getHuddle: () => Promise<HuddleState>
   }>(env.CHANNEL_DO.getByName(`channel:${channelId}`))
   const huddle = await stub.getHuddle()
-  if (!huddle.active || !huddle.meetingId) fail(404, 'not_found', 'No active huddle')
+  if (!huddle.active || !huddle.meetingId) fail(404, 'not_found', 'No active live session')
   const meetingId = huddle.meetingId
-  if (!meetingId) fail(404, 'not_found', 'No active huddle')
+  if (!meetingId) fail(404, 'not_found', 'No active live session')
 
   const { token } = await addParticipant(realtimekit, meetingId, {
     name: member.user.displayName,

@@ -129,7 +129,7 @@ async function configureDomain() {
             />
           </div>
           <div class="rounded-md border border-default p-4">
-            <p class="text-sm font-medium text-highlighted">Huddles</p>
+            <p class="text-sm font-medium text-highlighted">Live</p>
             <p class="mt-1 text-sm text-muted">{{ status.huddlesEnabled ? 'RealtimeKit is connected.' : 'Discoflare Admin can connect RealtimeKit.' }}</p>
             <UButton
               v-if="!status.huddlesEnabled && status.managementMode === 'admin'"

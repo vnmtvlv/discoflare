@@ -31,7 +31,7 @@ This repository is the source of truth for the complete product while each deplo
 
 Four apps bring conversations, work, email, and knowledge into one workspace:
 
-- **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first huddle with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Huddles can also be scheduled in their parent conversation. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
+- **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first Live session with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Live sessions can also be scheduled in their parent conversation. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
 - **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Assign Agents to execute Tasks, follow their progress, and retain run history with cancellation and recovery.
 - **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
 - **Data** — Keep structured information and knowledge together. Shape each Database through shared table, list, board, and calendar Views with typed filters and sorting; bookmark the Views, Documents, and Canvases important to you; and edit records without exposing their physical D1 storage.
@@ -60,7 +60,7 @@ One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Eac
 | Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data app content, Agents, boards, Tasks, Task Runs, and Agent Computer files. R2 stores attachments and raw email. |
 | Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation and Task Run. KV holds short-lived WebSocket tickets. |
 | Agent execution | Workers AI, Browser Run, optional Workflows / Computer / Containers | Chat and public-web reading on the base workspace; Linux command execution after Agent Computer. |
-| Voice and video | RealtimeKit | Carry optional huddle media. |
+| Voice and video | RealtimeKit | Carry optional Live session media. |
 
 ```
 Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / R2 / KV
@@ -70,7 +70,7 @@ Chat ──► Agent DO + Think ──► Workers AI
                     └───────────► Browser Run (public URLs)
 Task ──► Agent DO + Computer ──► Workflow ──► Workers AI
                     └───────────► Container runtime
-Huddle media ────────────────► RealtimeKit
+Live session media ─────────► RealtimeKit
 ```
 
 See the [architecture guide](docs/architecture.md) for runtime boundaries and storage invariants.
@@ -90,7 +90,7 @@ After Agent Computer is enabled, its first Container image may need several minu
 1. Open the [managed installer](https://discoflare.com/deploy), sign in with Cloudflare, and choose the account.
 2. The OAuth grant creates or repairs `discoflare-admin`; Managed Setup stores its renewable credential there as encrypted Worker secrets.
 3. Admin immediately creates the first `discoflare` workspace on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim. The installer discards its own session before the Owner enters the workspace.
-4. Enable Agent Computer, Huddles, custom domains, and email later from Workspace Settings when the account is ready for them.
+4. Enable Agent Computer, Live, custom domains, and email later from Workspace Settings when the account is ready for them.
 
 The broad Cloudflare credential stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. The operator does not register another OAuth client and Managed Setup neither requests Account API Token Write nor creates an Account Admin Token. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without a renewable OAuth grant, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
 
@@ -113,7 +113,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 - **Login and signup protection** — Guided installs use Discoflare-owned accounts by default. The Owner can invite members immediately and configure auth email, OAuth, and Turnstile later without redeploying. Cloudflare Access remains an advanced installation option.
 - **Verification and password-reset email** — Configure a Cloudflare Email Service binding and verified sender domain. See the [email setup guide](docs/deployment.md#verification-and-password-reset-email).
-- **Calls and huddles** — Connect RealtimeKit in **Workspace Settings → Huddles**. Deployment secrets remain available as an override. Every Channel and Direct Message can host one live session; 1:1 DMs ring as calls, while groups and Channels expose joinable huddles. V1 does not record or transcribe live sessions. Text chat works without RealtimeKit, and the app explains when credentials are missing.
+- **Calls and Live** — Connect RealtimeKit in **Workspace Settings → Live**. Deployment secrets remain available as an override. Every Channel and Direct Message can host one live session; 1:1 DMs ring as calls, while groups and Channels expose joinable Live sessions. V1 does not record or transcribe live sessions. Text chat works without RealtimeKit, and the app explains when credentials are missing.
 - **Web Push** — Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push requires HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
 
 ## Manage your installation

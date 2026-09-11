@@ -114,7 +114,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     )).limit(1))[0]
     if (!grant) fail(404, 'not_found', 'Channel not found')
     if (flag === Permission.manageChannels) fail(403, 'forbidden', 'Manage mailboxes in email settings')
-    if (flag === Permission.startHuddle) fail(403, 'forbidden', 'Huddles are unavailable for mailboxes')
+    if (flag === Permission.startHuddle) fail(403, 'forbidden', 'Live sessions are unavailable for mailboxes')
     const mutationWithoutFlag = !['GET', 'HEAD'].includes(event.method.toUpperCase()) && flag === undefined
     if ((mutationWithoutFlag || flag === Permission.sendMessages || flag === Permission.attachFiles) && !mailPermissionAllows(grant.permission, 'send')) {
       fail(403, 'forbidden', 'Mailbox is read only')

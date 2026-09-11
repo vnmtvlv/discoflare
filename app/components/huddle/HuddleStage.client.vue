@@ -25,7 +25,7 @@ const participants = computed(() => [
         <p class="truncate text-sm font-semibold text-highlighted">{{ huddle.currentTitle || 'Huddle' }}</p>
         <p class="text-xs text-muted">{{ participants.length }} {{ participants.length === 1 ? 'participant' : 'participants' }}</p>
       </div>
-      <UButton icon="i-ph-corners-in" color="neutral" variant="ghost" square aria-label="Minimize huddle" @click="huddle.expanded = false" />
+      <UButton icon="i-ph-corners-in" color="neutral" variant="ghost" square aria-label="Minimize live session" @click="huddle.expanded = false" />
     </header>
 
     <div class="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 gap-2 overflow-y-auto p-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -91,7 +91,7 @@ const participants = computed(() => [
         v-if="canEnd"
         :items="[[{ label: 'End for everyone', icon: 'i-ph-x-circle', color: 'error', onSelect: () => emit('end') }]]"
       >
-        <UButton color="neutral" variant="ghost" square icon="i-ph-dots-three-vertical" aria-label="Huddle actions" />
+        <UButton color="neutral" variant="ghost" square icon="i-ph-dots-three-vertical" aria-label="Live session actions" />
       </UDropdownMenu>
     </footer>
   </section>

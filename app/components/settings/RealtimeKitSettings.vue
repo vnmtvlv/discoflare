@@ -171,7 +171,7 @@ onMounted(load)
 <template>
   <div>
     <div class="flex items-center gap-3">
-      <h1 class="text-xl font-semibold text-highlighted">Huddles</h1>
+      <h1 class="text-xl font-semibold text-highlighted">Live</h1>
       <UBadge :label="statusLabel" :color="statusColor" variant="subtle" />
       <UButton
         class="ms-auto"

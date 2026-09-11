@@ -36,7 +36,7 @@ function timeLabel(value: string) {
         <UIcon :name="item.status === 'ready' ? 'i-ph-waveform' : 'i-ph-calendar-blank'" class="size-4" />
       </div>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-sm font-medium text-highlighted">{{ item.title || `Scheduled ${kind}` }}</p>
+        <p class="truncate text-sm font-medium text-highlighted">{{ item.title || `Scheduled ${kind === 'call' ? 'call' : 'live'}` }}</p>
         <p class="truncate text-xs text-muted">{{ item.status === 'ready' ? 'Ready to start' : timeLabel(item.startsAt) }}</p>
       </div>
       <UButton
@@ -50,7 +50,7 @@ function timeLabel(value: string) {
         v-if="canManage || item.createdBy.id === currentUserId"
         :items="[[{ label: 'Cancel', icon: 'i-ph-x', color: 'error', onSelect: () => emit('cancel', item) }]]"
       >
-        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-dots-three" aria-label="Scheduled huddle actions" />
+        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-dots-three" aria-label="Scheduled live actions" />
       </UDropdownMenu>
     </div>
   </div>

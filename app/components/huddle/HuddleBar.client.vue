@@ -40,7 +40,7 @@ const users = computed(() => Object.fromEntries(props.members.map(member => [mem
     </div>
     <div class="flex items-center gap-1">
       <template v-if="joinedHere">
-        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-corners-out" aria-label="Open huddle" @click="huddle.expanded = true" />
+        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-corners-out" aria-label="Open live session" @click="huddle.expanded = true" />
         <UButton
           color="neutral"
           variant="ghost"

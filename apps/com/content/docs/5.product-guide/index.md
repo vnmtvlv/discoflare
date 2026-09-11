@@ -14,7 +14,7 @@ One Discoflare deployment creates one workspace. Members move between built-in a
 | App | A top-level workspace surface. The released apps are Chat, Tasks, Mail, and Databases. |
 | Human member | A person with a sign-in identity, membership status, Role, and session. |
 | Agent member | A configured AI participant with a model, instructions, permissions, conversation memory, and optional connections such as Browser Run or a Linux computer. It cannot sign in. |
-| Integration | An optional external capability, such as RealtimeKit for Huddles or an authentication provider. |
+| Integration | An optional external capability, such as RealtimeKit for Live sessions or an authentication provider. |
 
 An app is not a separate deployment. Chat messages, Task records, Mail conversations, Database Records, members, and authorization facts live in the same D1 database; files and raw email live in the same protected R2 boundary.
 
@@ -28,7 +28,7 @@ An app is not a separate deployment. Chat messages, Task records, Mail conversat
 
 The app switcher changes the surface, not the security boundary. Access is enforced by the Worker APIs, Durable Objects, and the member's effective permissions.
 
-The default Member Role can chat, attach files, and start Huddles. Administrative surfaces appear only when the member has the corresponding grant. In particular:
+The default Member Role can chat, attach files, and start Live sessions. Administrative surfaces appear only when the member has the corresponding grant. In particular:
 
 - **Manage workspace** controls Agent creation and configuration.
 - **Manage tasks** controls Task boards, Task changes, assignment, and runs.
