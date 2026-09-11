@@ -45,7 +45,7 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     ? [...new Set(body.allowedEmails.map(item => String(item).trim().toLowerCase()).filter(Boolean))]
     : []
   if (allowedEmails.length > 20 || allowedEmails.some(email => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(email))) installerError(400, 'Enter at most 20 valid Access member emails')
-  const targetVersion = typeof body.targetVersion === 'string' && /^v?\d+\.\d+\.\d+$/u.test(body.targetVersion)
+  const targetVersion = typeof body.targetVersion === 'string' && /^v?\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?$/u.test(body.targetVersion)
     ? body.targetVersion
     : undefined
   if (body.targetVersion && !targetVersion) installerError(400, 'Invalid Discoflare release version')
