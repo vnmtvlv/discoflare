@@ -48,7 +48,7 @@ To complete first-owner setup after the manual GitHub deployment:
 2. Open `/setup#claim=<ADMIN_SETUP_TOKEN>` on the resulting Worker URL.
 3. Create the owner name and password there. The workspace becomes ready and signs the owner in.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
-5. Open **Workspace Settings → Huddles** to configure RealtimeKit only if the workspace needs calls or huddles; text chat works without it.
+5. Open **Workspace Settings → Live** to configure RealtimeKit only if the workspace needs calls or live sessions; text chat works without it.
 6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that its Computer is unavailable immediately after deploy, wait for container provisioning and retry the Task.
 
 ### MCP access

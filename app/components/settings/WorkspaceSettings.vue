@@ -85,7 +85,7 @@ const workspaceNav = computed(() => [
   ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels', icon: 'i-ph-hash', keywords: ['categories', 'private', 'voice'] }] : []),
   ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles', icon: 'i-ph-shield', keywords: ['permissions', 'admin', 'access'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents', icon: 'i-ph-robot', keywords: ['bots', 'automation', 'tasks'] }] : []),
-  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Huddles', icon: 'i-ph-speaker-high', keywords: ['voice', 'video', 'realtimekit', 'calls'] }] : []),
+  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Live', icon: 'i-ph-speaker-high', keywords: ['voice', 'video', 'realtimekit', 'calls', 'huddles'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email', icon: 'i-ph-envelope-simple', keywords: ['mail', 'mailbox', 'inbox', 'domain'] }] : []),
   ...(isOwner.value ? [{ id: 'authentication' as const, label: 'Authentication', icon: 'i-ph-key', keywords: ['login', 'signup', 'oauth', 'github', 'sso', 'registration'] }] : []),
   ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),

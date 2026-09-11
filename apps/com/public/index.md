@@ -16,7 +16,7 @@ One workspace contains four released apps that share members, permissions, stora
 - Reactions, mentions, typing indicators, presence, unread state, and pins
 - Recorded audio messages
 - File attachments stored in the workspace owner's R2 bucket
-- Optional voice huddles using Cloudflare RealtimeKit
+- Optional voice Live sessions using Cloudflare RealtimeKit
 
 Message history has no retention window. Messages remain in the workspace owner's D1 database until that owner deletes them.
 
@@ -79,7 +79,7 @@ The person or organization that deploys a workspace controls its infrastructure,
 
 ## Access control
 
-- Members chat, attach files, and start huddles by default
+- Members chat, attach files, and start live sessions by default
 - Manage workspace controls agent creation and configuration
 - Manage tasks controls task boards, changes, assignment, and runs
 - Mailbox grants separately control who may read, send, or manage each mailbox

@@ -292,7 +292,7 @@ async function logout() {
           <UFormField name="displayName" label="Display Name">
             <UInput v-model="state.displayName" class="w-full" />
           </UFormField>
-          <p class="text-sm text-muted">This is how you appear in channels, DMs, and huddles.</p>
+          <p class="text-sm text-muted">This is how you appear in channels, DMs, and live sessions.</p>
           <UButton type="submit" label="Save Changes" :loading="savingName" :disabled="!nameChanged || !state.displayName?.trim()" />
         </UForm>
         <div>
@@ -348,7 +348,7 @@ async function logout() {
         <div class="flex items-start justify-between gap-6 py-4">
           <div>
             <p class="font-medium text-highlighted">Push notifications</p>
-            <p class="text-sm text-muted mt-1">Mentions, direct messages, and new huddles on this device.</p>
+            <p class="text-sm text-muted mt-1">Mentions, direct messages, and new live sessions on this device.</p>
           </div>
           <UButton
             v-if="push.status.value === 'prompt' || push.status.value === 'error'"
@@ -382,7 +382,7 @@ async function logout() {
 
     <template v-else-if="section === 'voice'">
       <h1 class="text-xl font-semibold text-highlighted">Voice & Video</h1>
-      <p class="mt-1 text-sm text-muted">Huddles use your browser microphone. Mute and deafen also live on the account panel.</p>
+      <p class="mt-1 text-sm text-muted">Live sessions use your browser microphone. Mute and deafen also live on the account panel.</p>
       <div class="mt-8 space-y-6 max-w-md">
         <div class="flex gap-2">
           <UButton

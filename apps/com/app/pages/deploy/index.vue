@@ -10,6 +10,11 @@ const { data: session, status, refresh } = await useFetch<InstallerSessionRespon
   default: () => ({ connected: false, accounts: [], zones: [], managedAdmins: [] }),
 })
 
+const { data: releaseVersion } = await useFetch<{ version: string | null }>('/api/release-version', {
+  server: false,
+  default: () => ({ version: null }),
+})
+
 const accountId = ref('')
 const attemptedAccountId = ref('')
 const installing = ref(false)
@@ -171,6 +176,10 @@ useSeoMeta({
               <UCard class="mt-8"><div class="flex min-h-56 items-center justify-center gap-3 text-muted"><UIcon name="i-ph-spinner-gap" class="size-5 animate-spin" />Checking managed profile</div></UCard>
             </template>
           </ClientOnly>
+
+          <p class="mt-6 text-center text-xs text-muted">
+            Discoflare installer{{ releaseVersion?.version ? ` · installs release v${releaseVersion.version}` : '' }}
+          </p>
         </div>
       </UContainer>
     </main>

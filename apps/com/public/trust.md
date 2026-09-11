@@ -62,7 +62,7 @@ Each Agent runs tools in one isolated Cloudflare Containers sandbox, checkpointe
 
 ## Subprocessors
 
-A deployed workspace has none by default. It runs on the Cloudflare account its owner controls, and enabling voice huddles adds RealtimeKit, configured with the owner's own credentials.
+A deployed workspace has none by default. It runs on the Cloudflare account its owner controls, and enabling voice Live sessions adds RealtimeKit, configured with the owner's own credentials.
 
 Discoflare.com uses Cloudflare for hosting and for the D1 database holding the deployment rows described above, and GitHub for source, releases, and the installer manifest. The site uses no advertising or analytics providers.
 
