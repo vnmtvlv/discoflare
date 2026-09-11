@@ -1,6 +1,6 @@
 {
   "name": "@discoflare/cli",
-  "version": "0.9.2",
+  "version": "0.9.3",
   "description": "Install and update Discoflare directly from a terminal",
   "type": "module",
   "license": "MIT",
