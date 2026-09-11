@@ -1,6 +1,6 @@
 {
   "name": "discoflare",
-  "version": "0.9.3",
+  "version": "0.9.4-rc.1",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.3",
