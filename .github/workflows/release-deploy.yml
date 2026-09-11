@@ -19,6 +19,9 @@ concurrency:
 jobs:
   website:
     name: Deploy discoflare.com
+    # Pre-releases publish installer artifacts for stage testing and must
+    # never deploy the production website.
+    if: github.event.release.prerelease != true
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
