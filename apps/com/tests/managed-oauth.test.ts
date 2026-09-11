@@ -13,7 +13,8 @@ describe('managed OAuth permissions', () => {
     expect(scopes).toContain('realtime.admin')
     expect(scopes).toContain('email-sending.write')
     expect(scopes).not.toContain('account-api-tokens.write')
-    expect(scopes).not.toContain('offline_access')
+    // Self-managed OAuth clients issue refresh tokens only when offline_access is requested.
+    expect(scopes).toContain('offline_access')
     expect(scopes).not.toContain('access.write')
   })
 

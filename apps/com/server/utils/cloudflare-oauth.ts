@@ -14,6 +14,8 @@ export const CLOUDFLARE_OAUTH_SCOPES = [
 
 export const CLOUDFLARE_MANAGED_OAUTH_SCOPES = [
   CLOUDFLARE_OAUTH_SCOPES,
+  // Self-managed OAuth clients only issue refresh tokens when this is requested.
+  'offline_access',
   'd1.read',
   'd1.write',
   'containers.read',

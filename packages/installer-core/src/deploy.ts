@@ -366,30 +366,25 @@ async function applyD1Migrations(accessToken: string, accountId: string, databas
     { method: 'POST', body: JSON.stringify({ sql: 'SELECT name FROM d1_migrations;' }) },
   )
   const applied = new Set(rows.flatMap(result => result.results || []).map(row => row.name).filter(Boolean))
-  const pending: string[] = []
-  for (const migration of payload.migrations) {
-    if (applied.has(migration.name)) continue
-    const sql = `${migration.sql.replaceAll('--> statement-breakpoint', '\n')}\nINSERT INTO d1_migrations (name) VALUES (${sqlString(migration.name)});`
-    const result = await cloudflareApi<Array<{ success?: boolean }>>(accessToken, `/accounts/${accountId}/d1/database/${databaseId}/query`, {
+  const pending = payload.migrations.filter(migration => !applied.has(migration.name))
+  if (pending.length) {
+    // One subrequest for every pending migration: free plans cap a Worker
+    // invocation at 50 subrequests, which per-migration calls exhaust.
+    const sql = pending
+      .map(migration => `${migration.sql.replaceAll('--> statement-breakpoint', '\n')}\nINSERT INTO d1_migrations (name) VALUES (${sqlString(migration.name)});`)
+      .join('\n')
+    const results = await cloudflareApi<Array<{ success?: boolean }>>(accessToken, `/accounts/${accountId}/d1/database/${databaseId}/query`, {
       method: 'POST',
       body: JSON.stringify({ sql }),
     })
-    if (!result.length || result.some(statement => statement.success === false)) {
-      throw createError({ statusCode: 502, statusMessage: `Discoflare migration ${migration.name} did not complete` })
+    if (results.length !== pending.length) {
+      throw createError({ statusCode: 502, statusMessage: 'Discoflare migrations did not all complete' })
     }
-    pending.push(migration.name)
+    if (results.some(statement => statement.success === false)) {
+      throw createError({ statusCode: 502, statusMessage: 'Discoflare migration did not complete' })
+    }
   }
-  if (pending.length) {
-    const verified = await cloudflareApi<Array<{ results?: Array<{ name?: string }> }>>(
-      accessToken,
-      `/accounts/${accountId}/d1/database/${databaseId}/query`,
-      { method: 'POST', body: JSON.stringify({ sql: 'SELECT name FROM d1_migrations;' }) },
-    )
-    const recorded = new Set(verified.flatMap(result => result.results || []).map(row => row.name).filter(Boolean))
-    const missing = pending.find(name => !recorded.has(name))
-    if (missing) throw createError({ statusCode: 502, statusMessage: `Discoflare migration ${missing} was not recorded` })
-  }
-  return pending
+  return pending.map(migration => migration.name)
 }
 
 async function uploadAssets(accessToken: string, accountId: string, workerName: string, payload: InstallerAssetsPayload) {
