@@ -1,4 +1,4 @@
-import { cloudflareClient, listDiscoflareInstallations, verifyAdminCapability, type CloudflareZone } from '@discoflare/installer-core'
+import { listAccountZones, readDiscoflareInstallation, verifyAdminCapability, type CloudflareZone } from '@discoflare/installer-core'
 import { requireAccountToken, requireAdminConfig } from '../../utils/cloudflare'
 
 export default defineEventHandler(async (event): Promise<{ zones: CloudflareZone[] }> => {
@@ -17,18 +17,15 @@ export default defineEventHandler(async (event): Promise<{ zones: CloudflareZone
   if (!stableCapability && !legacyCapability) {
     throw createError({ statusCode: 403, statusMessage: 'Installation capability is invalid' })
   }
-  const installation = (await listDiscoflareInstallations(token, accountId))
-    .find(candidate => candidate.workerName === requestedWorkerName)
+  const [installation, zones] = await Promise.all([
+    readDiscoflareInstallation(token, accountId, requestedWorkerName),
+    listAccountZones(token, accountId),
+  ])
   if (!installation
     || installation.configuration.managementMode !== 'admin'
     || installation.configuration.adminWorkerName !== adminWorkerName) {
     throw createError({ statusCode: 403, statusMessage: 'Installation is not managed by this Discoflare Admin' })
   }
 
-  const zones: CloudflareZone[] = []
-  for await (const zone of cloudflareClient(token).zones.list({ account: { id: accountId }, per_page: 50 })) {
-    if (!zone.id || !zone.name) continue
-    zones.push({ id: zone.id, accountId, name: zone.name, status: zone.status || 'unknown' })
-  }
   return { zones: zones.filter(zone => zone.status === 'active').sort((a, b) => a.name.localeCompare(b.name)) }
 })

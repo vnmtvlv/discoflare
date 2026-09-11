@@ -132,27 +132,89 @@ function installationFromBindings(
   }
 }
 
-export async function listDiscoflareInstallations(
-  accessToken: string,
-  accountId: string,
-): Promise<CloudflareInstallation[]> {
-  if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Cloudflare account is invalid' })
-  const client = cloudflareClient(accessToken)
-  const account = await client.accounts.get({ account_id: accountId })
-  if (account.id !== accountId) throw createError({ statusCode: 403, statusMessage: 'Cloudflare account is unavailable' })
+async function accountZones(client: ReturnType<typeof cloudflareClient>, accountId: string): Promise<CloudflareZone[]> {
   const zones: CloudflareZone[] = []
   for await (const zone of client.zones.list({ account: { id: accountId }, per_page: 50 })) {
     if (!zone.id || !zone.name) continue
     zones.push({ id: zone.id, name: zone.name, accountId, status: zone.status || 'unknown' })
   }
-  const installations: CloudflareInstallation[] = []
+  return zones
+}
+
+export function listAccountZones(accessToken: string, accountId: string): Promise<CloudflareZone[]> {
+  return accountZones(cloudflareClient(accessToken), accountId)
+}
+
+const SETTINGS_CONCURRENCY = 10
+
+async function mapConcurrent<T, R>(items: T[], limit: number, task: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await task(items[index]!)
+    }
+  }))
+  return results
+}
+
+async function workerSettings(
+  client: ReturnType<typeof cloudflareClient>,
+  accountId: string,
+  workerIds: string[],
+): Promise<Array<ExistingWorkerBinding[] | null>> {
+  return mapConcurrent(workerIds, SETTINGS_CONCURRENCY, async (workerId) => {
+    const settings = await client.workers.scripts.scriptAndVersionSettings.get(workerId, { account_id: accountId }).catch(() => null)
+    return (settings?.bindings as ExistingWorkerBinding[] | undefined) || null
+  })
+}
+
+export async function listDiscoflareInstallations(
+  accessToken: string,
+  accountId: string,
+  options: { zones?: CloudflareZone[] } = {},
+): Promise<CloudflareInstallation[]> {
+  if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Cloudflare account is invalid' })
+  const client = cloudflareClient(accessToken)
+  const zones = options.zones || await (async () => {
+    const [account, fetchedZones] = await Promise.all([
+      client.accounts.get({ account_id: accountId }),
+      accountZones(client, accountId),
+    ])
+    if (account.id !== accountId) throw createError({ statusCode: 403, statusMessage: 'Cloudflare account is unavailable' })
+    return fetchedZones
+  })()
+  const workerIds: string[] = []
   for await (const worker of client.workers.scripts.list({ account_id: accountId })) {
-    if (!worker.id) continue
-    const settings = await client.workers.scripts.scriptAndVersionSettings.get(worker.id, { account_id: accountId })
-    const installation = installationFromBindings(accountId, worker.id, settings.bindings as ExistingWorkerBinding[] || [], zones)
-    if (installation) installations.push(installation)
+    if (worker.id) workerIds.push(worker.id)
   }
+  const installations: CloudflareInstallation[] = []
+  const settingsList = await workerSettings(client, accountId, workerIds)
+  settingsList.forEach((bindings, index) => {
+    if (!bindings) return
+    const installation = installationFromBindings(accountId, workerIds[index]!, bindings, zones)
+    if (installation) installations.push(installation)
+  })
   return installations.sort((left, right) => left.workerName.localeCompare(right.workerName))
+}
+
+export async function readDiscoflareInstallation(
+  accessToken: string,
+  accountId: string,
+  workerName: string,
+): Promise<CloudflareInstallation | null> {
+  if (!/^[0-9a-f]{32}$/u.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Cloudflare account is invalid' })
+  if (!workerName.trim()) return null
+  const client = cloudflareClient(accessToken)
+  const [bindings, zones] = await Promise.all([
+    client.workers.scripts.scriptAndVersionSettings.get(workerName, { account_id: accountId })
+      .catch(() => null)
+      .then(settings => (settings?.bindings as ExistingWorkerBinding[] | undefined) || null),
+    accountZones(client, accountId),
+  ])
+  if (!bindings) return null
+  return installationFromBindings(accountId, workerName, bindings, zones)
 }
 
 export async function findDiscoflareInstallations(accessToken: string, origin: unknown): Promise<CloudflareInstallation[]> {
@@ -174,18 +236,22 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
   const installations: CloudflareInstallation[] = []
   for (const account of accounts) {
     if (!candidateAccountIds.has(account.id)) continue
+    const workerIds: string[] = []
     for await (const worker of client.workers.scripts.list({ account_id: account.id })) {
-      if (!worker.id) continue
-      const settings = await client.workers.scripts.scriptAndVersionSettings.get(worker.id, { account_id: account.id })
-      const bindings = settings.bindings as ExistingWorkerBinding[] || []
-      if (!isDiscoflareWorker(bindings)) continue
+      if (worker.id) workerIds.push(worker.id)
+    }
+    const settingsList = await workerSettings(client, account.id, workerIds)
+    settingsList.forEach((bindings, index) => {
+      if (!bindings) return
+      const workerName = workerIds[index]!
+      if (!isDiscoflareWorker(bindings)) return
       const appHostname = textBinding(bindings, 'DISCOFLARE_APP_HOSTNAME') || textBinding(bindings, 'MAIL_APP_HOSTNAME')
-      if (appHostname.toLowerCase() !== hostname) continue
-      const configuration = installationConfiguration(account.id, worker.id, hostname, bindings, zones)
-      if (!configuration) continue
+      if (appHostname.toLowerCase() !== hostname) return
+      const configuration = installationConfiguration(account.id, workerName, hostname, bindings, zones)
+      if (!configuration) return
       installations.push({
         accountId: account.id,
-        workerName: worker.id,
+        workerName,
         origin: `https://${hostname}`,
         version: textBinding(bindings, 'DISCOFLARE_VERSION') || null,
         configuration,
@@ -194,8 +260,8 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           primary: textBinding(bindings, 'DISCOFLARE_PRIMARY') === 'true',
           bucketName: bindings.find(binding => binding.name === 'FILES' && binding.type === 'r2_bucket')?.bucket_name || null,
           kvId: bindings.find(binding => binding.name === 'TICKETS' && binding.type === 'kv_namespace')?.namespace_id || null,
-          workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${worker.id}-agent-tasks`,
-          containerName: `${worker.id}-computer`,
+          workflowName: bindings.find(binding => binding.name === 'AGENT_TASK_WORKFLOW' && binding.type === 'workflow')?.workflow_name || `${workerName}-agent-tasks`,
+          containerName: `${workerName}-computer`,
           agentComputerEnabled: configuration.agentComputerEnabled,
           mailZoneId: textBinding(bindings, 'MAIL_ZONE_ID') || null,
           mailDomain: textBinding(bindings, 'MAIL_DOMAIN') || null,
@@ -209,7 +275,7 @@ export async function findDiscoflareInstallations(accessToken: string, origin: u
           realtimekitManaged: ['true', 'admin'].includes(textBinding(bindings, 'DISCOFLARE_REALTIMEKIT_MANAGED')),
         },
       })
-    }
+    })
   }
   return installations
 }

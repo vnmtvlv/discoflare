@@ -1,4 +1,4 @@
-import { installDiscoflare, listDiscoflareInstallations } from '@discoflare/installer-core'
+import { installDiscoflare, readDiscoflareInstallation } from '@discoflare/installer-core'
 import { sendStream, setResponseHeaders } from 'h3'
 import { requireAccountToken, requireAdminConfig } from '../../utils/cloudflare'
 import { createDeployStream } from '../../utils/deploy-stream'
@@ -10,8 +10,7 @@ export default defineEventHandler(async (event) => {
   const token = await requireAccountToken(event)
   const { accountId, origin, sessionSecret, workerName: adminWorkerName } = requireAdminConfig(event)
   const workerName = getRouterParam(event, 'workerName') || ''
-  const installation = (await listDiscoflareInstallations(token, accountId))
-    .find(candidate => candidate.workerName === workerName)
+  const installation = await readDiscoflareInstallation(token, accountId, workerName)
   if (!installation) throw createError({ statusCode: 404, statusMessage: 'Discoflare installation not found' })
   const body = await readBody<{ targetVersion?: unknown }>(event)
   const targetVersion = typeof body?.targetVersion === 'string' ? body.targetVersion : undefined
