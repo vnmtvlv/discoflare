@@ -17,7 +17,7 @@ pnpm com:test
 pnpm com:build
 ```
 
-The marketing routes are prerendered. `/deploy` is Managed Setup: public-client PKCE OAuth creates the account-local Admin Worker and stores its renewable credential there, then discards the website session. `/deploy/private` preserves the temporary bootstrap that leaves credential connection to the operator.
+The marketing routes are prerendered. `/deploy` is Managed Setup: public-client PKCE OAuth creates the account-local Admin Worker and stores its renewable credential there, then discards the website session. The completed handoff stays in the encrypted installer session so a refresh resumes the workspace redirect until its token expires.
 
 ## Deployment
 
@@ -32,7 +32,7 @@ Changes confined to the workspace Worker, Admin, or native client shells should 
 
 The deploy command rejects local execution and non-production branches. Do not deploy `apps/com` from a developer machine. The Worker and `discoflare.com` custom domain are configured in [`wrangler.jsonc`](wrangler.jsonc).
 
-Production requires the secrets from `.env.example`. The single public OAuth client ID is declared in `wrangler.jsonc` so a Workers Build cannot erase it; register its callback as `https://discoflare.com/api/cloudflare/oauth/callback`. Managed Setup stores the returned refresh credential in the new Admin Worker and deletes the website session. Later Admin login reuses the same client with identity and verification read scopes. Private Setup requests no renewable credential; the owner connects an Account Admin Token on their own Admin origin.
+Production requires the secrets from `.env.example`. The single public OAuth client ID is declared in `wrangler.jsonc` so a Workers Build cannot erase it; register its callback as `https://discoflare.com/api/cloudflare/oauth/callback`. Managed Setup stores the returned refresh credential in the new Admin Worker and deletes the website session. Later Admin login reuses the same client with identity and verification read scopes.
 
 The public infrastructure counters use the `discoflare-com-telemetry` D1 database. Create it once with `pnpm db:create`, put the returned database ID into `wrangler.jsonc` if Wrangler does not resolve the name automatically, and configure `NUXT_TELEMETRY_HASH_SECRET` as a Worker secret. Production migrations run only inside the Workers Builds deploy command. Only a keyed hash of the Cloudflare account and Worker identity is retained; raw account IDs, Worker names, domains, owner details, and workspace content are not stored.
 

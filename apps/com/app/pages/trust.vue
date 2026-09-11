@@ -110,7 +110,7 @@ useHead({
       <h2>What the installer asks for</h2>
       <p>During bootstrap, discoflare.com keeps the OAuth access token in an encrypted, HTTP-only session cookie that expires after one hour and is never written to a Discoflare database.</p>
       <p>Managed Setup stores the returned renewable OAuth credential only as encrypted <code>discoflare-admin</code> Worker secrets, then removes the website session. Admin uses it only for fixed installation, update, RealtimeKit, email, and repair operations in the selected account.</p>
-      <p>Private Setup retains no renewable OAuth credential. Instead, the operator submits an Account Admin Token directly on the Admin <code>workers.dev</code> origin. Neither credential enters a workspace Worker.</p>
+      <p>Operators who prefer an account-owned credential can submit an Account Admin Token directly on the Admin <code>workers.dev</code> origin instead; discoflare.com never receives it. Neither credential enters a workspace Worker.</p>
       <p>Later Admin sign-ins reuse the same OAuth client with only identity, membership, and Worker-verification read scopes. Admin keeps a stateless encrypted cookie; no Cloudflare Access application or Admin database is required.</p>
       <div v-for="group in scopeGroups" :key="group.purpose" class="scope-group">
         <h3>{{ group.purpose }}</h3>

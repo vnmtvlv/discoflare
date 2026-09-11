@@ -9,7 +9,7 @@ The single small Worker through which an operator creates, discovers, updates, a
 _Avoid_: Admin instance, installer workspace, management workspace
 
 **Account Admin Token**:
-The account-owned Cloudflare credential an operator creates and submits directly to Admin after Private Setup. It is stored only as Admin's encrypted Worker secret.
+The account-owned Cloudflare credential an operator can create and submit directly to Admin on its own origin. It is stored only as Admin's encrypted Worker secret.
 _Avoid_: Instance Admin Token, installer token, workspace token
 
 **Managed Admin OAuth Credential**:
@@ -26,11 +26,7 @@ _Avoid_: Managed instance, tenant
 
 **Managed Setup**:
 The discoflare.com flow that creates or repairs Admin, installs its renewable OAuth credential as encrypted Worker secrets, asks Admin to create the first base Installation, and discards the website installer session.
-_Avoid_: Hosted control plane, runtime proxy
-
-**Private Setup**:
-The discoflare.com/deploy/private flow that creates or repairs Admin with temporary OAuth and leaves Account Admin Token connection to the operator.
-_Avoid_: Managed OAuth, separate Admin product
+_Avoid_: Hosted control plane, runtime proxy, Private Setup
 
 **Update Policy**:
 The operator's choice to receive an update notification or let Discoflare Admin apply a compatible release automatically.

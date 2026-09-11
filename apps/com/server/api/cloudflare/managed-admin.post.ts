@@ -61,6 +61,19 @@ export default defineEventHandler(async (event): Promise<DiscoflareAdminBootstra
       version: result.version,
     },
   ]
-  await session.update({ cloudflare: undefined, oauthPending: undefined, managedAdmins })
+  await session.update({
+    cloudflare: undefined,
+    oauthPending: undefined,
+    managedAdmins,
+    installHandoff: {
+      accountId,
+      accountName: account.name,
+      origin: result.origin,
+      workerName: result.workerName,
+      version: result.version,
+      handoffUrl: handoff.toString(),
+      expiresAt: credential.expiresAt,
+    },
+  })
   return result
 })

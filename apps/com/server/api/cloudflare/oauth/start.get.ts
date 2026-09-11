@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
     : typeof query.returnTo === 'string' && query.returnTo.startsWith('/') && !query.returnTo.startsWith('//')
     ? query.returnTo
     : '/deploy'
-  const mode = adminLogin ? 'login' : returnTo.startsWith('/deploy/private') || returnTo.startsWith('/uninstall') ? 'private' : 'managed'
+  const mode = adminLogin ? 'login' : returnTo.startsWith('/uninstall') ? 'private' : 'managed'
   const scopes = mode === 'login'
     ? CLOUDFLARE_LOGIN_OAUTH_SCOPES
     : returnTo.startsWith('/uninstall')

@@ -7,7 +7,7 @@ const route = useRoute()
 const oauthStartUrl = `/api/cloudflare/oauth/start?returnTo=${encodeURIComponent('/deploy')}`
 const { data: session, status, refresh } = await useFetch<InstallerSessionResponse>('/api/cloudflare/session', {
   server: false,
-  default: () => ({ connected: false, accounts: [], zones: [], managedAdmins: [] }),
+  default: () => ({ connected: false, accounts: [], zones: [], managedAdmins: [], handoff: null }),
 })
 
 const { data: releaseVersion } = await useFetch<{ version: string | null }>('/api/release-version', {
@@ -34,6 +34,19 @@ watch([() => session.value.connected, accountId], ([connected, selectedAccountId
 
 const ready = computed(() => Boolean(accountId.value))
 
+watch(() => session.value.handoff, (handoff) => {
+  if (!handoff || installing.value || result.value) return
+  result.value = {
+    origin: handoff.origin,
+    workerName: handoff.workerName,
+    version: handoff.version,
+    updated: true,
+    managementMode: 'managed',
+    tokenConnected: true,
+  }
+  window.location.replace(handoff.handoffUrl)
+}, { immediate: true })
+
 function warnBeforeUnload(event: BeforeUnloadEvent) {
   if (!installing.value) return
   event.preventDefault()
@@ -50,6 +63,12 @@ onMounted(() => {
 })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', warnBeforeUnload))
 onBeforeRouteLeave(() => installing.value ? window.confirm('Discoflare Admin may still be deploying. Keep this page open until it finishes.') : true)
+
+async function dismissHandoff() {
+  result.value = null
+  await $fetch('/api/cloudflare/handoff', { method: 'DELETE' })
+  await refresh()
+}
 
 async function disconnect() {
   await $fetch('/api/cloudflare/logout', { method: 'POST' })
@@ -97,7 +116,7 @@ useSeoMeta({
       <template #title><BrandLogo :linked="false" /></template>
       <template #right>
         <UColorModeButton color="neutral" variant="ghost" />
-        <UButton to="/deploy/private" label="Private install" color="neutral" variant="ghost" />
+        <UButton to="/" label="Back home" trailing-icon="i-ph-arrow-left" color="neutral" variant="ghost" />
       </template>
     </UHeader>
 
@@ -124,7 +143,7 @@ useSeoMeta({
                 <UButton class="mt-6" :to="result.origin" external label="Open Admin" trailing-icon="i-ph-arrow-right" size="lg" />
                 <div class="-mx-6 -mb-6 mt-8 flex items-center justify-between gap-3 border-t border-muted px-6 py-5 text-left sm:-mx-8 sm:-mb-8 sm:px-8">
                   <p class="text-xs text-muted">Runtime calls, including RealtimeKit, go from each workspace to your Admin.</p>
-                  <UButton type="button" label="Back to profile" color="neutral" variant="ghost" @click="result = null" />
+                  <UButton type="button" label="Back to profile" color="neutral" variant="ghost" @click="dismissHandoff" />
                 </div>
               </div>
 
@@ -168,7 +187,6 @@ useSeoMeta({
                 <UAlert v-if="error" color="error" variant="subtle" :title="error" />
                 <UAlert color="neutral" variant="subtle" title="Before you continue" description="R2 must be enabled on the Cloudflare account. Workers Paid is not required for the base workspace." />
                 <UButton :to="oauthStartUrl" external label="Connect Cloudflare" trailing-icon="i-ph-arrow-right" size="xl" block />
-                <p class="text-center text-xs text-muted">Want zero discoflare.com state? Use the <NuxtLink to="/deploy/private" class="text-primary hover:underline">private installer</NuxtLink>.</p>
               </div>
             </UCard>
 

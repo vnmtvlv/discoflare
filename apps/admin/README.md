@@ -2,7 +2,7 @@
 
 The account-local control plane for Discoflare. One small Worker holds one Cloudflare account credential and manages every Discoflare installation in that account. Cloudflare OAuth authenticates the configured owner; Admin itself needs neither Cloudflare Access nor D1.
 
-The managed installer stores its renewable OAuth credential as this Worker's encrypted secrets, asks Admin to create the first base workspace, then discards the website session. It does not create an account token. The private installer bootstraps the same Worker and lets the operator paste an Account Admin Token directly on the Admin origin. Workspace Workers receive neither broad credential.
+The managed installer stores its renewable OAuth credential as this Worker's encrypted secrets, asks Admin to create the first base workspace, then discards the website session. It does not create an account token. An operator can connect an Account Admin Token directly on the Admin origin instead. Workspace Workers receive neither broad credential.
 
 ## Authority boundary
 

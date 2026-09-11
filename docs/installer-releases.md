@@ -1,6 +1,6 @@
 # Discoflare.com installer releases
 
-The managed installer on `discoflare.com/deploy` creates or repairs `discoflare-admin` and installs its renewable OAuth credential. The private installer on `/deploy/private` creates the same Admin without a persistent credential. That account-local Worker consumes Discoflare releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
+The managed installer on `discoflare.com/deploy` creates or repairs `discoflare-admin` and installs its renewable OAuth credential. That account-local Worker consumes Discoflare releases and manages every guided Installation in the account. The Cloudflare Deploy Button remains a source-level escape hatch.
 
 ## Publishing a release
 

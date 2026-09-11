@@ -47,7 +47,7 @@ useHead({
     <section>
       <h2>Cloudflare installer</h2>
       <p>When you connect Cloudflare, discoflare.com temporarily keeps the OAuth access token in an encrypted, HTTP-only session cookie. The bootstrap uses it to list available accounts and create or repair only the account-local Discoflare Admin Worker. The token is not stored in a Discoflare database and the session expires after one hour.</p>
-      <p>Managed Setup stores the returned renewable OAuth credential as encrypted Admin Worker secrets, then removes the OAuth session from discoflare.com. Private Setup never receives the Account Admin Token created and submitted later on the Admin origin. Later Admin sign-ins use discoflare.com only as the callback for a short-lived identity grant; Admin replaces it with its own encrypted session cookie.</p>
+      <p>Managed Setup stores the returned renewable OAuth credential as encrypted Admin Worker secrets, then removes the OAuth session from discoflare.com. The website never receives an Account Admin Token created and submitted directly on the Admin origin. Later Admin sign-ins use discoflare.com only as the callback for a short-lived identity grant; Admin replaces it with its own encrypted session cookie.</p>
     </section>
 
     <section>

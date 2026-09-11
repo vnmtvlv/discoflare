@@ -29,6 +29,15 @@ type InstallerSessionData = {
     workerName: string
     version: string
   }>
+  installHandoff?: {
+    accountId: string
+    accountName: string
+    origin: string
+    workerName: string
+    version: string
+    handoffUrl: string
+    expiresAt: number
+  }
 }
 
 function sessionConfig(event: H3Event): SessionConfig {
@@ -54,6 +63,12 @@ function sessionConfig(event: H3Event): SessionConfig {
 
 export function useInstallerSession(event: H3Event) {
   return useSession<InstallerSessionData>(event, sessionConfig(event))
+}
+
+export function activeInstallHandoff(stored: InstallerSessionData['installHandoff'], now: number = Date.now()) {
+  if (!stored || stored.expiresAt <= now) return null
+  const { expiresAt: _expiresAt, ...handoff } = stored
+  return handoff
 }
 
 export async function requireCloudflareToken(event: H3Event) {
