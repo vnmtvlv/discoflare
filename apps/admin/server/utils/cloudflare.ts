@@ -19,8 +19,6 @@ export type AdminEnv = {
   DISCOFLARE_ADMIN_OAUTH_REFRESH_TOKEN?: string
   DISCOFLARE_ADMIN_OAUTH_CLIENT_ID?: string
   DISCOFLARE_ADMIN_OAUTH_EXPIRES_AT?: string
-  CF_ACCESS_ISS?: string
-  CF_ACCESS_AUD?: string
 }
 
 type CloudflareContext = {
