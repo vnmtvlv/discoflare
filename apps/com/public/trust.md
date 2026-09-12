@@ -10,7 +10,7 @@ Four explicit boundaries touch anything belonging to a deployer: the temporary b
 
 ## What the installer asks for
 
-During bootstrap, discoflare.com keeps the OAuth access token in an encrypted, HTTP-only session cookie that expires after one hour and is never written to a Discoflare database.
+During bootstrap, discoflare.com keeps the OAuth access token in an encrypted, HTTP-only session cookie. The token expires after one hour, is never written to a Discoflare database, and after bootstrap the cookie keeps only your installation list and handoff until it is cleared on sign-out.
 
 Managed Setup requests the scopes needed to identify the owner, create or repair Admin, and operate managed installations. It stores the returned renewable credential only as encrypted Admin Worker secrets, then removes the website session. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
 
