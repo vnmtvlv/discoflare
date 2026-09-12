@@ -28,6 +28,15 @@ export type {
   ReleaseAsset,
 }
 
+export type InstallerHandoff = {
+  accountId: string
+  accountName: string
+  origin: string
+  workerName: string
+  version: string
+  handoffUrl: string
+}
+
 export type InstallerSessionResponse = {
   connected: boolean
   accounts: CloudflareAccount[]
@@ -39,6 +48,7 @@ export type InstallerSessionResponse = {
     workerName: string
     version: string
   }>
+  handoff: InstallerHandoff | null
 }
 
 export type UninstallRequest = {

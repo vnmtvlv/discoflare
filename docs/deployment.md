@@ -4,9 +4,9 @@
 
 The managed installer at `discoflare.com/deploy` uses public-client PKCE OAuth to create or repair one `discoflare-admin` Worker on the account's `workers.dev` hostname. It stores the renewable OAuth credential as encrypted Admin Worker secrets, hands the browser to Admin, and immediately discards the website session. Admin then creates or repairs the first `discoflare` workspace and sends the browser to its private Owner Setup Claim. Managed Setup does not create Cloudflare Access, a RealtimeKit app, a custom domain, a mail route, an Agent Workflow, or a Container application.
 
-Cloudflare's public OAuth scope catalog does not expose Account API Tokens Write, so Managed Setup cannot and does not mint an account-owned token. The Discoflare-owned OAuth client and its fixed `discoflare.com` callback are reused for later Admin identity sign-ins; the operator does not register another OAuth client. `Token Write` and `OAuth Client Write` are not part of the installation contract. Private Setup remains available when the operator prefers to create and control an Account Admin Token manually.
+Cloudflare's public OAuth scope catalog does not expose Account API Tokens Write, so Managed Setup cannot and does not mint an account-owned token. The Discoflare-owned OAuth client and its fixed `discoflare.com` callback are reused for later Admin identity sign-ins; the operator does not register another OAuth client. `Token Write` and `OAuth Client Write` are not part of the installation contract. An operator who prefers an account-owned token can still create one and connect it directly on the Admin origin.
 
-Admin uses the stored managed OAuth credential to discover marked Discoflare Installations and becomes the only guided control plane for workspace creation, updates, repair, RealtimeKit, and eligible email infrastructure. The broad credential never enters a workspace Worker. Later Admin sign-ins use the same discoflare.com OAuth client only as a callback broker for Cloudflare identity. Operators who want to avoid a renewable OAuth credential use `discoflare.com/deploy/private`, then paste an Account Admin Token directly into the same Admin binary.
+Admin uses the stored managed OAuth credential to discover marked Discoflare Installations and becomes the only guided control plane for workspace creation, updates, repair, RealtimeKit, and eligible email infrastructure. The broad credential never enters a workspace Worker. Later Admin sign-ins use the same discoflare.com OAuth client only as a callback broker for Cloudflare identity. The installer keeps the completed handoff in its encrypted website session, so refreshing or revisiting `discoflare.com/deploy` resumes the workspace handoff until the short-lived token expires.
 
 The base Admin-created Installation receives D1, R2, KV, the core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim on `workers.dev`. R2 is required for attachments, raw email, and backups; Cloudflare requires the account to complete R2 subscription checkout even while usage fits the R2 free tier. Agent Computer is a later opt-in because its Workflow and Container application require Workers Paid. Huddles, a custom domain, and email are also connected later from Workspace Settings. Each workspace holds only a service binding to Admin and a derived capability accepted by Admin's fixed operation allowlists.
 
@@ -22,7 +22,7 @@ Discoflare Admin returns a conflict instead of replacing a foreign catch-all. Re
 
 ## GitHub / Workers Builds
 
-The GitHub deploy button remains an advanced source-build entry point. It does not use the Discoflare OAuth provisioning workflow. Use `discoflare.com/deploy` for managed setup or `discoflare.com/deploy/private` for private setup.
+The GitHub deploy button remains an advanced source-build entry point. It does not use the Discoflare OAuth provisioning workflow. Use `discoflare.com/deploy` for managed setup.
 
 ```md
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/vnmtvlv/discoflare)

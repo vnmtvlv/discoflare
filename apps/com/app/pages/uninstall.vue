@@ -31,7 +31,7 @@ const result = shallowRef<UninstallResponse | null>(null)
 
 const { data: session, status, refresh } = await useFetch<InstallerSessionResponse>('/api/cloudflare/session', {
   server: false,
-  default: () => ({ connected: false, accounts: [], zones: [], managedAdmins: [] }),
+  default: () => ({ connected: false, accounts: [], zones: [], managedAdmins: [], handoff: null }),
 })
 
 onMounted(() => {

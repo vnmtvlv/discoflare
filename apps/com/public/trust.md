@@ -12,7 +12,7 @@ Four explicit boundaries touch anything belonging to a deployer: the temporary b
 
 During bootstrap, discoflare.com keeps the OAuth access token in an encrypted, HTTP-only session cookie that expires after one hour and is never written to a Discoflare database.
 
-Managed Setup requests the scopes needed to identify the owner, create or repair Admin, and operate managed installations. It stores the returned renewable credential only as encrypted Admin Worker secrets, then removes the website session. Private Setup retains no renewable credential. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
+Managed Setup requests the scopes needed to identify the owner, create or repair Admin, and operate managed installations. It stores the returned renewable credential only as encrypted Admin Worker secrets, then removes the website session. Later Admin sign-ins request identity, membership, and Worker-verification read scopes.
 
 | Purpose | Scopes |
 | --- | --- |
@@ -20,7 +20,7 @@ Managed Setup requests the scopes needed to identify the owner, create or repair
 | Identify the owner and selected account | `account-settings.read`, `user-details.read`, `memberships.read` |
 | Operate managed installations | `d1.read`, `d1.write`, `containers.read`, `containers.write`, `workers-kv-storage.read`, `workers-kv-storage.write`, `workers-r2.read`, `workers-r2.write`, `realtime.read`, `realtime.write`, `realtime.admin`, `zone.read`, `zone-settings.read`, `zone-settings.write`, `dns.read`, `dns.write`, `workers-routes.read`, `workers-routes.write`, `email-routing-rule.read`, `email-routing-rule.write`, `email-sending.read`, `email-sending.write` |
 
-The bootstrap does not create Cloudflare Access, an API token, a workspace, or workspace storage. Private Setup lets the operator submit an Account Admin Token directly to Admin. Neither credential enters a workspace Worker. Admin login uses a stateless encrypted cookie and needs no Admin database.
+The bootstrap does not create Cloudflare Access, an API token, a workspace, or workspace storage. An operator can submit an Account Admin Token directly to Admin on its own origin; discoflare.com never receives it. Neither credential enters a workspace Worker. Admin login uses a stateless encrypted cookie and needs no Admin database.
 
 ## What leaves a deployment
 

@@ -92,7 +92,7 @@ After Agent Computer is enabled, its first Container image may need several minu
 3. Admin immediately creates the first `discoflare` workspace on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim. The installer discards its own session before the Owner enters the workspace.
 4. Enable Agent Computer, Live, custom domains, and email later from Workspace Settings when the account is ready for them.
 
-The broad Cloudflare credential stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. The operator does not register another OAuth client and Managed Setup neither requests Account API Token Write nor creates an Account Admin Token. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. Use [the private installer](https://discoflare.com/deploy/private) to bootstrap the same Admin binary without a renewable OAuth grant, then create and paste an Account Admin Token directly on its private origin. The CLI remains the source-level recovery path and does not require `discoflare.com`.
+The broad Cloudflare credential stays in Discoflare Admin; `discoflare.com` is used only as the callback broker for later Cloudflare sign-ins and is not in the workspace runtime path. The operator does not register another OAuth client and Managed Setup neither requests Account API Token Write nor creates an Account Admin Token. Every workspace receives only a narrow per-Installation capability and service binding for fixed Admin operations. The CLI remains the source-level recovery path and does not require `discoflare.com`.
 
 ### Manual deployment
 

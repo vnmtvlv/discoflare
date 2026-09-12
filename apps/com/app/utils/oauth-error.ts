@@ -4,7 +4,7 @@ export function installerOAuthError(code: unknown): string {
     case 'access_denied':
       return 'Cloudflare authorization was cancelled.'
     case 'invalid_scope':
-      return 'Cloudflare rejected a requested permission. Use the private installer to repair Admin, then reconnect managed setup.'
+      return 'Cloudflare rejected a requested permission. Reconnect Cloudflare to repair Admin.'
     case 'oauth_state':
       return 'The Cloudflare login expired. Connect Cloudflare again.'
     case 'oauth_exchange':
@@ -12,7 +12,7 @@ export function installerOAuthError(code: unknown): string {
     case 'oauth_token':
       return 'Cloudflare did not return an access token.'
     case 'oauth_refresh_token':
-      return 'Cloudflare did not return a refresh token. Use the private installer to repair Admin.'
+      return 'Cloudflare did not return a refresh token. Connect Cloudflare again to retry the install.'
     default:
       return `Cloudflare connection was not completed (${code}).`
   }
