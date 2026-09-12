@@ -1,4 +1,4 @@
-import { installDiscoflare, listDiscoflareInstallations, verifyAdminCapability } from '@discoflare/installer-core'
+import { installDiscoflare, readDiscoflareInstallation, verifyAdminCapability } from '@discoflare/installer-core'
 import { sendStream, setResponseHeaders } from 'h3'
 import { requireAccountToken, requireAdminConfig } from '../../utils/cloudflare'
 import { createDeployStream } from '../../utils/deploy-stream'
@@ -33,8 +33,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, statusMessage: 'Installation capability is invalid' })
   }
 
-  const installation = (await listDiscoflareInstallations(token, accountId))
-    .find(candidate => candidate.workerName === requestedWorkerName)
+  const installation = await readDiscoflareInstallation(token, accountId, requestedWorkerName)
   if (!installation
     || installation.configuration.managementMode !== 'admin'
     || installation.configuration.adminWorkerName !== adminWorkerName) {

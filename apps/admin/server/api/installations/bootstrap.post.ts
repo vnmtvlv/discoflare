@@ -1,4 +1,4 @@
-import { installDiscoflare, listDiscoflareInstallations } from '@discoflare/installer-core'
+import { installDiscoflare, readDiscoflareInstallation } from '@discoflare/installer-core'
 import { sendStream, setResponseHeaders } from 'h3'
 import { requireAccountToken, requireAdminConfig } from '../../utils/cloudflare'
 import { createDeployStream } from '../../utils/deploy-stream'
@@ -9,8 +9,7 @@ export default defineEventHandler(async (event) => {
   await requireAdminIdentity(event)
   const token = await requireAccountToken(event)
   const { accountId, email, origin, sessionSecret, workerName: adminWorkerName } = requireAdminConfig(event)
-  const existing = (await listDiscoflareInstallations(token, accountId))
-    .find(installation => installation.workerName === 'discoflare')
+  const existing = await readDiscoflareInstallation(token, accountId, 'discoflare')
 
   const request = existing
     ? {
