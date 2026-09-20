@@ -45,7 +45,8 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE `data_bookmarks`')
     expect(INIT_SQL).toContain('CREATE TABLE `gadgets`')
     expect(INIT_SQL).toContain('CREATE TABLE `gadget_versions`')
-    expect(INIT_SQL).toContain('CREATE TABLE `gadget_role_access`')
+    expect(INIT_SQL).toContain('CREATE TABLE `gadget_draft_role_access`')
+    expect(INIT_SQL).toContain('CREATE TABLE `gadget_version_role_access`')
     expect(INIT_SQL).toContain('CREATE TRIGGER `database_default_view_after_insert`')
     expect(INIT_SQL).toContain('CREATE TABLE `onboarding_revisions`')
     expect(INIT_SQL).toContain('CREATE TABLE `onboarding_acceptances`')
@@ -120,7 +121,7 @@ describe('D1 bootstrap schema', () => {
     expect(sqlite.prepare("SELECT permissions_bitmask FROM roles WHERE key = 'admin'").get()).toEqual({ permissions_bitmask: 4095 })
     expect(sqlite.prepare("SELECT permissions_bitmask FROM roles WHERE key = 'member'").get()).toEqual({ permissions_bitmask: 112 })
     expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'gadget%' ORDER BY name").all()).toEqual([
-      { name: 'gadget_role_access' }, { name: 'gadget_versions' }, { name: 'gadgets' },
+      { name: 'gadget_draft_role_access' }, { name: 'gadget_version_role_access' }, { name: 'gadget_versions' }, { name: 'gadgets' },
     ])
     sqlite.close()
   })

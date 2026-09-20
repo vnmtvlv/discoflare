@@ -749,6 +749,8 @@ export const gadgetVersions = sqliteTable('gadget_versions', {
   id: text('id').primaryKey(),
   gadgetId: text('gadget_id').notNull().references(() => gadgets.id, { onDelete: 'cascade' }),
   version: integer('version').notNull(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
   specJson: text('spec_json').notNull(),
   createdBy: text('created_by').notNull().references(() => users.id),
   createdAt: text('created_at').notNull(),
@@ -757,13 +759,22 @@ export const gadgetVersions = sqliteTable('gadget_versions', {
   check('gadget_versions_version_check', sql`${table.version} > 0`),
 ])
 
-/** Published Gadget access is assigned to Roles; managers and the owner bypass this list. */
-export const gadgetRoleAccess = sqliteTable('gadget_role_access', {
+/** Mutable draft access. Publishing copies it into the immutable Version access list. */
+export const gadgetDraftRoleAccess = sqliteTable('gadget_draft_role_access', {
   gadgetId: text('gadget_id').notNull().references(() => gadgets.id, { onDelete: 'cascade' }),
   roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
 }, table => [
   primaryKey({ columns: [table.gadgetId, table.roleId] }),
-  index('gadget_role_access_role_idx').on(table.roleId, table.gadgetId),
+  index('gadget_draft_role_access_role_idx').on(table.roleId, table.gadgetId),
+])
+
+/** Role access captured for one immutable published Gadget Version. */
+export const gadgetVersionRoleAccess = sqliteTable('gadget_version_role_access', {
+  gadgetVersionId: text('gadget_version_id').notNull().references(() => gadgetVersions.id, { onDelete: 'cascade' }),
+  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+}, table => [
+  primaryKey({ columns: [table.gadgetVersionId, table.roleId] }),
+  index('gadget_version_role_access_role_idx').on(table.roleId, table.gadgetVersionId),
 ])
 
 /** Task boards are shared product state, so they live in D1 rather than an Agent DO. */

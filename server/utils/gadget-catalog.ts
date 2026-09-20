@@ -40,16 +40,28 @@ export async function requireGadget(env: DiscoflareEnv, id: string): Promise<Gad
 export async function listGadgets(env: DiscoflareEnv, actor: Membership): Promise<GadgetListDTO> {
   const canManage = canManageGadgets(actor)
   if (!canManage && !canUseGadgets(actor)) fail(403, 'forbidden', 'Missing permission')
-  const result = canManage
-    ? await env.DB.prepare(`${selectGadgetSql()} ORDER BY position, created_at`).all<GadgetRow>()
-    : await env.DB.prepare(`${selectGadgetSql('WHERE published_version IS NOT NULL AND EXISTS (SELECT 1 FROM gadget_role_access access WHERE access.gadget_id = gadgets.id AND access.role_id = ?)')} ORDER BY position, created_at`).bind(actor.roleId).all<GadgetRow>()
-  return { gadgets: (result.results ?? []).map(summary), canManage }
+  if (canManage) {
+    const result = await env.DB.prepare(`${selectGadgetSql()} ORDER BY position, created_at`).all<GadgetRow>()
+    return { gadgets: (result.results ?? []).map(summary), canManage }
+  }
+  const result = await env.DB.prepare(
+    `SELECT gadgets.id, versions.name, versions.description, gadgets.position,
+      gadgets.draft_revision as draftRevision, gadgets.published_version as publishedVersion,
+      gadgets.created_by as createdBy, gadgets.created_at as createdAt, versions.created_at as updatedAt
+     FROM gadgets
+     JOIN gadget_versions versions
+       ON versions.gadget_id = gadgets.id AND versions.version = gadgets.published_version
+     JOIN gadget_version_role_access access ON access.gadget_version_id = versions.id
+     WHERE access.role_id = ?
+     ORDER BY gadgets.position, gadgets.created_at`,
+  ).bind(actor.roleId).all<GadgetSummaryDTO>()
+  return { gadgets: result.results ?? [], canManage }
 }
 
 export async function getGadgetDetail(env: DiscoflareEnv, actor: Membership, id: string): Promise<GadgetDetailDTO> {
   if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Missing permission')
   const row = await requireGadget(env, id)
-  const access = await env.DB.prepare('SELECT role_id as roleId FROM gadget_role_access WHERE gadget_id = ? ORDER BY role_id').bind(id).all<{ roleId: string }>()
+  const access = await env.DB.prepare('SELECT role_id as roleId FROM gadget_draft_role_access WHERE gadget_id = ? ORDER BY role_id').bind(id).all<{ roleId: string }>()
   let draftSpec: GadgetSpec
   try { draftSpec = parseGadgetSpec(JSON.parse(row.draftSpecJson)) }
   catch { fail(409, 'gadget_draft_invalid', 'The Gadget draft is invalid') }
@@ -66,8 +78,8 @@ async function validateRoleIds(env: DiscoflareEnv, roleIds: string[]): Promise<s
 }
 
 async function replaceRoleAccess(env: DiscoflareEnv, gadgetId: string, roleIds: string[]): Promise<void> {
-  const statements = [env.DB.prepare('DELETE FROM gadget_role_access WHERE gadget_id = ?').bind(gadgetId)]
-  for (const roleId of roleIds) statements.push(env.DB.prepare('INSERT INTO gadget_role_access (gadget_id, role_id) VALUES (?, ?)').bind(gadgetId, roleId))
+  const statements = [env.DB.prepare('DELETE FROM gadget_draft_role_access WHERE gadget_id = ?').bind(gadgetId)]
+  for (const roleId of roleIds) statements.push(env.DB.prepare('INSERT INTO gadget_draft_role_access (gadget_id, role_id) VALUES (?, ?)').bind(gadgetId, roleId))
   await env.DB.batch(statements)
 }
 
@@ -123,12 +135,20 @@ export async function publishGadget(env: DiscoflareEnv, actor: Membership, id: s
   if (current.draftRevision !== revision) fail(409, 'stale_gadget', 'This Gadget changed elsewhere. Reload and try again.')
   const spec = await validateGadgetSpec(env, JSON.parse(current.draftSpecJson), { publish: true })
   const version = (current.publishedVersion ?? 0) + 1
+  const versionId = newId()
   const now = nowIso()
   const results = await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO gadget_versions (id, gadget_id, version, spec_json, created_by, created_at)
-       SELECT ?, id, ?, ?, ?, ? FROM gadgets WHERE id = ? AND draft_revision = ?`,
-    ).bind(newId(), version, JSON.stringify(spec), actor.user.id, now, id, revision),
+      `INSERT INTO gadget_versions (id, gadget_id, version, name, description, spec_json, created_by, created_at)
+       SELECT ?, id, ?, name, description, ?, ?, ? FROM gadgets WHERE id = ? AND draft_revision = ?`,
+    ).bind(versionId, version, JSON.stringify(spec), actor.user.id, now, id, revision),
+    env.DB.prepare(
+      `INSERT INTO gadget_version_role_access (gadget_version_id, role_id)
+       SELECT versions.id, access.role_id
+       FROM gadget_versions versions
+       JOIN gadget_draft_role_access access ON access.gadget_id = versions.gadget_id
+       WHERE versions.id = ? AND versions.gadget_id = ?`,
+    ).bind(versionId, id),
     env.DB.prepare('UPDATE gadgets SET published_version = ?, updated_at = ? WHERE id = ? AND draft_revision = ?')
       .bind(version, now, id, revision),
   ])

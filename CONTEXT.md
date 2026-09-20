@@ -102,7 +102,7 @@ A bounded capability connecting one Gadget to one workspace resource. A Binding 
 _Avoid_: Database credentials, raw SQL, ambient workspace access
 
 **Gadget Version**:
-An immutable published snapshot of a Gadget's interface and Bindings. Draft changes remain private to Gadget managers until they are published as a new Version.
+An immutable published snapshot of a Gadget's name, description, interface, Bindings, and Role access. Draft changes remain private to Gadget managers until they are published as a new Version.
 _Avoid_: Live model output, mutable published configuration
 
 **Data Bookmark**:

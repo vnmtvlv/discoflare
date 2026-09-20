@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { ALL_PERMISSIONS, Permission } from '../../shared/permissions'
 import type { GadgetSpec } from '../../shared/gadgets'
 import { INIT_SQL } from '../../server/utils/db'
-import { createGadget, listGadgets, publishGadget } from '../../server/utils/gadget-catalog'
+import { createGadget, listGadgets, publishGadget, updateGadget } from '../../server/utils/gadget-catalog'
 import { composeGadgetSpec } from '../../server/utils/gadget-composer'
 import { invokeGadget, openGadget } from '../../server/utils/gadget-runtime'
 import { parseGadgetSpec, validateGadgetSpec } from '../../server/utils/gadget-spec'
@@ -60,7 +60,8 @@ function fixture() {
   sqlite.exec(`
     INSERT INTO roles (id, key, name, permissions_bitmask) VALUES
       ('owner-role', 'owner', 'Owner', ${ALL_PERMISSIONS}),
-      ('member-role', 'member', 'Member', ${Permission.useGadgets});
+      ('member-role', 'member', 'Member', ${Permission.useGadgets}),
+      ('reviewer-role', 'custom', 'Reviewer', ${Permission.useGadgets});
     INSERT INTO identity_keys (id, name, email) VALUES
       ('owner', 'Owner', 'owner@example.com'),
       ('member', 'Member', 'member@example.com');
@@ -73,8 +74,9 @@ function fixture() {
       ('companies', 'Companies', 'owner');
     INSERT INTO database_fields (id, database_id, name, type, slot, config_json, created_by) VALUES
       ('lead-status', 'leads', 'Status', 'select', 'select_1', '{"options":["Open","Won"]}', 'owner'),
+      ('lead-secret', 'leads', 'Secret', 'text', 'text_1', '{}', 'owner'),
       ('company-tier', 'companies', 'Tier', 'text', 'text_1', '{}', 'owner');
-    INSERT INTO database_items (id, database_id, title, select_1, created_by) VALUES ('lead-1', 'leads', 'Acme deal', 'Open', 'owner');
+    INSERT INTO database_items (id, database_id, title, select_1, text_1, created_by) VALUES ('lead-1', 'leads', 'Acme deal', 'Open', 'Private note', 'owner');
     INSERT INTO database_items (id, database_id, title, text_1, created_by) VALUES ('company-1', 'companies', 'Acme', 'Enterprise', 'owner');
   `)
   return sqlite
@@ -87,7 +89,7 @@ const spec: GadgetSpec = {
     label: 'Leads / All records',
     source: { type: 'database_view', databaseId: 'leads', viewId: 'default:leads' },
     fieldIds: ['lead-status'],
-    operations: ['read', 'create'],
+    operations: ['read', 'create', 'update'],
   }, {
     id: 'companies',
     label: 'Companies / All records',
@@ -162,10 +164,65 @@ describe('Gadgets', () => {
       bindingId: 'leads', operation: 'create', title: 'Beta deal', values: { 'lead-status': 'Won' },
     })
     expect(item).toMatchObject({ databaseId: 'leads', title: 'Beta deal', values: { 'lead-status': 'Won' } })
+    expect(item.values).toEqual({ 'lead-status': 'Won' })
+    const updated = await invokeGadget(env, member, created.id, {
+      bindingId: 'leads', operation: 'update', recordId: 'lead-1', version: 1, title: 'Updated deal',
+    })
+    expect(updated.values).toEqual({ 'lead-status': 'Open' })
     await expect(invokeGadget(env, member, created.id, {
       bindingId: 'companies', operation: 'update', recordId: 'company-1', version: 1, title: 'Changed',
     })).rejects.toThrow('does not allow that operation')
     expect(sqlite.prepare("SELECT COUNT(*) as count FROM database_items WHERE database_id = 'companies'").get()).toEqual({ count: 1 })
+    sqlite.close()
+  })
+
+  it('keeps draft identity and Role access private until the next publish', async () => {
+    const sqlite = fixture()
+    const env = { DB: d1(sqlite) } as never
+    const manager = actor()
+    const member = actor({ roleId: 'member-role', roleName: 'Member', perms: Permission.useGadgets, isOwner: false })
+    const reviewer = actor({ roleId: 'reviewer-role', roleName: 'Reviewer', perms: Permission.useGadgets, isOwner: false })
+    const created = await createGadget(env, manager, {
+      name: 'Published sales desk',
+      description: 'Published description',
+      spec,
+      roleIds: ['member-role'],
+    })
+    const published = await publishGadget(env, manager, created.id, created.draftRevision)
+
+    const draft = await updateGadget(env, manager, created.id, {
+      revision: published.draftRevision,
+      name: 'Private draft name',
+      description: 'Private draft description',
+      roleIds: ['reviewer-role'],
+    })
+
+    expect((await listGadgets(env, member)).gadgets[0]).toMatchObject({
+      name: 'Published sales desk',
+      description: 'Published description',
+      publishedVersion: 1,
+    })
+    expect((await openGadget(env, member, created.id)).gadget).toMatchObject({
+      name: 'Published sales desk',
+      description: 'Published description',
+      version: 1,
+    })
+    expect((await listGadgets(env, reviewer)).gadgets).toEqual([])
+    await expect(openGadget(env, reviewer, created.id)).rejects.toThrow('Gadget not found')
+
+    await publishGadget(env, manager, created.id, draft.draftRevision)
+    expect((await listGadgets(env, member)).gadgets).toEqual([])
+    await expect(openGadget(env, member, created.id)).rejects.toThrow('Gadget not found')
+    expect((await listGadgets(env, reviewer)).gadgets[0]).toMatchObject({
+      name: 'Private draft name',
+      description: 'Private draft description',
+      publishedVersion: 2,
+    })
+    expect((await openGadget(env, reviewer, created.id)).gadget).toMatchObject({
+      name: 'Private draft name',
+      description: 'Private draft description',
+      version: 2,
+    })
     sqlite.close()
   })
 

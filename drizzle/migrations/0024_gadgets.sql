@@ -20,6 +20,8 @@ CREATE TABLE `gadget_versions` (
   `id` text PRIMARY KEY NOT NULL,
   `gadget_id` text NOT NULL,
   `version` integer NOT NULL,
+  `name` text NOT NULL,
+  `description` text DEFAULT '' NOT NULL,
   `spec_json` text NOT NULL,
   `created_by` text NOT NULL,
   `created_at` text NOT NULL,
@@ -30,7 +32,7 @@ CREATE TABLE `gadget_versions` (
 --> statement-breakpoint
 CREATE UNIQUE INDEX `gadget_versions_number_unique` ON `gadget_versions` (`gadget_id`, `version`);
 --> statement-breakpoint
-CREATE TABLE `gadget_role_access` (
+CREATE TABLE `gadget_draft_role_access` (
   `gadget_id` text NOT NULL,
   `role_id` text NOT NULL,
   PRIMARY KEY (`gadget_id`, `role_id`),
@@ -38,7 +40,17 @@ CREATE TABLE `gadget_role_access` (
   FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `gadget_role_access_role_idx` ON `gadget_role_access` (`role_id`, `gadget_id`);
+CREATE INDEX `gadget_draft_role_access_role_idx` ON `gadget_draft_role_access` (`role_id`, `gadget_id`);
+--> statement-breakpoint
+CREATE TABLE `gadget_version_role_access` (
+  `gadget_version_id` text NOT NULL,
+  `role_id` text NOT NULL,
+  PRIMARY KEY (`gadget_version_id`, `role_id`),
+  FOREIGN KEY (`gadget_version_id`) REFERENCES `gadget_versions`(`id`) ON UPDATE no action ON DELETE cascade,
+  FOREIGN KEY (`role_id`) REFERENCES `roles`(`id`) ON UPDATE no action ON DELETE cascade
+);
+--> statement-breakpoint
+CREATE INDEX `gadget_version_role_access_role_idx` ON `gadget_version_role_access` (`role_id`, `gadget_version_id`);
 --> statement-breakpoint
 UPDATE `roles`
 SET `permissions_bitmask` = `permissions_bitmask` | 3072

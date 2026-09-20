@@ -16,20 +16,27 @@ async function requireRuntimeAccess(env: DiscoflareEnv, actor: Membership, gadge
   const gadget = await requireGadget(env, gadgetId)
   if (!gadget.publishedVersion) fail(404, 'not_found', 'Gadget not found')
   if (!canManageGadgets(actor)) {
-    const access = await env.DB.prepare('SELECT 1 FROM gadget_role_access WHERE gadget_id = ? AND role_id = ?').bind(gadgetId, actor.roleId).first()
+    const access = await env.DB.prepare(
+      `SELECT 1 FROM gadget_versions versions
+       JOIN gadget_version_role_access access ON access.gadget_version_id = versions.id
+       WHERE versions.gadget_id = ? AND versions.version = ? AND access.role_id = ?`,
+    ).bind(gadgetId, gadget.publishedVersion, actor.roleId).first()
     if (!access) fail(404, 'not_found', 'Gadget not found')
   }
   return gadget
 }
 
-async function loadPublishedSpec(env: DiscoflareEnv, gadget: GadgetRow): Promise<GadgetSpec> {
-  const row = await env.DB.prepare('SELECT spec_json as specJson FROM gadget_versions WHERE gadget_id = ? AND version = ?')
-    .bind(gadget.id, gadget.publishedVersion).first<{ specJson: string }>()
+type PublishedGadget = { name: string, description: string, spec: GadgetSpec }
+
+async function loadPublishedGadget(env: DiscoflareEnv, gadget: GadgetRow): Promise<PublishedGadget> {
+  const row = await env.DB.prepare(
+    'SELECT name, description, spec_json as specJson FROM gadget_versions WHERE gadget_id = ? AND version = ?',
+  ).bind(gadget.id, gadget.publishedVersion).first<{ name: string, description: string, specJson: string }>()
   if (!row) fail(409, 'gadget_version_missing', 'The published Gadget Version is missing')
   let value: unknown
   try { value = JSON.parse(row.specJson) }
   catch { fail(409, 'gadget_version_invalid', 'The published Gadget Version is invalid') }
-  return validateGadgetSpec(env, value, { publish: true })
+  return { name: row.name, description: row.description, spec: await validateGadgetSpec(env, value, { publish: true }) }
 }
 
 function projectItem(item: DatabaseItemDTO, binding: GadgetBinding): DatabaseItemDTO {
@@ -40,7 +47,8 @@ function projectItem(item: DatabaseItemDTO, binding: GadgetBinding): DatabaseIte
 /** Open is the only read interface the UI needs; all source resolution stays behind this seam. */
 export async function openGadget(env: DiscoflareEnv, actor: Membership, gadgetId: string): Promise<GadgetRuntimeDTO> {
   const gadget = await requireRuntimeAccess(env, actor, gadgetId)
-  const spec = await loadPublishedSpec(env, gadget)
+  const published = await loadPublishedGadget(env, gadget)
+  const spec = published.spec
   const datasets = await Promise.all(spec.bindings.map(async (binding) => {
     const page = await loadDatabasePage(env, binding.source.databaseId, {
       viewId: binding.source.viewId,
@@ -58,7 +66,7 @@ export async function openGadget(env: DiscoflareEnv, actor: Membership, gadgetId
     }
   }))
   return {
-    gadget: { id: gadget.id, name: gadget.name, description: gadget.description, version: gadget.publishedVersion! },
+    gadget: { id: gadget.id, name: published.name, description: published.description, version: gadget.publishedVersion! },
     spec,
     datasets,
   }
@@ -107,7 +115,7 @@ async function createRecord(
     meta: { gadgetId, bindingId: binding.id, databaseId: binding.source.databaseId },
     authorization: actor.authorization,
   })
-  return (await loadDatabaseItem(env, id))!
+  return projectItem((await loadDatabaseItem(env, id))!, binding)
 }
 
 async function updateRecord(
@@ -157,13 +165,13 @@ async function updateRecord(
     meta: { gadgetId, bindingId: binding.id, databaseId: binding.source.databaseId, fields: [...Object.keys(input.values ?? {}), ...(input.title !== undefined ? ['title'] : [])] },
     authorization: actor.authorization,
   })
-  return databaseItemDto(updated, fields)
+  return projectItem(databaseItemDto(updated, fields), binding)
 }
 
 /** Invoke enforces published capabilities before dispatching a domain mutation. */
 export async function invokeGadget(env: DiscoflareEnv, actor: Membership, gadgetId: string, input: GadgetInvocation): Promise<DatabaseItemDTO> {
   const gadget = await requireRuntimeAccess(env, actor, gadgetId)
-  const spec = await loadPublishedSpec(env, gadget)
+  const { spec } = await loadPublishedGadget(env, gadget)
   const binding = spec.bindings.find(candidate => candidate.id === input.bindingId)
   if (!binding || !binding.operations.includes(input.operation)) fail(403, 'gadget_operation_denied', 'This Gadget does not allow that operation')
   if (input.operation === 'create') return createRecord(env, actor, gadgetId, binding, input)
