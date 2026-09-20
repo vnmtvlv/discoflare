@@ -1,0 +1,195 @@
+{
+  "name": "discoflare",
+  "version": "0.0.1",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@10.30.3",
+  "scripts": {
+    "build": "NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
+    "generate:native": "node scripts/generate-native.mjs native",
+    "generate:extension": "node scripts/generate-native.mjs extension",
+    "dev": "nuxt dev",
+    "dev:remote": "node scripts/dev-remote.mjs --",
+    "dev:full": "pnpm db:migrate:local && pnpm build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
+    "preview": "nuxt build && wrangler dev",
+    "deploy": "pnpm build && pnpm deploy:built",
+    "deploy:built": "pnpm db:migrate && wrangler deploy",
+    "release:installer": "pnpm build:packages && pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .installer/bundle && node scripts/build-installer-release.mjs && pnpm release:packages",
+    "release:packages": "pnpm --filter @discoflare/installer-core pack:release && pnpm --filter @discoflare/cli pack:release",
+    "build:packages": "pnpm --filter @discoflare/installer-core build && pnpm --filter @discoflare/cli build",
+    "env:init": "node scripts/init-env.mjs",
+    "vapid:generate": "node scripts/generate-vapid.mjs",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.dev.jsonc",
+    "db:migrate": "wrangler d1 migrations apply DB --remote",
+    "db:seed": "node scripts/seed.mjs",
+    "cf:types": "wrangler types",
+    "prepare:clients": "node scripts/prepare-clients.mjs all",
+    "prepare:clients:mobile": "node scripts/prepare-clients.mjs mobile",
+    "prepare:clients:desktop": "node scripts/prepare-clients.mjs desktop",
+    "prepare:clients:extension": "node scripts/prepare-clients.mjs extension",
+    "ios:sync": "pnpm prepare:clients:mobile && pnpm --filter @discoflare/mobile ios:sync",
+    "ios:open": "pnpm --filter @discoflare/mobile ios:open",
+    "ios:run": "pnpm ios:sync && pnpm --filter @discoflare/mobile ios:run",
+    "macos:dev": "pnpm prepare:clients:desktop && pnpm --filter @discoflare/desktop dev",
+    "macos:build": "pnpm prepare:clients:desktop && pnpm --filter @discoflare/desktop build",
+    "extension:build": "pnpm prepare:clients:extension",
+    "dev:simulator-proxy": "node scripts/simulator-proxy.mjs"
+  },
+  "cloudflare": {
+    "bindings": {
+      "AUTH_SECRET": {
+        "description": "Generate a random 32+ character value. This signs login sessions."
+      },
+      "AUTH_MODE": {
+        "description": "Authentication perimeter: builtin (default) or access."
+      },
+      "CF_ACCESS_ISS": {
+        "description": "Cloudflare Access team issuer, such as https://team.cloudflareaccess.com."
+      },
+      "CF_ACCESS_AUD": {
+        "description": "Cloudflare Access application audience tag."
+      },
+      "APP_NAME": {
+        "description": "Name shown beside the Discoflare logo and in the page title."
+      },
+      "APP_TITLE": {
+        "description": "Login headline. Use \\n to split it across two lines."
+      },
+      "APP_SUBTITLE": {
+        "description": "Supporting copy shown below the login headline."
+      },
+      "AUTH_REGISTRATION_MODE": {
+        "description": "Initial signup policy: invite_only (default) or open. The owner can change it later."
+      },
+      "EMAIL_FROM": {
+        "description": "Optional verified Cloudflare Email Service sender. An EMAIL send binding is also required."
+      },
+      "EMAIL_FROM_NAME": {
+        "description": "Optional display name for verification emails."
+      },
+      "GITHUB_CLIENT_ID": {
+        "description": "Optional GitHub OAuth client ID. Deployment credentials override settings entered in Discoflare."
+      },
+      "GITHUB_CLIENT_SECRET": {
+        "description": "Optional GitHub OAuth client secret."
+      },
+      "TWITTER_CLIENT_ID": {
+        "description": "Optional OAuth 2.0 client ID for Sign in with X. Configure `/api/auth/callback/twitter` as the callback path."
+      },
+      "TWITTER_CLIENT_SECRET": {
+        "description": "Optional OAuth 2.0 client secret for Sign in with X."
+      },
+      "TELEGRAM_CLIENT_ID": {
+        "description": "Optional Telegram OIDC client ID."
+      },
+      "TELEGRAM_CLIENT_SECRET": {
+        "description": "Optional Telegram OIDC client secret."
+      },
+      "TURNSTILE_SITE_KEY": {
+        "description": "Optional Cloudflare Turnstile site key for email signup."
+      },
+      "TURNSTILE_SECRET_KEY": {
+        "description": "Optional Cloudflare Turnstile secret key for email signup."
+      },
+      "REALTIMEKIT_ACCOUNT_ID": {
+        "description": "Optional RealtimeKit account ID. Deployment credentials override settings entered in Discoflare."
+      },
+      "REALTIMEKIT_APP_ID": {
+        "description": "Optional RealtimeKit app ID."
+      },
+      "REALTIMEKIT_API_KEY": {
+        "description": "Optional Cloudflare API token with Realtime permissions. Store this as a secret."
+      },
+      "VAPID_SUBJECT": {
+        "description": "Web Push contact URI, normally mailto:admin@example.com."
+      },
+      "VAPID_PUBLIC_KEY": {
+        "description": "Stable URL-safe P-256 public key generated by pnpm vapid:generate."
+      },
+      "VAPID_PRIVATE_KEY": {
+        "description": "Stable URL-safe P-256 private key. Store this as a secret."
+      },
+      "ADMIN_EMAIL": {
+        "description": "Email for the first owner account."
+      },
+      "ADMIN_SETUP_TOKEN": {
+        "description": "Optional private 32+ character claim used to create the first owner on the workspace domain."
+      },
+      "AGENT_MODEL": {
+        "description": "Default Workers AI model for workspace agents. The included default is @cf/moonshotai/kimi-k2.7-code."
+      }
+    }
+  },
+  "dependencies": {
+    "@better-auth/drizzle-adapter": "^1.7.2",
+    "@block65/webcrypto-web-push": "2.0.0",
+    "@cloudflare/computer": "0.2.1",
+    "@cloudflare/realtimekit": "^2.0.2",
+    "@cloudflare/shell": "0.4.3",
+    "@cloudflare/think": "0.17.0",
+    "@iconify-json/ph": "^1.2.2",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@noble/hashes": "^2.4.0",
+    "@nuxt/ui": "^4.11.0",
+    "@pinia/nuxt": "^1.0.2",
+    "@tanstack/vue-query": "^5.102.8",
+    "@tiptap/core": "^3.31.0",
+    "@tiptap/extension-code": "^3.31.0",
+    "@tiptap/extension-horizontal-rule": "^3.31.0",
+    "@tiptap/extension-image": "^3.31.0",
+    "@tiptap/extension-mention": "^3.31.0",
+    "@tiptap/extension-placeholder": "^3.31.0",
+    "@tiptap/markdown": "^3.31.0",
+    "@tiptap/pm": "^3.31.0",
+    "@tiptap/starter-kit": "^3.31.0",
+    "@tiptap/vue-3": "^3.31.0",
+    "@vueuse/core": "^14.4.0",
+    "@vueuse/nuxt": "^14.4.0",
+    "agents": "0.22.0",
+    "ai": "7.0.92",
+    "aws4fetch": "1.0.20",
+    "better-auth": "^1.7.2",
+    "bignumber.js": "^11.1.5",
+    "dayjs": "^1.11.23",
+    "drizzle-orm": "^0.45.2",
+    "jose": "6.2.10",
+    "nanoid": "^6.0.1",
+    "nuxt": "^4.5.2",
+    "pinia": "^4.0.3",
+    "postal-mime": "^3.0.0",
+    "uuidv7": "^1.2.1",
+    "vue": "^3.5.42",
+    "vue-router": "^5.3.0",
+    "workers-ai-provider": "4.0.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
+    "@nuxt/eslint": "^1.17.0",
+    "@types/node": "^26.4.1",
+    "@vue/test-utils": "^2.5.0",
+    "drizzle-kit": "^0.31.10",
+    "eslint": "^10.9.1",
+    "happy-dom": "^20.13.1",
+    "miniflare": "5.20260831.0-alpha",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.2",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^3.3.11",
+    "wrangler": "^4.128.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "better-sqlite3",
+      "unrs-resolver",
+      "vue-demi",
+      "workerd"
+    ]
+  }
+}

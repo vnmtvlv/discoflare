@@ -1,0 +1,65 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discoflare-dev",
+  // Local Nuxt skips AI, Browser, Workflows, and Containers: those bindings
+  // start a remote wrangler session and fail without CLOUDFLARE_API_TOKEN.
+  "main": "workers/index.ts",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "triggers": { "crons": ["17 4 * * 1"] },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "discoflare",
+      "database_id": "local-discoflare",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "discoflare-files"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TICKETS",
+      "id": "local-tickets"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
+      { "name": "WORKSPACE_DO", "class_name": "WorkspaceDurableObject" },
+      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" },
+      { "name": "NOTIFICATION_DO", "class_name": "NotificationDurableObject" },
+      { "name": "AGENT_DO", "class_name": "DiscoflareAgent" },
+      { "name": "AGENT_THINK", "class_name": "DiscoflareThink" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ChannelDurableObject",
+        "WorkspaceDurableObject",
+        "RateLimitDurableObject"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["NotificationDurableObject"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DiscoflareAgent"]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": ["DiscoflareThink"]
+    }
+  ],
+  "vars": {
+    "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
+  }
+}

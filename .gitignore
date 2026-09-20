@@ -1,0 +1,46 @@
+# Nuxt / Nitro
+.output
+.data
+.nuxt
+.nitro
+.installer
+.cache
+dist
+
+# Node
+node_modules
+
+# Logs
+logs
+*.log
+
+# Misc
+.DS_Store
+.fleet
+.idea
+.vscode
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Wrangler local state
+.wrangler
+worker-configuration.d.ts
+
+# Tests
+coverage
+
+# Bundled client output
+apps/mobile/www
+apps/desktop/www
+apps/extension/www
+apps/desktop/src-tauri/gen
+apps/desktop/src-tauri/target
+*.xcuserstate
+xcuserdata/
+DerivedData/
+
+# Local stage deployment configs
+wrangler.stage.local.jsonc

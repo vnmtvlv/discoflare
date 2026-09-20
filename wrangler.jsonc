@@ -1,0 +1,88 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discoflare-sandbox",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  "observability": {
+    "enabled": true
+  },
+  "triggers": {
+    "crons": ["17 4 * * 1"]
+  },
+  "routes": [
+    { "pattern": "sandbox.discoflare.com", "custom_domain": true }
+  ],
+  "ai": { "binding": "AI" },
+  "browser": { "binding": "BROWSER" },
+  "workflows": [
+    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-sandbox-agent-tasks", "class_name": "AgentTaskWorkflow" }
+  ],
+  "containers": [
+    { "class_name": "DiscoflareAgent", "image": "./Dockerfile.computer", "instance_type": "lite", "max_instances": 10 }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "discoflare-sandbox",
+      "database_id": "06413877-4644-4bcf-bd36-0048ac443d1d",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "discoflare-sandbox-files"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TICKETS",
+      "id": "1a4e9a42cbef42578e4de9c5e3cbc1d6"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
+      { "name": "WORKSPACE_DO", "class_name": "WorkspaceDurableObject" },
+      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" },
+      { "name": "NOTIFICATION_DO", "class_name": "NotificationDurableObject" },
+      { "name": "AGENT_DO", "class_name": "DiscoflareAgent" },
+      { "name": "AGENT_THINK", "class_name": "DiscoflareThink" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ChannelDurableObject",
+        "WorkspaceDurableObject",
+        "RateLimitDurableObject"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["NotificationDurableObject"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DiscoflareAgent"]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": ["DiscoflareThink"]
+    }
+  ],
+  "vars": {
+    "REALTIMEKIT_PRESET_VOICE": "voice",
+    "REALTIMEKIT_PRESET_AV": "group_call_host",
+    "PUBLIC_ORIGIN": "https://sandbox.discoflare.com",
+    "AUTH_REGISTRATION_MODE": "open",
+    "APP_NAME": "Discoflare Sandbox",
+    "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
+  }
+}

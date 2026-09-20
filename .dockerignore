@@ -1,0 +1,12 @@
+.git
+.github
+.env
+.env.*
+.wrangler
+.nuxt
+.output
+node_modules
+coverage
+*.log
+.DS_Store
+._*

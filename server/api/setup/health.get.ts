@@ -1,0 +1,97 @@
+import { loadRealtimeKitConfig, realtimekitConfigured } from '../../../workers/realtimekit'
+import { ensureAdminFromEnv, readAdminEnv } from '../../utils/bootstrap'
+import { cf } from '../../utils/cf'
+import { ensureMigrated, userCount, workspaceReady } from '../../utils/db'
+import type { SetupHealth } from '../../../shared/types'
+import { readAppBranding } from '../../../shared/app-branding'
+import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
+import { version as packageVersion } from '../../../package.json'
+import { authMode } from '../../utils/cloudflare-access'
+import { agentBrowserConfigured, agentComputerConfigured } from '../../../workers/env'
+
+export default defineEventHandler(async (event): Promise<SetupHealth> => {
+  setHeader(event, 'Cache-Control', 'no-store')
+  let env
+  try {
+    env = cf(event).env
+  }
+  catch {
+    return {
+      version: packageVersion,
+      authMode: 'builtin',
+      ok: false,
+      ready: false,
+      users: 0,
+      migrated: false,
+      adminEnv: false,
+      ownerSetup: false,
+      ownerEmailHint: null,
+      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, agentComputer: false, agentWorkflow: false, workersAi: false, browser: false },
+      realtimekit: false,
+      twitterAuth: false,
+      ...readAppBranding(),
+    }
+  }
+
+  const bindings = {
+    db: Boolean(env.DB),
+    r2: Boolean(env.FILES),
+    kv: Boolean(env.TICKETS),
+    channelDo: Boolean(env.CHANNEL_DO),
+    workspaceDo: Boolean(env.WORKSPACE_DO),
+    rateLimitDo: Boolean(env.RATE_LIMIT_DO),
+    notificationDo: Boolean(env.NOTIFICATION_DO),
+    agentDo: Boolean(env.AGENT_DO),
+    agentComputer: agentComputerConfigured(env),
+    agentWorkflow: agentComputerConfigured(env),
+    workersAi: Boolean(env.AI),
+    browser: agentBrowserConfigured(env),
+  }
+
+  let migrated = false
+  let users = 0
+  let ready = false
+  if (env.DB) {
+    try {
+      migrated = await ensureMigrated(env.DB)
+      users = (await ensureAdminFromEnv(event)).users
+      ready = await workspaceReady(env.DB)
+    }
+    catch {
+      try {
+        users = await userCount(env.DB)
+        ready = await workspaceReady(env.DB)
+      }
+      catch {
+        users = 0
+      }
+    }
+  }
+
+  const ownerSetup = readOwnerSetupEnv(env)
+
+  if (env.FILES) {
+    try {
+      await env.FILES.head('__health__')
+    }
+    catch {
+      // head of missing key still proves the binding works on most runtimes
+    }
+  }
+
+  return {
+    version: env.DISCOFLARE_VERSION?.trim() || packageVersion,
+    authMode: authMode(env),
+    ok: bindings.db && migrated,
+    ready,
+    users,
+    migrated,
+    adminEnv: Boolean(readAdminEnv(env)),
+    ownerSetup: Boolean(ownerSetup && !ready),
+    ownerEmailHint: ownerSetup && !ready ? maskedOwnerEmail(ownerSetup.email) : null,
+    bindings,
+    realtimekit: realtimekitConfigured(await loadRealtimeKitConfig(env)),
+    twitterAuth: Boolean(env.TWITTER_CLIENT_ID?.trim() && env.TWITTER_CLIENT_SECRET?.trim()),
+    ...readAppBranding(env),
+  }
+})

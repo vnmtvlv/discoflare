@@ -1,0 +1,95 @@
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { agents, identityKeys, roles, users } from '../../../../drizzle/schema'
+import { newId, nowIso } from '../../../../shared/ids'
+import { Permission } from '../../../../shared/permissions'
+import type { AgentDTO } from '../../../../shared/types'
+import { requireMember } from '../../../utils/guards'
+import { cf, fail } from '../../../utils/cf'
+import { getDb } from '../../../utils/db'
+import { writeAudit } from '../../../utils/messages'
+import { parseBody } from '../../../utils/validate'
+import { signalMembersChanged } from '../../../../workers/member-events'
+import { agentRuntimeConfigured } from '../../../../workers/env'
+
+const bodySchema = z.object({
+  displayName: z.string().trim().min(1).max(80),
+  model: z.string().trim().min(1).max(200).default('@cf/moonshotai/kimi-k2.7-code'),
+  instructions: z.string().trim().max(12_000).default(''),
+})
+
+export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> => {
+  const workspaceId = getRouterParam(event, 'id')!
+  const actor = await requireMember(event, workspaceId, Permission.manageWorkspace)
+  const body = parseBody(bodySchema, await readBody(event))
+  const { env, waitUntil } = cf(event)
+  if (!agentRuntimeConfigured(env)) {
+    fail(409, 'agent_runtime_disabled', 'Workers AI and the Agent Durable Object must be bound before creating an agent')
+  }
+  const db = getDb(env.DB)
+  const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
+  if (!memberRole) fail(409, 'workspace_incomplete', 'Member role not found')
+
+  const id = newId()
+  const now = nowIso()
+  const identityNow = new Date()
+  const computerId = `agent:${id}`.toLowerCase()
+  await db.batch([
+    db.insert(identityKeys).values({
+      id,
+      name: body.displayName,
+      email: `agent+${id}@discoflare.invalid`,
+      emailVerified: false,
+      image: null,
+      createdAt: identityNow,
+      updatedAt: identityNow,
+    }),
+    db.insert(users).values({
+      id,
+      kind: 'agent',
+      handle: null,
+      displayName: body.displayName,
+      avatarR2Key: null,
+      status: 'active',
+      roleId: memberRole.id,
+      nickname: null,
+      joinedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    }),
+    db.insert(agents).values({
+      userId: id,
+      model: body.model,
+      instructions: body.instructions,
+      status: 'active',
+      computerId,
+      createdBy: actor.user.id,
+      lastActiveAt: null,
+      createdAt: now,
+      updatedAt: now,
+    }),
+  ])
+  await writeAudit(env, {
+    workspaceId,
+    actorId: actor.user.id,
+    action: 'agent.create',
+    targetType: 'agent',
+    targetId: id,
+    meta: { displayName: body.displayName, model: body.model },
+  })
+  waitUntil(signalMembersChanged(env, workspaceId))
+  return {
+    agent: {
+      id,
+      displayName: body.displayName,
+      avatarR2Key: null,
+      model: body.model,
+      instructions: body.instructions,
+      status: 'active',
+      computerId,
+      lastActiveAt: null,
+      createdAt: now,
+      updatedAt: now,
+    },
+  }
+})
