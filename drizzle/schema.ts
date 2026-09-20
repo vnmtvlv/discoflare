@@ -728,6 +728,44 @@ export const dataBookmarks = sqliteTable('data_bookmarks', {
   check('data_bookmarks_target_type_check', sql`${table.targetType} in ('database_view', 'document', 'canvas')`),
 ])
 
+/** Declarative internal tools. Drafts are mutable; published versions are immutable snapshots. */
+export const gadgets = sqliteTable('gadgets', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  description: text('description').notNull().default(''),
+  draftSpecJson: text('draft_spec_json').notNull(),
+  draftRevision: integer('draft_revision').notNull().default(1),
+  publishedVersion: integer('published_version'),
+  position: integer('position').notNull().default(0),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  ...isoTimestamps(),
+}, table => [
+  index('gadgets_position_idx').on(table.position, table.createdAt),
+  check('gadgets_draft_revision_check', sql`${table.draftRevision} > 0`),
+  check('gadgets_published_version_check', sql`${table.publishedVersion} is null or ${table.publishedVersion} > 0`),
+])
+
+export const gadgetVersions = sqliteTable('gadget_versions', {
+  id: text('id').primaryKey(),
+  gadgetId: text('gadget_id').notNull().references(() => gadgets.id, { onDelete: 'cascade' }),
+  version: integer('version').notNull(),
+  specJson: text('spec_json').notNull(),
+  createdBy: text('created_by').notNull().references(() => users.id),
+  createdAt: text('created_at').notNull(),
+}, table => [
+  uniqueIndex('gadget_versions_number_unique').on(table.gadgetId, table.version),
+  check('gadget_versions_version_check', sql`${table.version} > 0`),
+])
+
+/** Published Gadget access is assigned to Roles; managers and the owner bypass this list. */
+export const gadgetRoleAccess = sqliteTable('gadget_role_access', {
+  gadgetId: text('gadget_id').notNull().references(() => gadgets.id, { onDelete: 'cascade' }),
+  roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),
+}, table => [
+  primaryKey({ columns: [table.gadgetId, table.roleId] }),
+  index('gadget_role_access_role_idx').on(table.roleId, table.gadgetId),
+])
+
 /** Task boards are shared product state, so they live in D1 rather than an Agent DO. */
 export const taskBoards = sqliteTable('task_boards', {
   id: text('id').primaryKey(),

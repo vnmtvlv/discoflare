@@ -9,6 +9,8 @@ export const Permission = {
   kick: 1 << 7,
   manageTasks: 1 << 8,
   manageDatabases: 1 << 9,
+  useGadgets: 1 << 10,
+  manageGadgets: 1 << 11,
 } as const
 
 export type PermissionFlag = (typeof Permission)[keyof typeof Permission]
@@ -24,6 +26,8 @@ export const ALL_PERMISSIONS =
   | Permission.kick
   | Permission.manageTasks
   | Permission.manageDatabases
+  | Permission.useGadgets
+  | Permission.manageGadgets
 
 export const MemberPermissions =
   Permission.sendMessages | Permission.attachFiles | Permission.startHuddle
@@ -39,6 +43,8 @@ export const PermissionGrants = [
   { key: 'kick', flag: Permission.kick, label: 'Remove members', description: 'Remove members from the workspace.' },
   { key: 'manageTasks', flag: Permission.manageTasks, label: 'Manage tasks', description: 'Create, edit, assign, run, archive, and remove task boards and tasks.' },
   { key: 'manageDatabases', flag: Permission.manageDatabases, label: 'Manage data', description: 'Create databases, documents, canvases, fields, and records.' },
+  { key: 'useGadgets', flag: Permission.useGadgets, label: 'Use gadgets', description: 'Open published internal tools shared with this role.' },
+  { key: 'manageGadgets', flag: Permission.manageGadgets, label: 'Manage gadgets', description: 'Create, configure, publish, and share internal tools.' },
 ] as const
 
 export type PermissionGrantKey = (typeof PermissionGrants)[number]['key']

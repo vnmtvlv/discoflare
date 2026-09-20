@@ -9,6 +9,7 @@ import agentIdentityBoundarySql from '../../drizzle/migrations/0012_agent_identi
 import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
+import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -42,6 +43,9 @@ describe('D1 bootstrap schema', () => {
     expect(INIT_SQL).toContain('CREATE TABLE `canvas_edges`')
     expect(INIT_SQL).toContain('CREATE TABLE `database_views`')
     expect(INIT_SQL).toContain('CREATE TABLE `data_bookmarks`')
+    expect(INIT_SQL).toContain('CREATE TABLE `gadgets`')
+    expect(INIT_SQL).toContain('CREATE TABLE `gadget_versions`')
+    expect(INIT_SQL).toContain('CREATE TABLE `gadget_role_access`')
     expect(INIT_SQL).toContain('CREATE TRIGGER `database_default_view_after_insert`')
     expect(INIT_SQL).toContain('CREATE TABLE `onboarding_revisions`')
     expect(INIT_SQL).toContain('CREATE TABLE `onboarding_acceptances`')
@@ -101,6 +105,24 @@ describe('D1 bootstrap schema', () => {
     expect(lines).toHaveLength(2)
     expect(lines[0]).toContain('DELETE FROM derived WHERE id = OLD.id; INSERT INTO derived')
     expect(lines[0]).toMatch(/END;$/u)
+  })
+
+  it('adds Gadget storage and grants new capabilities to existing admin roles', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(`
+      PRAGMA foreign_keys = ON;
+      CREATE TABLE users (id TEXT PRIMARY KEY);
+      CREATE TABLE roles (id TEXT PRIMARY KEY, key TEXT NOT NULL, permissions_bitmask INTEGER NOT NULL);
+      INSERT INTO roles VALUES ('admin-role', 'admin', 1023);
+      INSERT INTO roles VALUES ('member-role', 'member', 112);
+    `)
+    sqlite.exec(d1ExecSql(gadgetsSql))
+    expect(sqlite.prepare("SELECT permissions_bitmask FROM roles WHERE key = 'admin'").get()).toEqual({ permissions_bitmask: 4095 })
+    expect(sqlite.prepare("SELECT permissions_bitmask FROM roles WHERE key = 'member'").get()).toEqual({ permissions_bitmask: 112 })
+    expect(sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'gadget%' ORDER BY name").all()).toEqual([
+      { name: 'gadget_role_access' }, { name: 'gadget_versions' }, { name: 'gadgets' },
+    ])
+    sqlite.close()
   })
 
   it('boots with constrained channel role overrides', () => {

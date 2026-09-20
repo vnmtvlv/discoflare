@@ -6,7 +6,7 @@ import { Permission } from '~~/shared/permissions'
 import { channelPath, mailPath } from '~~/shared/paths'
 import { useClipboard } from '@vueuse/core'
 
-type Mode = 'chat' | 'tasks' | 'mail' | 'databases'
+type Mode = 'chat' | 'tasks' | 'mail' | 'databases' | 'gadgets'
 
 const props = defineProps<{ workspaceId: string }>()
 const route = useRoute()
@@ -64,6 +64,7 @@ const mode = computed<Mode>(() => {
   if (route.path.startsWith('/databases')) return 'databases'
   if (route.path.startsWith('/documents')) return 'databases'
   if (route.path.startsWith('/canvases')) return 'databases'
+  if (route.path.startsWith('/gadgets')) return 'gadgets'
   return 'chat'
 })
 
@@ -85,6 +86,7 @@ const modes = computed(() => [
   ...(can(Permission.manageTasks) ? [{ value: 'tasks' as const, label: 'Tasks', icon: 'i-ph-kanban', to: '/tasks', dot: false, shortcut: '2' }] : []),
   { value: 'mail' as const, label: 'Mail', icon: 'i-ph-envelope-simple', to: mailTarget.value, dot: mailUnread.value, shortcut: '3' },
   ...(can(Permission.manageDatabases) ? [{ value: 'databases' as const, label: 'Data', icon: 'i-ph-table', to: '/databases', dot: false, shortcut: '4' }] : []),
+  ...(can(Permission.useGadgets) || can(Permission.manageGadgets) ? [{ value: 'gadgets' as const, label: 'Apps', icon: 'i-ph-squares-four', to: '/gadgets', dot: false, shortcut: '5' }] : []),
 ])
 
 const commandHeld = useState('app-switcher-command-held', () => false)
@@ -305,6 +307,7 @@ watch(nav.inviteOpen, (open) => {
       <LayoutChatNav v-if="mode === 'chat'" :workspace-id="workspaceId" />
       <LayoutTasksNav v-else-if="mode === 'tasks'" :workspace-id="workspaceId" />
       <LayoutDatabasesNav v-else-if="mode === 'databases'" :workspace-id="workspaceId" />
+      <LayoutGadgetsNav v-else-if="mode === 'gadgets'" :workspace-id="workspaceId" />
       <LayoutMailNav v-else />
     </div>
 
