@@ -73,10 +73,10 @@ After the release PR is merged:
 6. Verify that the Worker bundle, asset payload, and installer manifest are attached to the release and identify the expected version.
 
 Publishing the GitHub Release triggers
-`.github/workflows/publish-installer-release.yml`. It builds the Nuxt Worker,
-packages the static assets, D1 migrations, installer-core, CLI, and public Agent Computer image, and attaches the versioned
-installer artifacts to the GitHub Release. The guided installer and CLI consume the
-pinned manifest rather than an unversioned branch.
+`.github/workflows/publish-installer-release.yml`. It builds the Nuxt Worker and
+packages the static assets and D1 migrations as three versioned artifacts: the
+release manifest, Worker bundle, and asset payload. The guided installer consumes
+the pinned payloads rather than an unversioned branch.
 
 Do not move an existing release tag or overwrite a broken version. Fix the
 problem and publish the next patch release.

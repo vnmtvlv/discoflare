@@ -20,7 +20,7 @@ This repository is the source of truth for the open-source workspace runtime and
 - the root Nuxt app is the workspace Worker and shared frontend;
 - `discoflare.com` is a separate private account and installation control plane;
 - `apps/desktop`, `apps/mobile`, and `apps/extension` package the shared frontend; and
-- `packages/installer-core` and `packages/cli` provide the shared provisioning contract and recovery CLI.
+- `scripts/build-installer-release.mjs` packages the immutable Worker, assets, and migrations consumed by `discoflare.com`.
 
 `sandbox.discoflare.com` is a deployment of the root workspace app, not a separate application. Control-plane changes do not version or redeploy workspace installations, and client releases use their own platform tags.
 

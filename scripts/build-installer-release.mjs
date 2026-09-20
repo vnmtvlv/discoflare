@@ -90,7 +90,7 @@ const manifest = {
   releasedAt: new Date().toISOString(),
   compatibilityDate: '2026-09-02',
   compatibilityFlags: ['nodejs_compat'],
-  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'agent-computer-v1', 'managed-realtimekit-v1'],
+  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'managed-realtimekit-v1'],
   worker: {
     url: `${releaseBaseUrl}/${workerName}`,
     sha256: digest('sha256', worker),
@@ -101,12 +101,6 @@ const manifest = {
     sha256: digest('sha256', assetsPayload),
     size: assetsPayload.byteLength,
   },
-  container: {
-    image: process.env.DISCOFLARE_CONTAINER_IMAGE || `ghcr.io/vnmtvlv/discoflare-computer:${version}`,
-    className: 'DiscoflareAgent',
-    instanceType: 'lite',
-    maxInstances: 10,
-  },
   durableObjects: [
     { binding: 'CHANNEL_DO', className: 'ChannelDurableObject', migration: 'v1' },
     { binding: 'WORKSPACE_DO', className: 'WorkspaceDurableObject', migration: 'v1' },
@@ -115,10 +109,6 @@ const manifest = {
     { binding: 'AGENT_DO', className: 'DiscoflareAgent', migration: 'v3' },
     { binding: 'AGENT_THINK', className: 'DiscoflareThink', migration: 'v4' },
   ],
-  workflow: {
-    binding: 'AGENT_TASK_WORKFLOW',
-    className: 'AgentTaskWorkflow',
-  },
 }
 
 await writeFile(join(outputDir, 'discoflare-cloudflare-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
