@@ -30,8 +30,8 @@ INSERT INTO auth_accounts (id, issuer, account_id, provider_id, user_id, passwor
   ('${ownerAccountId}', 'local:credential', '${ownerId}', 'credential', '${ownerId}', '${hash}', ${authNow}, ${authNow}),
   ('${memberAccountId}', 'local:credential', '${memberId}', 'credential', '${memberId}', '${hash}', ${authNow}, ${authNow});
 INSERT INTO roles (id, key, name, permissions_bitmask, position, is_system, created_at, updated_at) VALUES
-  ('${ownerRole}', 'owner', 'owner', 255, 0, 1, '${now}', '${now}'),
-  ('${adminRole}', 'admin', 'admin', 255, 1, 1, '${now}', '${now}'),
+  ('${ownerRole}', 'owner', 'owner', 4095, 0, 1, '${now}', '${now}'),
+  ('${adminRole}', 'admin', 'admin', 4095, 1, 1, '${now}', '${now}'),
   ('${memberRole}', 'member', 'member', 112, 2, 1, '${now}', '${now}');
 INSERT INTO users (id, handle, display_name, status, role_id, joined_at, created_at, updated_at) VALUES
   ('${ownerId}', 'owner', 'Owner', 'active', '${ownerRole}', '${now}', '${now}', '${now}'),

@@ -93,6 +93,18 @@ _Avoid_: Generic Item, Task unless it has Task execution semantics
 A shared, named lens over one Database. A View owns its table, board, calendar, or list layout plus visible Fields, typed filters, sorts, and any grouping or date Field. It never copies Records or exposes their physical storage slots.
 _Avoid_: A second Database, a private browser preference, saving free-form SQL
 
+**Gadget**:
+A shared, versioned internal application composed from trusted interface elements. A Gadget may bind to multiple Databases and other workspace resources, while every binding declares visible Fields and permitted operations; it never owns or copies the bound business data.
+_Avoid_: Database View, generated chat message, arbitrary code sandbox, copied dataset
+
+**Gadget Binding**:
+A bounded capability connecting one Gadget to one workspace resource. A Binding names the exact source, visible Fields, and allowed operations that the Gadget may use for an authorized viewer.
+_Avoid_: Database credentials, raw SQL, ambient workspace access
+
+**Gadget Version**:
+An immutable published snapshot of a Gadget's name, description, interface, Bindings, and Role access. Draft changes remain private to Gadget managers until they are published as a new Version.
+_Avoid_: Live model output, mutable published configuration
+
 **Data Bookmark**:
 A private, ordered shortcut that one human keeps to a Database View, Document, or Canvas. Bookmarks are durable across that person's devices but do not reorganize the shared workspace for anyone else.
 _Avoid_: A shared navigation category, browser-local state, a copied Data resource

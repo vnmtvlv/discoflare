@@ -24,6 +24,7 @@ import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
 import dataViewsAndBookmarksSql from '../../drizzle/migrations/0023_data_views_and_bookmarks.sql?raw'
+import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -70,6 +71,7 @@ export const INIT_SQL = d1ExecSql([
   realtimeV1Sql,
   agentPrincipalsAndApprovalsSql,
   dataViewsAndBookmarksSql,
+  gadgetsSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

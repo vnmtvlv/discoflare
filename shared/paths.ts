@@ -47,3 +47,11 @@ export function documentPath(documentId?: string | null): string {
 export function canvasPath(canvasId?: string | null): string {
   return canvasId ? `/canvases?canvas=${encodeURIComponent(canvasId)}` : '/canvases'
 }
+
+export function gadgetPath(gadgetId?: string | null, edit = false): string {
+  const query = new URLSearchParams()
+  if (gadgetId) query.set('gadget', gadgetId)
+  if (edit) query.set('edit', '1')
+  const suffix = query.toString()
+  return suffix ? `/gadgets?${suffix}` : '/gadgets'
+}

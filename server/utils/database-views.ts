@@ -203,6 +203,21 @@ function viewQuery(
   return { where: clauses.join(' AND '), values, order: order.join(', ') }
 }
 
+export async function databaseItemMatchesView(
+  env: DiscoflareEnv,
+  databaseId: string,
+  viewId: string,
+  itemId: string,
+): Promise<boolean> {
+  const fields = await databaseFieldsFor(env, databaseId)
+  const view = (await loadDatabaseViews(env, databaseId, fields)).find(candidate => candidate.id === viewId)
+  if (!view) return false
+  const query = viewQuery(view.config, fields, '')
+  const match = await env.DB.prepare(`SELECT 1 FROM database_items WHERE id = ? AND ${query.where} LIMIT 1`)
+    .bind(itemId, databaseId, ...query.values).first()
+  return Boolean(match)
+}
+
 export async function loadDatabasePage(
   env: DiscoflareEnv,
   databaseId: string,

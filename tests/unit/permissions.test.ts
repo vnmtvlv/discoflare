@@ -14,6 +14,8 @@ describe('permissions', () => {
     expect(hasPermission(MemberPermissions, Permission.startHuddle)).toBe(true)
     expect(hasPermission(MemberPermissions, Permission.manageTasks)).toBe(false)
     expect(hasPermission(MemberPermissions, Permission.manageDatabases)).toBe(false)
+    expect(hasPermission(MemberPermissions, Permission.useGadgets)).toBe(false)
+    expect(hasPermission(MemberPermissions, Permission.manageGadgets)).toBe(false)
     expect(hasPermission(MemberPermissions, Permission.manageWorkspace)).toBe(false)
     expect(hasPermission(MemberPermissions, Permission.kick)).toBe(false)
     expect(rolePermissions('member')).toBe(MemberPermissions)
@@ -21,6 +23,8 @@ describe('permissions', () => {
 
   it('includes databases in owner and admin authority', () => {
     expect(hasPermission(ALL_PERMISSIONS, Permission.manageDatabases)).toBe(true)
+    expect(hasPermission(ALL_PERMISSIONS, Permission.useGadgets)).toBe(true)
+    expect(hasPermission(ALL_PERMISSIONS, Permission.manageGadgets)).toBe(true)
     expect(rolePermissions('admin')).toBe(ALL_PERMISSIONS)
   })
 

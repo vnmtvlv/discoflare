@@ -9,7 +9,9 @@ import { toRoleDto } from '../../../utils/role-policy'
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id')!
   const actor = await requireMember(event, workspaceId)
-  if (!hasPermission(actor.perms, Permission.manageRoles) && !hasPermission(actor.perms, Permission.manageChannels)) {
+  if (!hasPermission(actor.perms, Permission.manageRoles)
+    && !hasPermission(actor.perms, Permission.manageChannels)
+    && !hasPermission(actor.perms, Permission.manageGadgets)) {
     fail(403, 'forbidden', 'Missing permission')
   }
   const { env } = cf(event)

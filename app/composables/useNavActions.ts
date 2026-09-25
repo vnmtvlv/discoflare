@@ -13,6 +13,7 @@ export function useNavActions() {
   const createDatabaseOpen = useState('nav:create-database', () => false)
   const createDocumentOpen = useState('nav:create-document', () => false)
   const createCanvasOpen = useState('nav:create-canvas', () => false)
+  const createGadgetOpen = useState('nav:create-gadget', () => false)
   const composeOpen = useState('nav:compose', () => false)
 
   function openCreateChannel(categoryId: string | null = null) {
@@ -30,6 +31,7 @@ export function useNavActions() {
     createDatabaseOpen,
     createDocumentOpen,
     createCanvasOpen,
+    createGadgetOpen,
     composeOpen,
     openCreateChannel,
   }

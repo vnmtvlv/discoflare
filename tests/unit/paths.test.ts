@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canvasPath, channelPath, databasePath, documentPath } from '../../shared/paths'
+import { canvasPath, channelPath, databasePath, documentPath, gadgetPath } from '../../shared/paths'
 
 describe('channelPath', () => {
   it('is /channels/{id} with no workspace id', () => {
@@ -34,5 +34,9 @@ describe('Data resource paths', () => {
 
   it('keeps the selected canvas in the URL', () => {
     expect(canvasPath('canvas 1')).toBe('/canvases?canvas=canvas%201')
+  })
+
+  it('keeps a Gadget and editor mode in its shareable URL', () => {
+    expect(gadgetPath('gadget 1', true)).toBe('/gadgets?gadget=gadget+1&edit=1')
   })
 })

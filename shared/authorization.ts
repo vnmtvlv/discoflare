@@ -7,6 +7,8 @@ export const WorkspaceAction = {
   writeTasks: 'tasks:write',
   readDocuments: 'documents:read',
   writeDocuments: 'documents:write',
+  useGadgets: 'gadgets:use',
+  manageGadgets: 'gadgets:manage',
   sendMessages: 'messages:send',
   approveTaskRun: 'task-runs:approve',
 } as const
@@ -43,6 +45,8 @@ const ACTION_RULES: Record<WorkspaceAction, ActionRule> = {
   [WorkspaceAction.writeTasks]: { permission: Permission.manageTasks, scope: 'tasks:write' },
   [WorkspaceAction.readDocuments]: { permission: Permission.manageDatabases, scope: 'documents:read' },
   [WorkspaceAction.writeDocuments]: { permission: Permission.manageDatabases, scope: 'documents:write' },
+  [WorkspaceAction.useGadgets]: { permission: Permission.useGadgets },
+  [WorkspaceAction.manageGadgets]: { permission: Permission.manageGadgets },
   [WorkspaceAction.sendMessages]: { permission: Permission.sendMessages },
   [WorkspaceAction.approveTaskRun]: { permission: Permission.manageTasks },
 }
