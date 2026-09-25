@@ -32,6 +32,7 @@ export type DiscoflareEnv = {
   MAIL_GATEWAY_TOKEN?: string
   DISCOFLARE_PRIMARY?: string
   DISCOFLARE_MAIL_ROUTES?: string
+  DISCOFLARE_EMAIL_DOMAINS?: string
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
   REALTIMEKIT_APP_ID?: string
@@ -85,6 +86,9 @@ export type DiscoflareEnv = {
   DISCOFLARE_TELEMETRY_ID?: string
   DISCOFLARE_TELEMETRY_TOKEN?: string
   DISCOFLARE_TELEMETRY_ENDPOINT?: string
+  DISCOFLARE_CONTROL_ID?: string
+  DISCOFLARE_CONTROL_TOKEN?: string
+  DISCOFLARE_CONTROL_ENDPOINT?: string
 }
 
 export function agentComputerConfigured(env: DiscoflareEnv): boolean {

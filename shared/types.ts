@@ -329,10 +329,13 @@ export type MailMessageDTO = MessageDTO & {
 
 export type MailSettingsDTO = {
   configured: boolean
-  domain: string | null
-  appHostname: string | null
+  domains: Array<{
+    id: string
+    domain: string
+    appHostname: string
+  }>
   sendingBound: boolean
-  mailboxes: Array<MailboxDTO & { access: Array<{ userId: string; permission: MailboxPermission }> }>
+  mailboxes: Array<MailboxDTO & { domainId: string, access: Array<{ userId: string; permission: MailboxPermission }> }>
 }
 
 export type SessionUser = PublicUser & {

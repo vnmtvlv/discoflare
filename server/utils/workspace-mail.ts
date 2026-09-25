@@ -9,18 +9,62 @@ import { requireChannelAccess } from './guards'
 import { cf, fail } from './cf'
 import { getDb } from './db'
 
+export type WorkspaceMailDomainConfig = {
+  id: string
+  zoneId: string
+  domain: string
+}
+
+function validDomainConfig(value: unknown): value is WorkspaceMailDomainConfig {
+  if (!value || typeof value !== 'object') return false
+  const item = value as Partial<WorkspaceMailDomainConfig>
+  return typeof item.id === 'string' && Boolean(item.id.trim())
+    && typeof item.zoneId === 'string' && Boolean(item.zoneId.trim())
+    && typeof item.domain === 'string' && /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u.test(item.domain.trim().toLowerCase())
+}
+
+export function workspaceMailDomains(env: DiscoflareEnv): WorkspaceMailDomainConfig[] {
+  const configured: WorkspaceMailDomainConfig[] = []
+  if (env.DISCOFLARE_EMAIL_DOMAINS) {
+    try {
+      const value = JSON.parse(env.DISCOFLARE_EMAIL_DOMAINS) as unknown
+      if (Array.isArray(value)) configured.push(...value.filter(validDomainConfig).map(item => ({
+        id: item.id.trim(),
+        zoneId: item.zoneId.trim(),
+        domain: item.domain.trim().toLowerCase(),
+      })))
+    }
+    catch {
+      // Invalid deployment metadata is ignored; legacy bindings remain available below.
+    }
+  }
+  const legacyDomain = env.MAIL_DOMAIN?.trim().toLowerCase()
+  const legacyZoneId = env.MAIL_ZONE_ID?.trim()
+  if (legacyDomain && legacyZoneId && !configured.some(item => item.domain === legacyDomain)) {
+    configured.unshift({ id: MAIL_DOMAIN_ID, zoneId: legacyZoneId, domain: legacyDomain })
+  }
+  return [...new Map(configured.map(item => [item.domain, item])).values()]
+}
+
 export async function ensureWorkspaceMailFromEnv(env: DiscoflareEnv): Promise<void> {
-  const domain = env.MAIL_DOMAIN?.trim().toLowerCase()
-  const zoneId = env.MAIL_ZONE_ID?.trim()
   const appHostname = env.MAIL_APP_HOSTNAME?.trim().toLowerCase()
-  if (!domain || !zoneId || !appHostname) return
+  const domains = workspaceMailDomains(env)
+  if (!appHostname) return
+
+  const configuredIds = domains.map(domain => domain.id)
+  if (!configuredIds.length) {
+    await env.DB.prepare('DELETE FROM email_domains WHERE id NOT IN (SELECT DISTINCT domain_id FROM email_mailboxes)').run()
+    return
+  }
 
   const owner = await env.DB.prepare('SELECT owner_id as ownerId FROM workspace WHERE id = ?').bind('main').first<{ ownerId: string }>()
   if (!owner) return
   const created = nowIso()
   const existing = await env.DB.prepare('SELECT channel_id as channelId, local_part as localPart FROM email_mailboxes LIMIT 1').first<{ channelId: string; localPart: string }>()
+  const createDefaultMailbox = !existing && Boolean(env.MAIL_DEFAULT_LOCAL_PART?.trim())
   const localPart = existing?.localPart || normalizeMailLocalPart(env.MAIL_DEFAULT_LOCAL_PART || 'inbox')
   const channelId = existing?.channelId || newId()
+  const defaultDomain = domains[0]!
   const identityCreated = Date.now()
 
   await env.DB.batch([
@@ -34,22 +78,22 @@ export async function ensureWorkspaceMailFromEnv(env: DiscoflareEnv): Promise<vo
        VALUES (?, 'human', NULL, 'Email', NULL, 'removed', NULL, NULL, NULL, ?, ?)
        ON CONFLICT(id) DO NOTHING`,
     ).bind(MAIL_EXTERNAL_USER_ID, created, created),
-    env.DB.prepare(
+    ...domains.map(domain => env.DB.prepare(
       `INSERT INTO email_domains (id, zone_id, domain, app_hostname, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET zone_id = excluded.zone_id, domain = excluded.domain,
          app_hostname = excluded.app_hostname, updated_at = excluded.updated_at`,
-    ).bind(MAIL_DOMAIN_ID, zoneId, domain, appHostname, created, created),
-    env.DB.prepare(
+    ).bind(domain.id, domain.zoneId, domain.domain, appHostname, created, created)),
+    ...(createDefaultMailbox ? [env.DB.prepare(
       `INSERT INTO channels (id, name, topic, type, visibility, category_id, position, huddle_meeting_id, parent_id, parent_message_id, created_at, updated_at)
        VALUES (?, ?, '', 'text', 'private', NULL, 0, NULL, NULL, NULL, ?, ?)
        ON CONFLICT(id) DO UPDATE SET name = excluded.name, updated_at = excluded.updated_at`,
-    ).bind(channelId, mailAddress(localPart, domain), created, created),
+    ).bind(channelId, mailAddress(localPart, defaultDomain.domain), created, created),
     env.DB.prepare(
       `INSERT INTO email_mailboxes (channel_id, domain_id, local_part, display_name, enabled, created_at, updated_at)
        VALUES (?, ?, ?, 'Inbox', 1, ?, ?)
        ON CONFLICT(channel_id) DO UPDATE SET domain_id = excluded.domain_id, updated_at = excluded.updated_at`,
-    ).bind(channelId, MAIL_DOMAIN_ID, localPart, created, created),
+    ).bind(channelId, defaultDomain.id, localPart, created, created),
     env.DB.prepare(
       `INSERT INTO channel_members (channel_id, user_id, hidden_at, joined_at)
        VALUES (?, ?, NULL, ?) ON CONFLICT(channel_id, user_id) DO UPDATE SET hidden_at = NULL`,
@@ -58,8 +102,12 @@ export async function ensureWorkspaceMailFromEnv(env: DiscoflareEnv): Promise<vo
       `INSERT INTO email_mailbox_access (channel_id, user_id, permission, created_at, updated_at)
        VALUES (?, ?, 'manage', ?, ?)
        ON CONFLICT(channel_id, user_id) DO UPDATE SET permission = 'manage', updated_at = excluded.updated_at`,
-    ).bind(channelId, owner.ownerId, created, created),
+    ).bind(channelId, owner.ownerId, created, created)] : []),
   ])
+  const placeholders = configuredIds.map(() => '?').join(', ')
+  await env.DB.prepare(
+    `DELETE FROM email_domains WHERE id NOT IN (${placeholders}) AND id NOT IN (SELECT DISTINCT domain_id FROM email_mailboxes)`,
+  ).bind(...configuredIds).run()
 }
 
 export async function requireMailboxPermission(event: H3Event, channelId: string, needed: MailboxPermission) {

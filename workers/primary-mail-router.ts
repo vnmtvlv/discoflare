@@ -2,6 +2,7 @@ import type { DiscoflareEnv } from './env'
 import { receiveWorkspaceEmail } from './mail-ingress'
 import { secureTokenEqual } from './mail-gateway-ingress'
 import type { WorkspaceEmailMessage } from './mail-transport'
+import { workspaceMailDomains } from '../server/utils/workspace-mail'
 
 export type PrimaryMailRoute = {
   domain: string
@@ -43,7 +44,7 @@ function senderAddress(message: WorkspaceEmailMessage): string {
 /** Routes the zone catch-all inside the primary Discoflare Worker. */
 export async function routeWorkspaceEmail(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
   const domain = recipientDomain(message.to)
-  if (domain && domain === env.MAIL_DOMAIN?.trim().toLowerCase()) {
+  if (domain && workspaceMailDomains(env).some(item => item.domain === domain)) {
     await receiveWorkspaceEmail(message, env)
     return
   }

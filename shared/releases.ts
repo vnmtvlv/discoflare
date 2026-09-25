@@ -26,7 +26,7 @@ export type InstallationManagementStatusDTO = {
   huddlesEnabled: boolean
   agentComputerEnabled: boolean
   emailEnabled: boolean
-  emailDomain: string | null
+  emailDomains: string[]
   emailEligible: boolean
 }
 
