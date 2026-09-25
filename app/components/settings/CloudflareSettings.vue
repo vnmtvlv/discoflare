@@ -53,6 +53,7 @@ const adminUrl = computed(() => {
         <div class="rounded-md border border-default p-4">
           <p class="text-sm font-medium text-highlighted">Domain and email</p>
           <p class="mt-1 text-sm text-muted">{{ status.customDomainEnabled ? `${status.hostname} connected` : 'Using workers.dev' }}</p>
+          <p v-if="status.emailDomains.length" class="mt-1 text-xs text-muted">{{ status.emailDomains.join(', ') }}</p>
         </div>
       </div>
 

@@ -163,8 +163,20 @@ A revocable Cloudflare OAuth grant connected to one Discoflare Account and encry
 _Avoid_: Workspace OAuth, Account Admin Token, general Cloudflare proxy
 
 **Control Plane**:
-The private discoflare.com account and Installation service. It stores operator identity, encrypted Cloudflare Connections, Cloudflare account metadata, and Installation metadata; it does not store or proxy workspace chat, files, calls, or Agent state.
+The private discoflare.com account and Installation service. It stores operator identity, encrypted Cloudflare Connections, Cloudflare account metadata, Installation metadata, connected domain metadata, and Cloudflare resource IDs needed to reverse fixed lifecycle operations; it does not store or proxy workspace chat, files, calls, or Agent state.
 _Avoid_: Hosted workspace, workspace runtime, Discoflare Admin Worker
+
+**App Domain**:
+The single canonical HTTP hostname connected to an Installation after its Base Installation is ready. It is independent of every Email Domain and replaces that Installation's `workers.dev` origin until disconnected.
+_Avoid_: Workspace domain, mail domain, installer hostname choice
+
+**Email Domain**:
+One of the domains connected to the Primary Installation for inbound routing and outbound sending. An Installation may have multiple Email Domains; each Mailbox chooses exactly one.
+_Avoid_: App Domain, one zone-wide catch-all, login email domain
+
+**Installation Control Credential**:
+A random, deployment-issued credential scoped to one Installation and stored hashed by the Control Plane. The workspace uses it only to create or delete an exact Cloudflare Email Routing rule when its Owner creates or deletes a Mailbox. It is not the Cloudflare OAuth credential and cannot call arbitrary Cloudflare operations.
+_Avoid_: Cloudflare token, workspace OAuth, general control-plane session
 
 **Primary Installation**:
 The first Discoflare Installation created in a Cloudflare account. It is the only Installation eligible to own account- or zone-wide resources such as mail routing and the RealtimeKit account integration.

@@ -16,6 +16,7 @@ function env(overrides: Partial<DiscoflareEnv> = {}) {
     DISCOFLARE_TELEMETRY_ID: '019c-test-installation',
     DISCOFLARE_TELEMETRY_TOKEN: 'private-token',
     DISCOFLARE_APP_HOSTNAME: 'chat.example.com',
+    DISCOFLARE_CUSTOM_DOMAIN: 'true',
     ...overrides,
   } as unknown as DiscoflareEnv
 }

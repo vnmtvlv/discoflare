@@ -90,7 +90,7 @@ After Agent Computer is enabled, its first Container image may need several minu
 1. Open [Discoflare Admin](https://discoflare.com/admin), sign in with Cloudflare, and choose the account.
 2. The private control plane stores the renewable OAuth credential encrypted and provisions only the selected Discoflare Installation resources.
 3. The first workspace in an account becomes Primary. It starts on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim.
-4. Optional Agent Computer, Live, custom-domain, and email management will move into the same cabinet.
+4. After the base workspace is healthy, connect its one App Domain and the Primary Installation's Email Domains from Settings in the same cabinet. Mailbox addresses remain workspace objects; each address gets an exact Cloudflare routing rule through a narrow per-Installation credential.
 
 The renewable Cloudflare credential never enters a workspace Worker. Workspace chat and data keep running when `discoflare.com` is unavailable; provisioning and infrastructure changes wait until the control plane returns. A future independent mode will restore the same management operations to an operator-owned path.
 
@@ -142,7 +142,7 @@ The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deploy
 
 For guided Installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the Installation through temporary Cloudflare authorization.
 
-A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, optional Agent Workflow and Container application, owned Access applications, optional custom domain, and owned email bindings. A separately configured backup bucket is never deleted.
+A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, optional Agent Workflow and Container application, owned Access applications, App Domain, literal mailbox routes, and Email Sending domains. A separately configured backup bucket is never deleted; shared zone-level Email Routing is left enabled.
 
 Manual deployments show Cloudflare cleanup guidance because Discoflare cannot prove that their bound resources are not shared.
 

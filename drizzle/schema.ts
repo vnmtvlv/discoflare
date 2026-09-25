@@ -461,7 +461,7 @@ export const notificationOutbox = sqliteTable('notification_outbox', {
   check('notification_outbox_kind_check', sql`${table.kind} in ('mention', 'dm_message', 'huddle_started')`),
 ])
 
-/** Cloudflare-managed mail domain attached to this single-workspace installation. */
+/** Cloudflare-managed mail domains attached to this single-workspace installation. */
 export const emailDomains = sqliteTable('email_domains', {
   id: text('id').primaryKey().default('main'),
   zoneId: text('zone_id').notNull(),
@@ -470,7 +470,6 @@ export const emailDomains = sqliteTable('email_domains', {
   ...isoTimestamps(),
 }, table => [
   uniqueIndex('email_domains_domain_unique').on(table.domain),
-  check('email_domains_singleton_check', sql`${table.id} = 'main'`),
 ])
 
 /** A mailbox is a private channel. Its email conversation channels are ordinary threads. */

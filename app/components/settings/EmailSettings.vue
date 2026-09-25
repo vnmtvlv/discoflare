@@ -7,9 +7,11 @@ const toast = useToast()
 const qc = useQueryClient()
 const selectedId = ref<string | null>(null)
 const localPart = ref('')
+const domainId = ref('')
 const displayName = ref('')
 const creating = ref(false)
 const saving = ref(false)
+const deleting = ref(false)
 const enabled = ref(true)
 const grants = reactive<Record<string, 'none' | MailboxPermission>>({})
 
@@ -23,6 +25,8 @@ const membersQ = useQuery({
 })
 const mail = computed(() => mailQ.data.value?.mail)
 const mailboxes = computed(() => mail.value?.mailboxes ?? [])
+const domains = computed(() => mail.value?.domains ?? [])
+const domainOptions = computed(() => domains.value.map(domain => ({ label: domain.domain, value: domain.id })))
 const selected = computed(() => mailboxes.value.find(mailbox => mailbox.channelId === selectedId.value) ?? null)
 const ownerId = computed(() => membersQ.data.value?.members.find(member => member.role.key === 'owner')?.user.id ?? null)
 const permissionOptions = [
@@ -34,6 +38,10 @@ const permissionOptions = [
 
 watch(mailboxes, (items) => {
   if (!selectedId.value || !items.some(item => item.channelId === selectedId.value)) selectedId.value = items[0]?.channelId ?? null
+}, { immediate: true })
+
+watch(domains, (items) => {
+  if (!items.some(item => item.id === domainId.value)) domainId.value = items[0]?.id ?? ''
 }, { immediate: true })
 
 watch(selected, (mailbox) => {
@@ -55,12 +63,12 @@ function accessPayload() {
 }
 
 async function createMailbox() {
-  if (!localPart.value.trim() || !mail.value?.domain) return
+  if (!localPart.value.trim() || !domainId.value) return
   creating.value = true
   try {
     await $fetch(`/api/workspaces/${props.workspaceId}/mailboxes`, {
       method: 'POST',
-      body: { localPart: localPart.value, displayName: localPart.value, access: [] },
+      body: { domainId: domainId.value, localPart: localPart.value, displayName: localPart.value, access: [] },
     })
     localPart.value = ''
     await Promise.all([
@@ -71,6 +79,21 @@ async function createMailbox() {
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
   finally { creating.value = false }
+}
+
+async function deleteMailbox() {
+  if (!selected.value) return
+  deleting.value = true
+  try {
+    await $fetch(`/api/workspaces/${props.workspaceId}/mailboxes/${selected.value.channelId}`, { method: 'DELETE' })
+    await Promise.all([
+      mailQ.refetch(),
+      qc.invalidateQueries({ queryKey: ['mailboxes'] }),
+    ])
+    toast.add({ title: 'Mailbox deleted', color: 'success' })
+  }
+  catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
+  finally { deleting.value = false }
 }
 
 async function saveMailbox() {
@@ -100,29 +123,27 @@ async function saveMailbox() {
       v-else-if="!mail?.configured"
       color="warning"
       title="Email is not connected"
-      description="Reconnect through the Discoflare installer to select a Cloudflare domain."
+      description="Connect an Email Domain from this Installation's Settings in Discoflare Admin, then create addresses here."
       class="mt-6"
     />
     <template v-else>
       <div class="mt-6 grid gap-3 sm:grid-cols-2">
-        <div class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">Mail domain</p>
-          <p class="mt-1 font-medium text-highlighted">{{ mail.domain }}</p>
-        </div>
-        <div class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">Discoflare address</p>
-          <p class="mt-1 font-medium text-highlighted">{{ mail.appHostname }}</p>
+        <div v-for="domain in domains" :key="domain.id" class="rounded-lg border border-default p-4">
+          <p class="text-xs text-muted">Email domain</p>
+          <p class="mt-1 font-medium text-highlighted">{{ domain.domain }}</p>
+          <p class="mt-1 text-xs text-muted">Managed for {{ domain.appHostname }}</p>
         </div>
       </div>
-      <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Run the installer again to add the workspace mail binding." class="mt-4" />
+      <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Discoflare Admin." class="mt-4" />
 
-      <div class="mt-8 flex gap-2">
-        <UFormField label="New mailbox" class="min-w-0 flex-1">
-          <UInput v-model="localPart" class="w-full" placeholder="support">
-            <template #trailing><span class="text-xs text-muted">@{{ mail.domain }}</span></template>
-          </UInput>
+      <div class="mt-8 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <UFormField label="Email domain">
+          <USelect v-model="domainId" :items="domainOptions" value-key="value" class="w-full" />
         </UFormField>
-        <UButton class="mt-6" label="Create" icon="i-ph-plus" :loading="creating" :disabled="!localPart.trim()" @click="createMailbox" />
+        <UFormField label="New mailbox" class="min-w-0 flex-1">
+          <UInput v-model="localPart" class="w-full" placeholder="support" />
+        </UFormField>
+        <UButton label="Create" icon="i-ph-plus" :loading="creating" :disabled="!localPart.trim() || !domainId" @click="createMailbox" />
       </div>
 
       <div v-if="mailboxes.length" class="mt-8 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -158,7 +179,10 @@ async function saveMailbox() {
               />
             </div>
           </div>
-          <div class="mt-6 flex justify-end"><UButton label="Save changes" :loading="saving" @click="saveMailbox" /></div>
+          <div class="mt-6 flex justify-between gap-3">
+            <UButton label="Delete mailbox" color="error" variant="soft" :loading="deleting" @click="deleteMailbox" />
+            <UButton label="Save changes" :loading="saving" @click="saveMailbox" />
+          </div>
         </div>
       </div>
     </template>

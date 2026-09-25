@@ -1,7 +1,10 @@
 import { DatabaseSync } from 'node:sqlite'
 import { describe, expect, it } from 'vitest'
-import { INIT_SQL } from '../../server/utils/db'
+import workspaceMailSql from '../../drizzle/migrations/0014_workspace_mail.sql?raw'
+import multipleEmailDomainsSql from '../../drizzle/migrations/0025_multiple_email_domains.sql?raw'
+import { d1ExecSql, INIT_SQL } from '../../server/utils/db'
 import { mailAddress, mailPermissionAllows, normalizeMailLocalPart } from '../../shared/mail'
+import { workspaceMailDomains } from '../../server/utils/workspace-mail'
 
 describe('workspace mail model', () => {
   it('normalizes mailbox addresses and rejects unsafe local parts', () => {
@@ -18,6 +21,20 @@ describe('workspace mail model', () => {
     expect(mailPermissionAllows('manage', 'send')).toBe(true)
   })
 
+  it('reads multiple deployment-managed email domains and preserves legacy bindings', () => {
+    expect(workspaceMailDomains({
+      DISCOFLARE_EMAIL_DOMAINS: JSON.stringify([
+        { id: 'main', zoneId: 'zone-1', domain: 'afterprompt.example.com' },
+        { id: 'second', zoneId: 'zone-2', domain: 'analflare.example.net' },
+      ]),
+      MAIL_DOMAIN: 'afterprompt.example.com',
+      MAIL_ZONE_ID: 'zone-1',
+    } as never)).toEqual([
+      { id: 'main', zoneId: 'zone-1', domain: 'afterprompt.example.com' },
+      { id: 'second', zoneId: 'zone-2', domain: 'analflare.example.net' },
+    ])
+  })
+
   it('boots mail as companion tables around channels and messages', () => {
     const sqlite = new DatabaseSync(':memory:')
     sqlite.exec(INIT_SQL)
@@ -29,7 +46,38 @@ describe('workspace mail model', () => {
       { name: 'email_messages' },
       { name: 'email_threads' },
     ])
-    expect(() => sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('other', 'zone', 'example.com', 'chat.example.com')")).toThrow()
+    sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('afterprompt', 'zone', 'afterprompt.example.com', 'chat.example.com')")
+    sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('analflare', 'zone', 'analflare.example.com', 'chat.example.com')")
+    expect(sqlite.prepare('SELECT domain FROM email_domains ORDER BY domain').all()).toEqual([
+      { domain: 'afterprompt.example.com' },
+      { domain: 'analflare.example.com' },
+    ])
+    expect(() => sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('duplicate', 'zone', 'afterprompt.example.com', 'chat.example.com')")).toThrow()
+    sqlite.close()
+  })
+
+  it('preserves the full mail foreign-key chain while removing the singleton domain constraint', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec('PRAGMA foreign_keys=ON')
+    sqlite.exec('CREATE TABLE channels (id text PRIMARY KEY NOT NULL)')
+    sqlite.exec('CREATE TABLE users (id text PRIMARY KEY NOT NULL)')
+    sqlite.exec('CREATE TABLE messages (id text PRIMARY KEY NOT NULL)')
+    sqlite.exec(d1ExecSql(workspaceMailSql))
+    sqlite.exec("INSERT INTO channels VALUES ('mailbox'), ('thread')")
+    sqlite.exec("INSERT INTO users VALUES ('owner')")
+    sqlite.exec("INSERT INTO messages VALUES ('message')")
+    sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('main', 'zone', 'project.example.com', 'app.example.com')")
+    sqlite.exec("INSERT INTO email_mailboxes (channel_id, domain_id, local_part, display_name) VALUES ('mailbox', 'main', 'support', 'Support')")
+    sqlite.exec("INSERT INTO email_mailbox_access (channel_id, user_id, permission) VALUES ('mailbox', 'owner', 'manage')")
+    sqlite.exec("INSERT INTO email_threads (channel_id, mailbox_channel_id, subject, last_message_at) VALUES ('thread', 'mailbox', 'Hello', '2026-09-25T00:00:00.000Z')")
+    sqlite.exec("INSERT INTO email_messages (message_id, thread_channel_id, direction, from_address) VALUES ('message', 'thread', 'inbound', 'sender@example.net')")
+
+    sqlite.exec(d1ExecSql(multipleEmailDomainsSql))
+
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM email_messages').get()).toEqual({ count: 1 })
+    expect(sqlite.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+    sqlite.exec("INSERT INTO email_domains (id, zone_id, domain, app_hostname) VALUES ('second', 'zone', 'other.example.com', 'app.example.com')")
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM email_domains').get()).toEqual({ count: 2 })
     sqlite.close()
   })
 })

@@ -2,6 +2,7 @@ import type { InstallationManagementStatusDTO } from '../../../../shared/release
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 import { agentComputerConfigured } from '../../../../workers/env'
+import { workspaceMailDomains } from '../../../utils/workspace-mail'
 
 export default defineEventHandler(async (event): Promise<InstallationManagementStatusDTO> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -14,10 +15,7 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
   const workerName = env.DISCOFLARE_WORKER_NAME?.trim() || ''
   const hostname = env.DISCOFLARE_APP_HOSTNAME?.trim() || ''
   const available = Boolean(accountId && workerName && hostname)
-  const emailDomain = env.MAIL_DOMAIN?.trim()
-    || (env.DISCOFLARE_PRIMARY === 'true' && env.DISCOFLARE_ZONE_NAME
-      ? `${env.DISCOFLARE_APP_SUBDOMAIN?.trim() || workerName}.${env.DISCOFLARE_ZONE_NAME.trim()}`
-      : null)
+  const emailDomains = workspaceMailDomains(env).map(item => item.domain)
 
   return {
     available,
@@ -27,8 +25,8 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
     customDomainEnabled: env.DISCOFLARE_CUSTOM_DOMAIN === 'true',
     huddlesEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
     agentComputerEnabled: agentComputerConfigured(env),
-    emailEnabled: Boolean(env.MAIL_ZONE_ID && emailDomain),
-    emailDomain,
+    emailEnabled: emailDomains.length > 0,
+    emailDomains,
     emailEligible: env.DISCOFLARE_PRIMARY === 'true',
   }
 })
