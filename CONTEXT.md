@@ -171,7 +171,7 @@ The single canonical HTTP hostname connected to an Installation after its Base I
 _Avoid_: Workspace domain, mail domain, installer hostname choice
 
 **Email Domain**:
-One of the domains connected to the Primary Installation for inbound routing and outbound sending. An Installation may have multiple Email Domains; each Mailbox chooses exactly one.
+One of the domains connected to an Installation for inbound routing and outbound sending. An Installation may have multiple Email Domains; each Email Domain belongs to exactly one Installation, and each Mailbox chooses exactly one of its Installation's domains.
 _Avoid_: App Domain, one zone-wide catch-all, login email domain
 
 **Installation Control Credential**:

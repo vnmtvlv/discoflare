@@ -90,7 +90,7 @@ After Agent Computer is enabled, its first Container image may need several minu
 1. Open [Discoflare Admin](https://discoflare.com/admin), sign in with Cloudflare, and choose the account.
 2. The private control plane stores the renewable OAuth credential encrypted and provisions only the selected Discoflare Installation resources.
 3. The first workspace in an account becomes Primary. It starts on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim.
-4. After the base workspace is healthy, connect its one App Domain and the Primary Installation's Email Domains from Settings in the same cabinet. Mailbox addresses remain workspace objects; each address gets an exact Cloudflare routing rule through a narrow per-Installation credential.
+4. After the base workspace is healthy, connect its one App Domain and any Email Domains from Settings in the same cabinet. Mailbox addresses remain workspace objects; each address gets an exact Cloudflare routing rule to its owning workspace through a narrow per-Installation credential.
 
 The renewable Cloudflare credential never enters a workspace Worker. Workspace chat and data keep running when `discoflare.com` is unavailable; provisioning and infrastructure changes wait until the control plane returns. A future independent mode will restore the same management operations to an operator-owned path.
 
