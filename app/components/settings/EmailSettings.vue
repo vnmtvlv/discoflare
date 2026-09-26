@@ -163,7 +163,7 @@ async function saveMailbox() {
       </SettingsHeader>
 
       <LayoutSkeleton v-if="mailQ.isPending.value" variant="rows" class="mt-6 -mx-2" />
-      <UAlert v-else-if="mailQ.error.value" color="error" title="Could not load email settings" class="mt-6" />
+      <LayoutLoadError v-else-if="mailQ.error.value" message="Email settings did not load." :retry="mailQ.refetch" />
       <UAlert
         v-else-if="!mail?.configured"
         color="warning"

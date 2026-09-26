@@ -29,12 +29,7 @@ const save = useMutation({
     <p class="mt-1 text-sm text-muted">Help show how many independent Discoflare installations are running.</p>
 
     <LayoutSkeleton v-if="telemetryQ.isPending.value" variant="form" :rows="2" class="mt-8" />
-    <UAlert
-      v-else-if="telemetryQ.error.value"
-      class="mt-8"
-      color="error"
-      title="Could not load telemetry settings"
-    />
+    <LayoutLoadError v-else-if="telemetryQ.error.value" message="Telemetry settings did not load." :retry="telemetryQ.refetch" />
     <template v-else-if="telemetryQ.data.value">
       <div class="mt-8 rounded-lg border border-default bg-elevated p-5">
         <div class="flex items-start justify-between gap-6">

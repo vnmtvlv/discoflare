@@ -541,6 +541,10 @@ const viewMenu = computed(() => activeView.value ? [[
 ], [
   { label: 'Delete view', icon: 'i-ph-trash', color: 'error' as const, disabled: views.value.length <= 1, onSelect: () => deleteView(activeView.value!) },
 ]] : [])
+
+function retryLoad() {
+  return Promise.all([resourcesQ.refetch(), databaseQ.refetch()])
+}
 </script>
 
 <template>
@@ -564,7 +568,7 @@ const viewMenu = computed(() => activeView.value ? [[
       </LayoutPageHeader>
 
       <div v-if="resourcesQ.isPending.value || (activeDatabaseSummary && databaseQ.isPending.value)"><LayoutSkeleton variant="table" /></div>
-      <UAlert v-else-if="resourcesQ.error.value || databaseQ.error.value" color="error" title="Could not load databases." class="m-6 w-auto" />
+      <LayoutLoadError v-else-if="resourcesQ.error.value || databaseQ.error.value" message="Data did not load." :retry="retryLoad" />
       <div v-else-if="!activeDatabase" class="grid flex-1 place-items-center p-6">
         <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first database" @click="openCreateDatabase" />
         <span v-else class="text-sm text-muted">Nothing archived</span>

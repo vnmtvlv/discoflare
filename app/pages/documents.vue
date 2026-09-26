@@ -84,6 +84,10 @@ async function removeDocument() {
   finally { deleting.value = false }
 }
 
+
+function retryLoad() {
+  return Promise.all([resourcesQ.refetch(), documentQ.refetch()])
+}
 </script>
 
 <template>
@@ -98,7 +102,7 @@ async function removeDocument() {
     </LayoutPageHeader>
 
     <div v-if="resourcesQ.isPending.value || (selectedId && documents.some(document => document.id === selectedId) && documentQ.isPending.value)"><LayoutSkeleton variant="document" /></div>
-    <UAlert v-else-if="resourcesQ.error.value || documentQ.error.value" color="error" title="Could not load documents." class="m-6 w-auto" />
+    <LayoutLoadError v-else-if="resourcesQ.error.value || documentQ.error.value" message="Documents did not load." :retry="retryLoad" />
     <div v-else-if="!activeDocument" class="grid flex-1 place-items-center p-6">
       <UButton icon="i-ph-plus" label="Create first document" @click="nav.createDocumentOpen.value = true" />
     </div>

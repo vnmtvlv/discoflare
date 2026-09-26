@@ -60,7 +60,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
 <template>
   <div>
     <LayoutSkeleton v-if="channelsQ.isPending.value" variant="nav" />
-    <UAlert v-else-if="channelsQ.error.value" color="error" title="Could not load channels." class="mx-2" />
+    <LayoutLoadError v-else-if="channelsQ.error.value" inline class="mx-2" message="Channels did not load." :retry="channelsQ.refetch" />
     <template v-else>
       <LayoutNavSection
         v-for="(group, index) in channelGroups"

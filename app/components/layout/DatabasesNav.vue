@@ -64,7 +64,7 @@ const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMa
       @create="nav.createDatabaseOpen.value = true"
     >
       <LayoutSkeleton v-if="resourcesQ.isPending.value" variant="nav" :rows="2" />
-      <p v-else-if="resourcesQ.error.value" class="px-2 py-2 text-sm text-error">Could not load Data.</p>
+      <LayoutLoadError v-else-if="resourcesQ.error.value" inline message="Data did not load." :retry="resourcesQ.refetch" />
       <p v-else-if="!databases.length" class="px-2 py-2 text-sm text-muted">{{ archived ? 'Nothing archived.' : 'No databases yet.' }}</p>
       <ul v-else>
         <li v-for="database in databases" :key="database.id">

@@ -129,7 +129,7 @@ async function copyValue(value: string, label: string) {
     </div>
 
     <LayoutSkeleton v-if="tokensQ.isPending.value" variant="cards" :rows="2" class="mt-5" />
-    <UAlert v-else-if="tokensQ.error.value" class="mt-5" color="error" title="Could not load access tokens" />
+    <LayoutLoadError v-else-if="tokensQ.error.value" message="Access tokens did not load." :retry="tokensQ.refetch" />
     <div v-else class="mt-5 rounded-lg border border-default">
       <div class="border-b border-default px-5 py-4">
         <p class="font-medium text-highlighted">Access tokens</p>

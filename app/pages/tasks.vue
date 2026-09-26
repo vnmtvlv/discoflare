@@ -495,7 +495,7 @@ const boardMenu = computed(() => [[
       </LayoutPageHeader>
 
       <LayoutSkeleton v-if="boardsQ.isPending.value" variant="board" />
-      <UAlert v-else-if="boardsQ.error.value" color="error" title="Could not load task boards." class="m-6 w-auto" />
+      <LayoutLoadError v-else-if="boardsQ.error.value" message="Task boards did not load." :retry="boardsQ.refetch" />
       <div v-else class="flex-1 min-h-0 overflow-auto p-4">
         <div v-if="!activeBoard" class="h-full flex items-center justify-center">
           <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first board" @click="openCreateBoard" />
@@ -633,7 +633,7 @@ const boardMenu = computed(() => [[
     <USlideover :open="Boolean(selectedTaskId)" :title="selectedTask ? taskLabel(selectedTask) : 'Task'" :ui="{ content: 'w-full max-w-2xl' }" @update:open="value => { if (!value) selectedTaskId = null }">
       <template #body>
         <LayoutSkeleton v-if="taskQ.isPending.value" variant="form" />
-        <UAlert v-else-if="taskQ.error.value" color="error" title="Could not load task." />
+        <LayoutLoadError v-else-if="taskQ.error.value" message="This task did not load." :retry="taskQ.refetch" />
         <div v-else-if="selectedTask" class="space-y-6">
           <div v-if="selectedTask.status === 'running'" class="flex items-center gap-2">
             <UButton color="error" variant="soft" icon="i-ph-stop" label="Cancel" @click="cancelTask(selectedTask.id)" />

@@ -267,7 +267,7 @@ function jumpToMessage(id: string) {
     <div v-if="q.isPending.value" class="flex flex-1 flex-col">
       <LayoutSkeleton variant="messages" class="flex-1" />
     </div>
-    <UAlert v-else-if="q.error.value" color="error" title="Could not load messages." class="m-3 w-auto" />
+    <LayoutLoadError v-else-if="q.error.value" class="my-auto" message="Messages did not load." :retry="q.refetch" />
     <div v-else-if="showIntro !== false" class="px-4 pt-4 pb-2">
       <div class="size-16 rounded-full bg-accented flex items-center justify-center mb-2">
         <UIcon :name="isDm ? 'i-ph-at' : 'i-ph-hash'" class="size-9 text-highlighted" />

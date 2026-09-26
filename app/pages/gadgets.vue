@@ -372,7 +372,7 @@ function roleAccessLabel(role: RoleDTO) {
 
     <main v-else-if="editing" class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
       <LayoutSkeleton v-if="detailQ.isPending.value" variant="form" class="mx-auto max-w-5xl" />
-      <div v-else-if="detailQ.error.value" class="mx-auto max-w-5xl"><UAlert color="error" title="Could not load the Gadget draft" :description="errorMessage(detailQ.error.value)" /></div>
+      <LayoutLoadError v-else-if="detailQ.error.value" :message="`The draft did not load. ${errorMessage(detailQ.error.value)}`" :retry="detailQ.refetch" />
       <div v-else class="mx-auto max-w-5xl space-y-8">
         <section class="grid gap-4 sm:grid-cols-2">
           <UFormField label="Name" required><UInput v-model="draftName" class="w-full" /></UFormField>

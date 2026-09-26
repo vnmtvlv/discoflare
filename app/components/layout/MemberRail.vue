@@ -23,7 +23,7 @@ const ui = useUiStore()
 const { api } = useApi()
 const isMobile = useIsMobile()
 
-const { data, isPending, error } = useQuery({
+const { data, isPending, error, refetch } = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
   queryFn: ({ queryKey }) => {
     const id = String(queryKey[1] ?? '')
@@ -153,7 +153,7 @@ function roleLabel(name: string) {
       <div v-if="isPending && !channelMembers?.length" class="p-3">
         <LayoutSkeleton variant="rows" />
       </div>
-      <UAlert v-else-if="error && !channelMembers?.length" color="error" title="Could not load members." class="m-3 w-auto" />
+      <LayoutLoadError v-else-if="error && !channelMembers?.length" message="Members did not load." :retry="refetch" />
       <p v-else-if="!list.length" class="p-3 text-sm text-muted">No members.</p>
       <div v-else class="px-2 py-4 space-y-4">
       <p v-if="isGroupDm" class="text-xs font-semibold text-muted px-1">Participants — {{ list.length }}</p>

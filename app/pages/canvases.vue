@@ -310,6 +310,10 @@ onBeforeRouteLeave(async () => {
     return false
   }
 })
+
+function retryLoad() {
+  return Promise.all([resourcesQ.refetch(), canvasQ.refetch()])
+}
 </script>
 
 <template>
@@ -342,7 +346,7 @@ onBeforeRouteLeave(async () => {
       {{ connectFrom ? 'Choose the second item.' : 'Choose the first item to connect.' }}
     </div>
     <div v-if="resourcesQ.isPending.value || (selectedId && canvases.some(canvas => canvas.id === selectedId) && canvasQ.isPending.value)" class="p-6"><LayoutSkeleton variant="cards" /></div>
-    <UAlert v-else-if="resourcesQ.error.value || canvasQ.error.value" color="error" title="Could not load canvases." class="m-6 w-auto" />
+    <LayoutLoadError v-else-if="resourcesQ.error.value || canvasQ.error.value" message="Canvases did not load." :retry="retryLoad" />
     <div v-else-if="!activeCanvas" class="grid flex-1 place-items-center p-6">
       <UButton icon="i-ph-plus" label="Create first canvas" @click="nav.createCanvasOpen.value = true" />
     </div>
