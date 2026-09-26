@@ -34,7 +34,7 @@ defineExpose({ hostname })
 <template>
   <div>
     <div class="flex min-w-0 items-center gap-1.5">
-      <UInput v-model="label" :placeholder="placeholder" class="min-w-0 flex-1" aria-label="Subdomain" autocomplete="off" />
+      <UInput v-model="label" :placeholder="placeholder" class="min-w-0 flex-1" aria-label="Subdomain" autocomplete="off" autofocus />
       <span class="text-muted">.</span>
       <USelect v-model="zoneId" :items="zoneOptions" value-key="value" class="min-w-0 flex-1" aria-label="Domain" />
     </div>

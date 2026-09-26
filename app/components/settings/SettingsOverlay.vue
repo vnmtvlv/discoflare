@@ -29,8 +29,13 @@ const releaseUrl = computed(() => discoflareReleaseUrl(appConfig.version))
 const isMobile = useIsMobile()
 
 const query = ref('')
-/** On mobile the two panes become two screens: pick a section, then read it. */
-const mobileView = ref<'nav' | 'detail'>('nav')
+/**
+ * On mobile the two panes become two screens: pick a section, then read it.
+ * A link that names a section (`?section=email`) opens that section directly.
+ */
+const route = useRoute()
+const deepLinked = () => typeof route.query.section === 'string' && route.query.section.length > 0
+const mobileView = ref<'nav' | 'detail'>(deepLinked() ? 'detail' : 'nav')
 
 const filtered = computed<SettingsGroup[]>(() => {
   const term = query.value.trim().toLowerCase()
@@ -81,7 +86,7 @@ function close() {
 watch(open, (value) => {
   if (!value) return
   query.value = ''
-  mobileView.value = isMobile.value ? 'nav' : 'detail'
+  mobileView.value = isMobile.value && !deepLinked() ? 'nav' : 'detail'
 })
 
 watch(isMobile, (value) => {

@@ -30,9 +30,13 @@ type Row = { id: string | null, domain: string, detail: string }
 const rows = computed<Row[]>(() => {
   const connected = domainsQ.data.value?.emailDomains
   if (props.isOwner && connected) {
-    return connected.map(domain => ({ id: domain.id, domain: domain.domain, detail: `Cloudflare zone ${domain.zoneName}` }))
+    return connected.map(domain => ({
+      id: domain.id,
+      domain: domain.domain,
+      detail: domain.zoneName === domain.domain ? '' : `in ${domain.zoneName}`,
+    }))
   }
-  return props.mail.domains.map(domain => ({ id: null, domain: domain.domain, detail: `Used by ${domain.appHostname}` }))
+  return props.mail.domains.map(domain => ({ id: null, domain: domain.domain, detail: '' }))
 })
 
 function mailboxCount(domain: string) {
@@ -58,10 +62,19 @@ watch(zones, (list) => {
   if (!list.some(zone => zone.id === zoneId.value)) zoneId.value = list[0]?.id ?? ''
 }, { immediate: true })
 const labelValid = computed(() => !label.value.trim() || /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(label.value.trim()))
+const alreadyConnected = computed(() => {
+  const hostname = input.value?.hostname
+  return Boolean(hostname && rows.value.some(row => row.domain.toLowerCase() === hostname))
+})
+const fieldError = computed(() => {
+  if (!labelValid.value) return 'Use letters, numbers and hyphens, like mail'
+  if (alreadyConnected.value) return `${input.value?.hostname} is already connected`
+  return undefined
+})
 
 async function addDomain() {
   const domain = input.value?.hostname
-  if (!domain || !labelValid.value) return
+  if (!domain || fieldError.value) return
   adding.value = true
   try {
     await api(`/api/workspaces/${props.workspaceId}/email-domains`, { method: 'POST', body: { zoneId: zoneId.value, domain } })
@@ -125,19 +138,19 @@ async function disconnect() {
         <span class="min-w-0 flex-1">
           <span class="block truncate text-sm font-medium text-highlighted">{{ row.domain }}</span>
           <span class="block truncate text-xs text-muted">
-            {{ mailboxCount(row.domain) }} {{ mailboxCount(row.domain) === 1 ? 'mailbox' : 'mailboxes' }} · {{ row.detail }}
+            {{ mailboxCount(row.domain) }} {{ mailboxCount(row.domain) === 1 ? 'mailbox' : 'mailboxes' }}<template v-if="row.detail"> · {{ row.detail }}</template>
           </span>
         </span>
-        <UTooltip v-if="isOwner && row.id" :text="mailboxCount(row.domain) ? 'Delete its mailboxes first' : ''" :disabled="!mailboxCount(row.domain)">
-          <UButton
-            label="Disconnect"
-            color="neutral"
-            variant="ghost"
-            size="sm"
-            :disabled="mailboxCount(row.domain) > 0"
-            @click="removing = row"
-          />
-        </UTooltip>
+        <template v-if="isOwner && row.id">
+          <!-- A domain with mailboxes cannot be disconnected; say why instead of showing a dead button. -->
+          <UTooltip v-if="mailboxCount(row.domain)" text="Delete its mailboxes to disconnect this domain.">
+            <span class="flex items-center gap-1 text-xs text-dimmed">
+              <UIcon name="i-ph-lock-simple" class="size-3.5" />
+              In use
+            </span>
+          </UTooltip>
+          <UButton v-else label="Disconnect" color="neutral" variant="ghost" size="sm" @click="removing = row" />
+        </template>
       </li>
     </ul>
     <p v-if="isOwner && !domainsQ.isPending.value && !managed" class="mt-3 text-sm text-muted">
@@ -146,7 +159,7 @@ async function disconnect() {
 
     <UModal v-model:open="addOpen" title="Add email domain" description="Mail for this domain is routed to this workspace.">
       <template #body>
-        <UFormField label="Domain" :error="labelValid ? undefined : 'Use letters, numbers and hyphens, like mail'">
+        <UFormField label="Domain" :error="fieldError">
           <SettingsDomainInput
             ref="input"
             v-model:label="label"
@@ -160,7 +173,7 @@ async function disconnect() {
       </template>
       <template #footer>
         <UButton color="neutral" variant="ghost" label="Cancel" @click="addOpen = false" />
-        <UButton label="Add domain" :loading="adding" :disabled="!zoneId || !labelValid" @click="addDomain" />
+        <UButton label="Add domain" :loading="adding" :disabled="!zoneId || Boolean(fieldError)" @click="addDomain" />
       </template>
     </UModal>
 
