@@ -11,8 +11,6 @@ export { WorkspaceDurableObject } from '../workers/workspace-do'
 export { RateLimitDurableObject } from '../workers/rate-limit-do'
 export { NotificationDurableObject } from '../workers/notification-do'
 export { DiscoflareAgent, DiscoflareThink } from '../workers/discoflare-agent'
-export { WorkspaceProxy } from '../workers/agent-computer'
-export { AgentTaskWorkflow } from '../workers/agent-task-workflow'
 
 const nitroApp = useNitroApp()
 

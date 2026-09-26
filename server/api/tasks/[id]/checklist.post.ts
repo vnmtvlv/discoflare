@@ -3,7 +3,7 @@ import { taskChecklistItems } from '../../../../drizzle/schema'
 import { newId, nowIso, WORKSPACE_ID } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
 import { signalTasksChanged } from '../../../../workers/task-events'
-import { cf, fail } from '../../../utils/cf'
+import { cf } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { requireMember } from '../../../utils/guards'
 import { writeAudit } from '../../../utils/messages'
@@ -19,7 +19,6 @@ export default defineEventHandler(async (event) => {
   const { env, waitUntil } = cf(event)
   const task = await requireTask(env, taskReference)
   const taskId = task.id
-  if (task.status === 'running') fail(409, 'task_running', 'Checklist cannot change while the task is running')
   const now = nowIso()
   const id = newId()
   const position = body.position ?? Date.now()

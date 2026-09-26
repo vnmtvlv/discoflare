@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { z } from 'zod'
-import { taskBoards, tasks } from '../../../drizzle/schema'
+import { taskBoards } from '../../../drizzle/schema'
 import { nowIso, WORKSPACE_ID } from '../../../shared/ids'
 import { Permission } from '../../../shared/permissions'
 import { signalTasksChanged } from '../../../workers/task-events'
@@ -23,11 +23,6 @@ export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env, waitUntil } = cf(event)
   await requireBoard(env, id)
-  if (body.archived === true) {
-    const running = (await getDb(env.DB).select({ id: tasks.id }).from(tasks)
-      .where(and(eq(tasks.boardId, id), eq(tasks.status, 'running'))).limit(1))[0]
-    if (running) fail(409, 'conflict', 'Cancel running tasks before archiving this board')
-  }
   const patch: Partial<typeof taskBoards.$inferInsert> = { updatedAt: nowIso() }
   if (body.name !== undefined) patch.name = body.name
   if (body.position !== undefined) patch.position = body.position

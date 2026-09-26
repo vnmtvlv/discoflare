@@ -68,10 +68,10 @@ describe('agent turn state', () => {
       draftMessageId: 'draft-1',
       approval: {
         executionId: 'execution-1',
-        action: 'computer_exec',
-        summary: 'Run a high-risk command',
-        input: { command: 'wrangler deploy' },
-        risk: 'high',
+        action: 'mail_reply',
+        summary: 'Send an email reply',
+        input: { threadId: 'thread-1' },
+        risk: 'medium',
       },
     })
 

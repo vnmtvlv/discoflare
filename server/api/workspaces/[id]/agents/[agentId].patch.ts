@@ -66,7 +66,6 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
       model,
       instructions,
       status,
-      computerId: current.profile.computerId,
       lastActiveAt: current.profile.lastActiveAt,
       createdAt: current.profile.createdAt,
       updatedAt: now,

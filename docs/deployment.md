@@ -4,7 +4,7 @@
 
 The guided installer at `discoflare.com/admin` creates a permanent Discoflare Account and connects Cloudflare through public-client PKCE OAuth. Discoflare.com stores the renewable credential encrypted at rest and uses it only for fixed Installation discovery and provisioning operations. The credential never enters a workspace Worker, and the Control Plane is not in the workspace content or realtime path.
 
-The first release provisions a base Installation directly into the selected Cloudflare account. It creates the workspace Worker, D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and a private Owner Setup Claim on `workers.dev`. It does not create a separate Admin Worker, Cloudflare Access application, RealtimeKit app, custom domain, mail route, Agent Workflow, or Container application.
+The first release provisions a base Installation directly into the selected Cloudflare account. It creates the workspace Worker, D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and a private Owner Setup Claim on `workers.dev`. It does not create a separate Admin Worker, Cloudflare Access application, RealtimeKit app, custom domain, or mail route.
 
 The first Installation in a Cloudflare account becomes Primary. It is the only Installation eligible to own account-wide features such as RealtimeKit. App Domains, Email Domains, and literal mailbox routes belong to one exact Installation. Billing and disconnecting a guided Installation into a fully independent lifecycle are deferred; the manual repository deployment remains the independent path today.
 
@@ -32,13 +32,13 @@ The button hands the public repository to Cloudflare. Everything account-specifi
 
 1. Fork or connect the repository to Workers Builds.
 2. Create or select the D1 database, R2 bucket, and KV namespace in the target Cloudflare account.
-3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workflow, Workers AI, and Container bindings. Do not reuse the public sandbox's account-specific IDs or hostname. Keep `"placement": { "mode": "smart" }`: request handling makes several D1 round trips, so running the Worker near the D1 primary is much faster for members far from that region than running it at their nearest edge.
+3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workers AI, and Browser Run bindings. Do not reuse the public sandbox's account-specific IDs or hostname. Keep `"placement": { "mode": "smart" }`: request handling makes several D1 round trips, so running the Worker near the D1 primary is much faster for members far from that region than running it at their nearest edge.
 4. Add `AUTH_SECRET`, `ADMIN_EMAIL`, and a random 32-character-or-longer `ADMIN_SETUP_TOKEN` as Worker secrets. Add optional provider, RealtimeKit, Web Push, and email values only for integrations you intend to operate.
 5. Configure `pnpm run build` as the build command and `pnpm run deploy:built` as the deploy command. The deploy command applies D1 migrations before publishing the already-built Worker.
 6. Attach the public hostname and manually configure any desired Email Routing, Email Sending, DNS, OAuth callbacks, and sender-domain settings.
-7. Verify `/api/setup/health`, claim the first owner at `/setup#claim=<ADMIN_SETUP_TOKEN>`, and test storage, realtime, and Agent execution from the deployed origin.
+7. Verify `/api/setup/health`, claim the first owner at `/setup#claim=<ADMIN_SETUP_TOKEN>`, and test storage, realtime, Agent chat, and Agent Task access from the deployed origin.
 
-The Worker can become live before the Agent Computer image finishes provisioning. Chat agents and Browser Run do not wait on that image. Allow several minutes before the first Agent Task that needs Linux execution. Agent Computer requires a Workers Paid account because it uses Containers. The default `@cf/moonshotai/kimi-k2.7-code` model uses the account's Workers AI binding, so no external model API key is required.
+The default `@cf/moonshotai/kimi-k2.7-code` model uses the account's Workers AI binding, so no external model API key is required. Agents can reply in chat and read or create Tasks; this release does not provision projects, repositories, computers, Workflows, or Containers for them.
 
 `APP_NAME` changes the name beside the hardcoded Discoflare logo and the browser title. `APP_TITLE` changes the login headline; use `\n` to split it across two lines. `APP_SUBTITLE` changes the supporting copy below it. These are public display values, not secrets.
 
@@ -49,7 +49,7 @@ To complete first-owner setup after the manual GitHub deployment:
 3. Create the owner name and password there. The workspace becomes ready and signs the owner in.
 4. Open **Workspace Settings → Authentication** to choose invite-only or open registration and configure login methods.
 5. Open **Workspace Settings → Live** to configure RealtimeKit only if the workspace needs calls or live sessions; text chat works without it.
-6. Open **Tasks**, create an Agent and a Task Board, assign a Task, and run it. If the first run reports that its Computer is unavailable immediately after deploy, wait for container provisioning and retry the Task.
+6. Open **Tasks**, create an Agent and a Task Board, then ask the Agent in chat to list, read, or create a Task.
 
 ### MCP access
 
@@ -71,7 +71,7 @@ The S3 Endpoint, Region, Bucket, Prefix, Access Key ID, and Secret Access Key ar
 
 Only the workspace Owner can start deletion from **Workspace Settings → System → Delete**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
 
-The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes every literal mailbox rule and Email Sending domain recorded for that Installation, detaches its App Domain, removes recorded Access applications, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, and KV resources. It leaves the zone-level Email Routing service enabled because unrelated domains or rules may share it. When Agent Computer was enabled, it also removes that Installation's Workflow and Container application. It never follows or deletes the independently configured S3 backup destination. Unrelated DNS or email rules are left alone.
+The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes every literal mailbox rule and Email Sending domain recorded for that Installation, detaches its App Domain, removes recorded Access applications, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, and KV resources. It leaves the zone-level Email Routing service enabled because unrelated domains or rules may share it. It never follows or deletes the independently configured S3 backup destination. Unrelated DNS or email rules are left alone.
 
 Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Delete tab links to the Cloudflare dashboard for manual cleanup.
 

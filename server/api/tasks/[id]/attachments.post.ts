@@ -16,7 +16,6 @@ export default defineEventHandler(async (event) => {
   const { env, waitUntil } = cf(event)
   const task = await requireTask(env, taskReference)
   const taskId = task.id
-  if (task.status === 'running') fail(409, 'task_running', 'Attachments cannot change while the task is running')
   const form = await readMultipartFormData(event)
   const file = form?.find(part => part.name === 'file' && part.data)
   if (!file?.data) fail(400, 'bad_request', 'Missing file')

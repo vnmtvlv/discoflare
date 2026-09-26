@@ -10,7 +10,6 @@ const qc = useQueryClient()
 const { api } = useApi()
 const session = useSessionStore()
 const browserEnabled = computed(() => session.health?.bindings.browser === true)
-const computerEnabled = computed(() => session.health?.bindings.agentComputer === true)
 const selectedAgentId = shallowRef<string | null>(null)
 const creatingNew = ref(false)
 const saving = ref(false)
@@ -197,14 +196,6 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
     <UButton icon="i-ph-plus" label="Add agent" size="sm" @click="createAgent" />
   </div>
 
-  <UAlert
-    v-if="session.health && !computerEnabled"
-    class="mt-6"
-    color="neutral"
-    title="Chat and browser first"
-    description="Agents can talk in channels and read public URLs through Cloudflare Browser Run. Linux command execution is a later connection: enable Agent Computer after Workers Paid."
-  />
-
   <LayoutSkeleton v-if="agentsQ.isPending.value" variant="cards" class="mt-6" />
   <LayoutLoadError v-else-if="agentsQ.error.value" message="Agents did not load." :retry="agentsQ.refetch" />
   <div v-else class="mt-6 grid min-h-[520px] gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
@@ -286,9 +277,8 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
       <dl v-if="selectedAgent" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-default pt-5 text-sm">
         <dt class="text-muted">Browser</dt>
         <dd>{{ browserEnabled ? 'Cloudflare Browser Run reads public URLs. This is not a search engine.' : 'Browser Run is not bound.' }}</dd>
-        <dt class="text-muted">Computer</dt>
-        <dd v-if="computerEnabled" class="truncate font-mono text-xs">{{ selectedAgent.computerId }}</dd>
-        <dd v-else>Linux sandbox is off. Enable Agent Computer in Cloudflare settings for command execution.</dd>
+        <dt class="text-muted">Tasks</dt>
+        <dd>Can read tasks and create new tasks.</dd>
         <dt class="text-muted">Last active</dt>
         <dd>{{ selectedAgent.lastActiveAt ? new Date(selectedAgent.lastActiveAt).toLocaleString() : 'Never' }}</dd>
       </dl>

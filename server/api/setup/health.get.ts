@@ -7,7 +7,7 @@ import { readAppBranding } from '../../../shared/app-branding'
 import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
 import { version as packageVersion } from '../../../package.json'
 import { authMode } from '../../utils/cloudflare-access'
-import { agentBrowserConfigured, agentComputerConfigured } from '../../../workers/env'
+import { agentBrowserConfigured } from '../../../workers/env'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -26,7 +26,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       adminEnv: false,
       ownerSetup: false,
       ownerEmailHint: null,
-      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, agentComputer: false, agentWorkflow: false, workersAi: false, browser: false },
+      bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, workersAi: false, browser: false },
       realtimekit: false,
       twitterAuth: false,
       ...readAppBranding(),
@@ -42,8 +42,6 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     rateLimitDo: Boolean(env.RATE_LIMIT_DO),
     notificationDo: Boolean(env.NOTIFICATION_DO),
     agentDo: Boolean(env.AGENT_DO),
-    agentComputer: agentComputerConfigured(env),
-    agentWorkflow: agentComputerConfigured(env),
     workersAi: Boolean(env.AI),
     browser: agentBrowserConfigured(env),
   }

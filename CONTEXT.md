@@ -61,9 +61,9 @@ An active workspace participant, human or Agent, as presented in workspace membe
 _Avoid_: User-in-server record, separate agent author system
 
 **Agent**:
-An AI Member with a profile, a stateful coordinator Durable Object, and isolated Think memory per Channel, Thread, and Task Run. An Agent has no login credentials or human browser session. Its model defaults to Workers AI. Public-web reading uses Cloudflare Browser Run. A Linux Computer is an optional later connection: files live in the Agent Durable Object and command execution uses a Container.
-Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat. A custom Role with Manage tasks may assign Agents to and run Tasks without receiving Agent configuration secrets.
-_Avoid_: Bot, external runner, Hermes profile, always-running VM, requiring Computer before chat
+An AI Member with a profile, a stateful coordinator Durable Object, and isolated Think memory per Channel or Thread. An Agent has no login credentials or human browser session. Its model defaults to Workers AI. It replies in chat and may read or create Tasks. Public-web reading uses Cloudflare Browser Run. Projects, repositories, computers, and code execution are outside the current product boundary.
+Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat.
+_Avoid_: Bot, external runner, coding agent, always-running VM, implying repository or computer access
 
 **Agent Browser**:
 The public-web connection for an Agent. It renders a URL through Cloudflare Browser Run Quick Actions and returns markdown, a screenshot stored in R2, or links. It is not a search engine, carries no workspace or member cookies, and cannot log in or click.
@@ -74,8 +74,8 @@ An ordered, archivable collection of Tasks and Labels shared by the workspace an
 _Avoid_: Agent-local todo list, queue as product language
 
 **Task**:
-A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may create Tasks.
-_Avoid_: Workflow (that is the execution primitive), prompt
+A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may read and create Tasks; assignment does not start execution.
+_Avoid_: Workflow, prompt, autonomous job
 
 **Database**:
 A human-managed collection of structured Records in the workspace. A Database has an ordered custom schema made from typed Fields and is stored as logical product data inside the installation D1.
@@ -125,17 +125,9 @@ _Avoid_: Whiteboard service, image file, using a Durable Object as the source of
 A movable note or text card on a Canvas. It owns its content, geometry, color, and edit version; a Connection relates two Items without embedding either one.
 _Avoid_: Database Record, Task, free-form untyped blob
 
-**Task Run**:
-One durable, cancellable execution attempt for a Task. It snapshots the Task and Agent launch configuration, retains progress and outcome history, and can be reconciled with its Cloudflare Workflow after an interruption. The assigned Agent Durable Object owns reasoning memory and Computer files; the Container backend owns only active processes.
-_Avoid_: Treating a Task and its retryable execution as the same record
-
-**Agent Computer**:
-The durable filesystem and execution facade assigned to one Agent. Files live in the Agent Durable Object; a replaceable Container backend executes Linux commands against them and may sleep between operations.
-_Avoid_: Permanent VM, implying the container process runs forever
-
 **Role**:
 Named reusable set of workspace Grants assigned to Members. Owner, Admin, and Member are protected system Roles; operators may add custom Roles.
-Owner and Admin receive every Grant. Member is chat-only by default: it may send Messages, attach files, and start Live sessions, but it cannot see or operate workspace settings, Agent configuration, Task Boards, Tasks, or Task Runs. Administrative access may be delegated only by assigning an explicit custom Role Grant.
+Owner and Admin receive every Grant. Member is chat-only by default: it may send Messages, attach files, and start Live sessions, but it cannot see or operate workspace settings, Agent configuration, Task Boards, or Tasks. Administrative access may be delegated only by assigning an explicit custom Role Grant.
 _Avoid_: Rank, group
 
 **Grant**:
@@ -187,7 +179,7 @@ A future operating mode in which an owner disconnects an Installation from disco
 _Avoid_: Claiming that current guided installs are already independent
 
 **Base Installation**:
-A usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Agent Computer, Live, custom domain, and email are not enabled during the first provisioning flow.
+A usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Live, custom domain, and email are not enabled during the first provisioning flow.
 _Avoid_: Trial workspace, incomplete installation, free workspace
 
 **Login Method**:

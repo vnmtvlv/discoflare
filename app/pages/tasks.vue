@@ -41,8 +41,6 @@ const showTaskForm = ref(false)
 const showLabels = ref(false)
 const showConfirm = ref(false)
 const saving = ref(false)
-const runningId = ref<string | null>(null)
-const approvalBusyId = ref<string | null>(null)
 const draggedTaskId = ref<string | null>(null)
 const confirmAction = shallowRef<null | (() => Promise<void>)>(null)
 const confirmTitle = ref('')
@@ -56,7 +54,6 @@ const boardsQ = useQuery({
   queryKey: computed(() => ['boards', workspaceId.value, showArchived.value]),
   queryFn: () => api<{ boards: TaskBoardDTO[] }>(`/api/workspaces/${workspaceId.value}/boards`, { query: { archived: showArchived.value } }),
   enabled: computed(() => Boolean(workspaceId.value)),
-  refetchInterval: query => query.state.data?.boards.some(board => board.tasks.some(task => task.status === 'running')) ? 3000 : false,
 })
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', workspaceId.value]),
@@ -67,7 +64,6 @@ const taskQ = useQuery({
   queryKey: computed(() => ['task', selectedTaskId.value]),
   queryFn: () => api<{ task: TaskDetailDTO }>(`/api/tasks/${selectedTaskId.value}`),
   enabled: computed(() => Boolean(selectedTaskId.value)),
-  refetchInterval: query => query.state.data?.task.status === 'running' ? 3000 : false,
 })
 
 const allBoards = computed(() => boardsQ.data.value?.boards ?? [])
@@ -110,12 +106,11 @@ watch(() => nav.createBoardOpen.value, (open) => {
 const columns: Array<{ status: TaskStatus; label: string }> = [
   { status: 'backlog', label: 'Backlog' },
   { status: 'ready', label: 'Ready' },
-  { status: 'running', label: 'Running' },
   { status: 'review', label: 'Review' },
   { status: 'done', label: 'Done' },
   { status: 'failed', label: 'Failed' },
 ]
-const manualStatusOptions = columns.filter(column => column.status !== 'running').map(column => ({ label: column.label, value: column.status }))
+const manualStatusOptions = columns.map(column => ({ label: column.label, value: column.status }))
 const priorityOptions: Array<{ label: string; value: TaskPriority }> = [
   { label: 'Low', value: 'low' },
   { label: 'Normal', value: 'normal' },
@@ -146,7 +141,7 @@ type TaskForm = {
 }
 
 const newTask = reactive<TaskForm>({ title: '', description: '', priority: 'normal', dueAt: '', assigneeId: null, channelId: null, labelIds: [], dependencyIds: [] })
-const editTask = reactive<TaskForm & { boardId: string; status: Exclude<TaskStatus, 'running'> }>({
+const editTask = reactive<TaskForm & { boardId: string; status: TaskStatus }>({
   title: '', description: '', priority: 'normal', dueAt: '', assigneeId: null, channelId: null, labelIds: [], dependencyIds: [], boardId: '', status: 'backlog',
 })
 const boardName = ref('')
@@ -169,7 +164,7 @@ watch(selectedTask, (task) => {
     labelIds: task.labels.map(label => label.id),
     dependencyIds: [...task.dependencyIds],
     boardId: task.boardId,
-    status: task.status === 'running' ? 'ready' : task.status,
+    status: task.status,
   })
 }, { immediate: true })
 
@@ -316,7 +311,7 @@ function openTask(task: TaskDTO) {
 
 async function saveTask() {
   const task = selectedTask.value
-  if (!task || task.status === 'running') return
+  if (!task) return
   await mutate(() => api(`/api/tasks/${task.id}`, {
     method: 'PATCH',
     body: { ...editTask, dueAt: toIso(editTask.dueAt) },
@@ -331,62 +326,17 @@ function changeEditBoard(value: string | number | undefined) {
 }
 
 async function setStatus(taskId: string, status: TaskStatus, position?: number) {
-  if (status === 'running') return
   await mutate(() => api(`/api/tasks/${taskId}`, { method: 'PATCH', body: { status, ...(position === undefined ? {} : { position }) } }))
 }
 
 async function dropTask(status: TaskStatus, beforeTaskId: string | null = null) {
   const taskId = draggedTaskId.value
   draggedTaskId.value = null
-  if (!taskId || status === 'running' || showArchived.value) return
+  if (!taskId || showArchived.value) return
   await mutate(() => api(`/api/boards/${activeBoard.value!.id}/tasks/reorder`, {
     method: 'PATCH',
     body: { taskId, status, beforeTaskId: beforeTaskId === taskId ? null : beforeTaskId },
   }))
-}
-
-async function runTask(taskId: string) {
-  runningId.value = taskId
-  try {
-    await api(`/api/tasks/${taskId}/run`, { method: 'POST' })
-    await refresh(taskId)
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    runningId.value = null
-  }
-}
-
-async function cancelTask(taskId: string) {
-  await mutate(() => api(`/api/tasks/${taskId}/cancel`, { method: 'POST' }), 'Run cancelled')
-}
-
-async function reconcileTask(taskId: string) {
-  await mutate(() => api(`/api/tasks/${taskId}/reconcile`, { method: 'POST' }), 'Run checked')
-}
-
-async function controlTaskApproval(runId: string, action: 'approve' | 'reject', executionId: string) {
-  const task = selectedTask.value
-  if (!task) return
-  approvalBusyId.value = executionId
-  try {
-    await api(`/api/tasks/${task.id}/runs/${runId}/approval`, { method: 'POST', body: { action, executionId } })
-    await refresh(task.id)
-    toast.add({ title: action === 'approve' ? 'Action approved' : 'Action rejected', color: 'success' })
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    approvalBusyId.value = null
-  }
-}
-
-function approvalInput(input: unknown): string {
-  if (input && typeof input === 'object' && 'command' in input && typeof input.command === 'string') return input.command
-  return JSON.stringify(input, null, 2)
 }
 
 function archiveTask() {
@@ -517,7 +467,7 @@ const boardMenu = computed(() => [[
                 v-for="task in tasksFor(column.status)"
                 :key="task.id"
                 class="df-panel rounded-lg p-3 space-y-2 cursor-pointer"
-                :draggable="!showArchived && task.status !== 'running'"
+                :draggable="!showArchived"
                 @dragstart="draggedTaskId = task.id"
                 @dragend="draggedTaskId = null"
                 @dragover.prevent
@@ -541,29 +491,15 @@ const boardMenu = computed(() => [[
                 </div>
                 <div v-if="task.dueAt" class="text-[11px] text-muted">{{ formatDate(task.dueAt) }}</div>
                 <UAlert v-if="task.lastError" color="error" :description="task.lastError" />
-                <div v-if="task.status === 'running' && task.latestRun?.progress" class="flex items-center gap-1.5 text-xs text-primary">
-                  <UIcon name="i-ph-spinner-gap" class="size-3.5 animate-spin" />
-                  <span class="truncate">{{ task.latestRun.progress }}</span>
-                </div>
-                <div v-else-if="task.resultSummary" class="text-xs border-t border-default pt-2 line-clamp-3">{{ task.resultSummary }}</div>
+                <div v-if="task.resultSummary" class="text-xs border-t border-default pt-2 line-clamp-3">{{ task.resultSummary }}</div>
                 <div v-if="!showArchived" class="flex items-center gap-1 pt-1" @click.stop>
-                  <UButton
-                    v-if="task.assigneeId && task.status !== 'running' && task.status !== 'done'"
-                    size="xs"
-                    icon="i-ph-play"
-                    label="Run"
-                    :loading="runningId === task.id"
-                    @click="runTask(task.id)"
-                  />
                   <USelect
-                    v-if="task.status !== 'running'"
                     :model-value="task.status"
                     :items="manualStatusOptions"
                     size="xs"
                     class="ml-auto w-24"
                     @update:model-value="value => setStatus(task.id, value as TaskStatus)"
                   />
-                  <UIcon v-else name="i-ph-spinner-gap" class="ml-auto size-4 animate-spin text-primary" />
                 </div>
               </article>
             </div>
@@ -635,32 +571,15 @@ const boardMenu = computed(() => [[
         <LayoutSkeleton v-if="taskQ.isPending.value" variant="form" />
         <LayoutLoadError v-else-if="taskQ.error.value" message="This task did not load." :retry="taskQ.refetch" />
         <div v-else-if="selectedTask" class="space-y-6">
-          <div v-if="selectedTask.status === 'running'" class="flex items-center gap-2">
-            <UButton color="error" variant="soft" icon="i-ph-stop" label="Cancel" @click="cancelTask(selectedTask.id)" />
-            <UButton color="neutral" variant="soft" icon="i-ph-arrows-clockwise" label="Check run" @click="reconcileTask(selectedTask.id)" />
-            <span v-if="selectedTask.latestRun?.progress" class="text-sm text-muted">{{ selectedTask.latestRun.progress }}</span>
-          </div>
-          <div v-if="selectedTask.latestRun?.approval" class="rounded-lg border border-warning/40 bg-warning/5 p-4">
-            <div class="flex items-center gap-2">
-              <UIcon name="i-ph-warning" class="size-5 text-warning" />
-              <span class="font-medium text-highlighted">{{ selectedTask.latestRun.approval.summary }}</span>
-              <UBadge class="ml-auto" color="warning" variant="subtle">{{ selectedTask.latestRun.approval.risk ?? 'approval' }}</UBadge>
-            </div>
-            <pre class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-muted/40 p-3 font-mono text-xs">{{ approvalInput(selectedTask.latestRun.approval.input) }}</pre>
-            <div class="mt-3 flex justify-end gap-2">
-              <UButton color="neutral" variant="outline" label="Reject" :loading="approvalBusyId === selectedTask.latestRun.approval.executionId" @click="controlTaskApproval(selectedTask.latestRun.id, 'reject', selectedTask.latestRun.approval.executionId)" />
-              <UButton color="warning" label="Approve" :loading="approvalBusyId === selectedTask.latestRun.approval.executionId" @click="controlTaskApproval(selectedTask.latestRun.id, 'approve', selectedTask.latestRun.approval.executionId)" />
-            </div>
-          </div>
           <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Title" class="sm:col-span-2"><UInput v-model="editTask.title" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Description" class="sm:col-span-2"><UTextarea v-model="editTask.description" :rows="6" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Board"><USelect :model-value="editTask.boardId" :items="boardOptions" :disabled="selectedTask.status === 'running'" class="w-full" @update:model-value="changeEditBoard" /></UFormField>
-            <UFormField label="Status"><USelect v-model="editTask.status" :items="manualStatusOptions" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Agent"><USelect v-model="editTask.assigneeId" :items="agentOptions" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Report channel"><USelect v-model="editTask.channelId" :items="channelOptions" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Priority"><USelect v-model="editTask.priority" :items="priorityOptions" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
-            <UFormField label="Due"><UInput v-model="editTask.dueAt" type="datetime-local" :disabled="selectedTask.status === 'running'" class="w-full" /></UFormField>
+            <UFormField label="Title" class="sm:col-span-2"><UInput v-model="editTask.title" class="w-full" /></UFormField>
+            <UFormField label="Description" class="sm:col-span-2"><UTextarea v-model="editTask.description" :rows="6" class="w-full" /></UFormField>
+            <UFormField label="Board"><USelect :model-value="editTask.boardId" :items="boardOptions" class="w-full" @update:model-value="changeEditBoard" /></UFormField>
+            <UFormField label="Status"><USelect v-model="editTask.status" :items="manualStatusOptions" class="w-full" /></UFormField>
+            <UFormField label="Agent"><USelect v-model="editTask.assigneeId" :items="agentOptions" class="w-full" /></UFormField>
+            <UFormField label="Report channel"><USelect v-model="editTask.channelId" :items="channelOptions" class="w-full" /></UFormField>
+            <UFormField label="Priority"><USelect v-model="editTask.priority" :items="priorityOptions" class="w-full" /></UFormField>
+            <UFormField label="Due"><UInput v-model="editTask.dueAt" type="datetime-local" class="w-full" /></UFormField>
           </div>
 
           <div v-if="allBoards.find(board => board.id === editTask.boardId)?.labels.length">
@@ -670,7 +589,6 @@ const boardMenu = computed(() => [[
                 v-for="label in allBoards.find(board => board.id === editTask.boardId)?.labels ?? []"
                 :key="label.id"
                 :model-value="editTask.labelIds.includes(label.id)"
-                :disabled="selectedTask.status === 'running'"
                 :label="label.name"
                 @update:model-value="value => toggleId(editTask.labelIds, label.id, Boolean(value))"
               />
@@ -684,7 +602,6 @@ const boardMenu = computed(() => [[
                 v-for="task in allBoards.find(board => board.id === editTask.boardId)?.tasks.filter(task => task.id !== selectedTask?.id && !task.archivedAt) ?? []"
                 :key="task.id"
                 :model-value="editTask.dependencyIds.includes(task.id)"
-                :disabled="selectedTask.status === 'running'"
                 :label="taskLabel(task)"
                 @update:model-value="value => toggleId(editTask.dependencyIds, task.id, Boolean(value))"
               />
@@ -692,8 +609,7 @@ const boardMenu = computed(() => [[
           </div>
 
           <div class="flex gap-2">
-            <UButton v-if="selectedTask.status !== 'running' && !selectedTask.archivedAt" label="Save" :loading="saving" @click="saveTask" />
-            <UButton v-if="selectedTask.assigneeId && selectedTask.status !== 'running' && selectedTask.status !== 'done' && !selectedTask.archivedAt" icon="i-ph-play" label="Run" :loading="runningId === selectedTask.id" @click="runTask(selectedTask.id)" />
+            <UButton v-if="!selectedTask.archivedAt" label="Save" :loading="saving" @click="saveTask" />
             <UButton class="ml-auto" color="neutral" variant="ghost" :label="selectedTask.archivedAt ? 'Restore' : 'Archive'" @click="archiveTask" />
             <UButton color="error" variant="ghost" label="Delete" @click="deleteTask" />
           </div>
@@ -702,12 +618,12 @@ const boardMenu = computed(() => [[
             <div class="text-sm font-medium mb-2">Checklist</div>
             <div class="space-y-2">
               <div v-for="item in selectedTask.checklist" :key="item.id" class="flex items-center gap-2">
-                <UCheckbox :model-value="item.completed" :disabled="selectedTask.status === 'running'" :label="item.title" @update:model-value="value => updateChecklistItem(item.id, Boolean(value))" />
-                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-x" aria-label="Delete checklist item" :disabled="selectedTask.status === 'running'" @click="deleteChecklistItem(item.id)" />
+                <UCheckbox :model-value="item.completed" :label="item.title" @update:model-value="value => updateChecklistItem(item.id, Boolean(value))" />
+                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-x" aria-label="Delete checklist item" @click="deleteChecklistItem(item.id)" />
               </div>
               <div class="flex gap-2">
-                <UInput v-model="checklistTitle" placeholder="Add item" :disabled="selectedTask.status === 'running'" class="flex-1" @keyup.enter="addChecklistItem" />
-                <UButton icon="i-ph-plus" aria-label="Add checklist item" :disabled="selectedTask.status === 'running' || !checklistTitle.trim()" @click="addChecklistItem" />
+                <UInput v-model="checklistTitle" placeholder="Add item" class="flex-1" @keyup.enter="addChecklistItem" />
+                <UButton icon="i-ph-plus" aria-label="Add checklist item" :disabled="!checklistTitle.trim()" @click="addChecklistItem" />
               </div>
             </div>
           </div>
@@ -718,10 +634,10 @@ const boardMenu = computed(() => [[
               <div v-for="attachment in selectedTask.attachments" :key="attachment.id" class="flex items-center gap-2 text-sm">
                 <UIcon name="i-ph-paperclip" class="size-4" />
                 <ULink :to="attachment.url" target="_blank" class="truncate">{{ attachment.filename }}</ULink>
-                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-trash" aria-label="Delete attachment" :disabled="selectedTask.status === 'running'" @click="deleteAttachment(attachment.id)" />
+                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-trash" aria-label="Delete attachment" @click="deleteAttachment(attachment.id)" />
               </div>
               <div class="flex items-center gap-2">
-                <UFileUpload v-model="uploadFile" variant="button" label="Choose file" :disabled="selectedTask.status === 'running'" />
+                <UFileUpload v-model="uploadFile" variant="button" label="Choose file" />
                 <UButton v-if="uploadFile" label="Upload" :loading="saving" @click="uploadAttachment" />
               </div>
             </div>
@@ -735,30 +651,6 @@ const boardMenu = computed(() => [[
             </div>
           </div>
 
-          <div>
-            <div class="text-sm font-medium mb-2">Runs</div>
-            <div v-if="selectedTask.runs.length" class="space-y-2">
-              <details v-for="run in selectedTask.runs" :key="run.id" class="rounded-lg border border-default p-3">
-                <summary class="cursor-pointer text-sm flex items-center gap-2">
-                  <UBadge :color="run.status === 'failed' ? 'error' : run.status === 'cancelled' ? 'warning' : run.status === 'completed' ? 'success' : 'primary'" variant="subtle">{{ run.status }}</UBadge>
-                  <span>{{ formatDate(run.createdAt) }}</span>
-                  <span class="ml-auto text-muted">{{ agentName(run.agentId) }}</span>
-                </summary>
-                <div class="mt-3 space-y-2 text-xs">
-                  <div v-if="run.summary">{{ run.summary }}</div>
-                  <pre v-if="run.details" class="whitespace-pre-wrap text-muted font-sans">{{ run.details }}</pre>
-                  <UAlert v-if="run.error" color="error" :description="run.error" />
-                  <div class="text-muted">{{ run.titleSnapshot }} · {{ run.agentModelSnapshot }} · from {{ run.taskStatusBefore }}</div>
-                  <div v-if="run.channelIdSnapshot" class="text-muted">Report channel: {{ run.channelIdSnapshot }}</div>
-                  <pre v-if="run.descriptionSnapshot" class="whitespace-pre-wrap text-muted font-sans">{{ run.descriptionSnapshot }}</pre>
-                  <pre v-if="run.agentInstructionsSnapshot" class="whitespace-pre-wrap text-muted font-sans">{{ run.agentInstructionsSnapshot }}</pre>
-                  <div v-if="run.startedAt" class="text-muted">Started {{ formatDate(run.startedAt) }}</div>
-                  <div v-if="run.completedAt" class="text-muted">Ended {{ formatDate(run.completedAt) }}</div>
-                </div>
-              </details>
-            </div>
-            <span v-else class="text-sm text-muted">No runs</span>
-          </div>
         </div>
       </template>
     </USlideover>

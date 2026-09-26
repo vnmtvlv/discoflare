@@ -10,6 +10,7 @@ import taskNumbersSql from '../../drizzle/migrations/0020_task_numbers.sql?raw'
 import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
 import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
+import retireTaskExecutionSql from '../../drizzle/migrations/0026_retire_task_execution.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -185,6 +186,41 @@ describe('D1 bootstrap schema', () => {
 
     expect(sqlite.prepare('SELECT subject_id FROM mcp_access_tokens WHERE id = ?').get('token')).toEqual({ subject_id: 'owner' })
     expect(sqlite.prepare('SELECT progress, approval_json FROM task_runs WHERE id = ?').get('run')).toEqual({ progress: 'Thinking', approval_json: null })
+    sqlite.close()
+  })
+
+  it('retires active Task Runs without deleting their history', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        status TEXT NOT NULL,
+        assignee_id TEXT,
+        active_run_id TEXT,
+        updated_at TEXT
+      );
+      CREATE TABLE task_runs (
+        id TEXT PRIMARY KEY,
+        task_status_before TEXT NOT NULL,
+        status TEXT NOT NULL,
+        progress TEXT,
+        approval_json TEXT,
+        cancelled_at TEXT,
+        error TEXT
+      );
+      INSERT INTO tasks VALUES ('task-1', 'running', 'agent-1', 'run-1', 'before');
+      INSERT INTO task_runs VALUES ('run-1', 'review', 'running', 'Thinking', '{"executionId":"approval-1"}', NULL, NULL);
+    `)
+
+    sqlite.exec(d1ExecSql(retireTaskExecutionSql))
+
+    expect(sqlite.prepare('SELECT status, active_run_id FROM tasks WHERE id = ?').get('task-1')).toEqual({ status: 'review', active_run_id: null })
+    expect(sqlite.prepare('SELECT status, progress, approval_json, error FROM task_runs WHERE id = ?').get('run-1')).toEqual({
+      status: 'cancelled',
+      progress: null,
+      approval_json: null,
+      error: 'Task execution was retired in Discoflare 0.1.5',
+    })
     sqlite.close()
   })
 

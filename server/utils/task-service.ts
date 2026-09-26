@@ -1,11 +1,9 @@
 import { eq, or } from 'drizzle-orm'
 import { taskDependencies, taskLabelLinks, tasks } from '../../drizzle/schema'
 import { newId, nowIso, WORKSPACE_ID } from '../../shared/ids'
-import { canSetTaskStatus } from '../../shared/task-status'
 import type { TaskBoardDTO, TaskDetailDTO, TaskPriority, TaskStatus } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { signalTasksChanged } from '../../workers/task-events'
-import { fail } from './cf'
 import { getDb } from './db'
 import { writeAudit } from './messages'
 import { authorize, WorkspaceAction, type AuthorizationContext } from '../../shared/authorization'
@@ -28,7 +26,7 @@ export type CreateTaskInput = {
 export type UpdateTaskInput = {
   title?: string
   description?: string
-  status?: Exclude<TaskStatus, 'running'>
+  status?: TaskStatus
   priority?: TaskPriority
   dueAt?: string | null
   position?: number
@@ -93,7 +91,6 @@ export async function createTask(
     resultSummary: null,
     resultDetails: null,
     lastError: null,
-    activeRunId: null,
     archivedAt: null,
     createdAt: now,
     updatedAt: now,
@@ -120,9 +117,6 @@ export async function updateTask(
   const db = getDb(env.DB)
   const task = await requireTask(env, taskReference)
   const id = task.id
-  if (task.status === 'running') fail(409, 'task_running', 'Cancel the running task before changing it')
-  if (input.status && !canSetTaskStatus(task.status as TaskStatus, input.status)) fail(409, 'invalid_status', 'Task status can only enter running through a run')
-
   const boardId = input.boardId ?? task.boardId
   await Promise.all([
     input.boardId ? requireBoard(env, input.boardId) : Promise.resolve(),
@@ -183,41 +177,4 @@ export async function updateTask(
   schedule(signalTasksChanged(env, boardId, id))
   if (boardId !== task.boardId) schedule(signalTasksChanged(env, task.boardId, id))
   return (await loadTaskDetail(env, id))!
-}
-
-/** Narrow Agent capability: update only its own assigned, non-running task result. */
-export async function updateAssignedTaskResult(
-  env: DiscoflareEnv,
-  authorization: AuthorizationContext,
-  taskId: string,
-  input: { status: Exclude<TaskStatus, 'running'>; summary?: string; details?: string },
-  schedule: Schedule,
-): Promise<{ updated: boolean }> {
-  authorize(authorization, WorkspaceAction.writeTasks)
-  const actorId = authorization.principal.id
-  const current = await env.DB.prepare(
-    "SELECT board_id as boardId, status FROM tasks WHERE id = ? AND assignee_id = ? AND status <> 'running'",
-  ).bind(taskId, actorId).first<{ boardId: string; status: TaskStatus }>()
-  if (!current) return { updated: false }
-  if (!canSetTaskStatus(current.status, input.status)) return { updated: false }
-
-  const result = await env.DB.prepare(
-    `UPDATE tasks SET status = ?, result_summary = coalesce(?, result_summary),
-     result_details = coalesce(?, result_details), updated_at = ?
-     WHERE id = ? AND assignee_id = ? AND status <> 'running'`,
-  ).bind(input.status, input.summary ?? null, input.details ?? null, nowIso(), taskId, actorId).run()
-  const updated = (result.meta.changes ?? 0) > 0
-  if (updated) {
-    await writeAudit(env, {
-      workspaceId: WORKSPACE_ID,
-      actorId,
-      action: 'task.update',
-      targetType: 'task',
-      targetId: taskId,
-      meta: { fields: ['status', 'result'], status: input.status },
-      authorization,
-    })
-    schedule(signalTasksChanged(env, current.boardId, taskId))
-  }
-  return { updated }
 }

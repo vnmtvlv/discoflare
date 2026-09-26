@@ -31,7 +31,7 @@ This repository is the source of truth for the open-source workspace runtime and
 Five apps bring conversations, work, email, knowledge, and internal tools into one workspace:
 
 - **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first Live session with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Live sessions can also be scheduled in their parent conversation. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
-- **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Assign Agents to execute Tasks, follow their progress, and retain run history with cancellation and recovery.
+- **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Humans and Agents can read and create tracked work.
 - **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
 - **Data** — Keep structured information and knowledge together. Shape each Database through shared table, list, board, and calendar Views with typed filters and sorting; bookmark the Views, Documents, and Canvases important to you; and edit records without exposing their physical D1 storage.
 - **Apps** — Build versioned Gadgets from trusted interface elements and bind one internal tool to multiple Database Views. Generate a read-only draft with Jev or configure it directly, publish it to selected Roles, and allow only the explicit Fields and record operations declared by each Binding.
@@ -39,7 +39,7 @@ Five apps bring conversations, work, email, knowledge, and internal tools into o
 ### AI agents
 
 - Add AI participants with custom profiles and avatars, powered by Workers AI.
-- Let authorized members work with Agents in chat or assign them Tasks, with one durable Computer per Agent for files and command execution.
+- Let authorized members work with Agents in chat. Agents can read Tasks and create new ones while projects, repositories, and computers remain outside the current product boundary.
 - Use vision-capable models to inspect image attachments.
 
 ### Workspace controls
@@ -57,9 +57,9 @@ One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Eac
 | Layer | Cloudflare services | Responsibility |
 | --- | --- | --- |
 | App and API | Workers | Serve the frontend, handle API requests, and receive routed email. |
-| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data and Gadget definitions, Agents, boards, Tasks, Task Runs, and Agent Computer files. R2 stores attachments and raw email. |
-| Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation and Task Run. KV holds short-lived WebSocket tickets. |
-| Agent execution | Workers AI, Browser Run, optional Workflows / Computer / Containers | Chat and public-web reading on the base workspace; Linux command execution after Agent Computer. |
+| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data and Gadget definitions, Agents, boards, and Tasks. R2 stores attachments and raw email. |
+| Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation. KV holds short-lived WebSocket tickets. |
+| Agents | Workers AI, Browser Run | Agents reply in chat, read or create Tasks, and can read public URLs. They do not receive repositories or Linux computers. |
 | Voice and video | RealtimeKit | Carry optional Live session media. |
 
 ```
@@ -68,8 +68,7 @@ Browser ──HTTP /api/*─────────► Nuxt Worker ── D1 / 
         ──WS /ws/workspace/:id► Workspace DO (presence)
 Chat ──► Agent DO + Think ──► Workers AI
                     └───────────► Browser Run (public URLs)
-Task ──► Agent DO + Computer ──► Workflow ──► Workers AI
-                    └───────────► Container runtime
+                    └───────────► Tasks in D1 (read/create)
 Live session media ─────────► RealtimeKit
 ```
 
@@ -81,9 +80,7 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 
 - A Cloudflare account to host the workspace and its resources.
 - R2 enabled on that account. Cloudflare requires completing the R2 subscription checkout even when usage remains inside its free tier.
-- A Workers Paid plan only when the Owner enables Agent Computer (Containers and Task Workflows). The default Workers AI model needs no model API key.
-
-After Agent Computer is enabled, its first Container image may need several minutes before the first Agent Task can start; chat remains available throughout.
+- Workers AI access for Agents. The default model needs no external model API key.
 
 ### Guided installation
 
@@ -142,7 +139,7 @@ The Owner can turn it off in **Workspace Settings → Telemetry**. Manual deploy
 
 For guided Installations, only the Owner can start permanent deletion in **Workspace Settings → Danger Zone**. Discoflare offers an optional backup first, then verifies the Installation through temporary Cloudflare authorization.
 
-A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, optional Agent Workflow and Container application, owned Access applications, App Domain, literal mailbox routes, and Email Sending domains. A separately configured backup bucket is never deleted; shared zone-level Email Routing is left enabled.
+A short-lived, one-use claim authorizes the installer to empty the installation's live R2 bucket and remove its Worker, Durable Object state, D1 database, R2 bucket, KV namespace, owned Access applications, App Domain, literal mailbox routes, and Email Sending domains. A separately configured backup bucket is never deleted; shared zone-level Email Routing is left enabled.
 
 Manual deployments show Cloudflare cleanup guidance because Discoflare cannot prove that their bound resources are not shared.
 
@@ -173,13 +170,10 @@ pnpm db:seed
 | Mode | Command | When to use it |
 | --- | --- | --- |
 | Local app | `pnpm dev` | Run Nuxt with local bindings for everyday development. |
-| Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets, Durable Object hibernation, and Agent Computers. Container development also needs Docker and a Cloudflare login. |
+| Full Worker | `pnpm dev:full` | Test production-equivalent WebSockets and Durable Object hibernation. |
 | Remote backend | `pnpm dev:remote` | Local frontend against a deployed server. Configure `.env`, pass `--env-file .env.personal`, or pass its URL. |
 
 See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.
-Pull requests from this repository can also receive isolated
-[Cloudflare Worker Previews](docs/worker-previews.md) for browser review without
-publishing a release tag.
 
 ### Static client build
 

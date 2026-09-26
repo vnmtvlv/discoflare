@@ -21,7 +21,6 @@ export type AgentDTO = {
   model: string
   instructions: string
   status: 'active' | 'paused'
-  computerId: string
   lastActiveAt: string | null
   createdAt: string
   updatedAt: string
@@ -51,7 +50,7 @@ export type AgentTurnDTO = {
   updatedAt: string
 }
 
-export type TaskStatus = 'backlog' | 'ready' | 'running' | 'review' | 'done' | 'failed'
+export type TaskStatus = 'backlog' | 'ready' | 'review' | 'done' | 'failed'
 export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent'
 
 export type TaskLabelDTO = {
@@ -81,31 +80,6 @@ export type TaskAttachmentDTO = AttachmentDTO & {
   createdAt: string
 }
 
-export type TaskRunDTO = {
-  id: string
-  taskId: string
-  agentId: string
-  workflowId: string | null
-  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
-  triggeredBy: string | null
-  titleSnapshot: string
-  descriptionSnapshot: string
-  channelIdSnapshot: string | null
-  agentModelSnapshot: string
-  agentInstructionsSnapshot: string
-  taskStatusBefore: Exclude<TaskStatus, 'running'>
-  summary: string | null
-  details: string | null
-  error: string | null
-  progress: string | null
-  approval: AgentApprovalDTO | null
-  startedAt: string | null
-  completedAt: string | null
-  cancelledAt: string | null
-  cancelledBy: string | null
-  createdAt: string
-}
-
 export type TaskDTO = {
   id: string
   number: number
@@ -122,7 +96,6 @@ export type TaskDTO = {
   resultSummary: string | null
   resultDetails: string | null
   lastError: string | null
-  activeRunId: string | null
   archivedAt: string | null
   createdAt: string
   updatedAt: string
@@ -131,11 +104,9 @@ export type TaskDTO = {
   checklistCompleted: number
   dependencyIds: string[]
   attachmentCount: number
-  latestRun: TaskRunDTO | null
 }
 
 export type TaskDetailDTO = TaskDTO & {
-  runs: TaskRunDTO[]
   checklist: TaskChecklistItemDTO[]
   attachments: TaskAttachmentDTO[]
 }
@@ -632,8 +603,6 @@ export type SetupHealth = {
     rateLimitDo: boolean
     notificationDo: boolean
     agentDo: boolean
-    agentComputer: boolean
-    agentWorkflow: boolean
     workersAi: boolean
     browser: boolean
   }

@@ -10,7 +10,6 @@ export const WorkspaceAction = {
   useGadgets: 'gadgets:use',
   manageGadgets: 'gadgets:manage',
   sendMessages: 'messages:send',
-  approveTaskRun: 'task-runs:approve',
 } as const
 
 export type WorkspaceAction = typeof WorkspaceAction[keyof typeof WorkspaceAction]
@@ -33,8 +32,10 @@ export type AuthorizationContext = {
   }
   delegation?: {
     by: string
-    taskRunId?: string
     actions?: WorkspaceAction[]
+    permissions?: number
+    isOwner?: boolean
+    roleName?: string
   }
 }
 
@@ -48,7 +49,6 @@ const ACTION_RULES: Record<WorkspaceAction, ActionRule> = {
   [WorkspaceAction.useGadgets]: { permission: Permission.useGadgets },
   [WorkspaceAction.manageGadgets]: { permission: Permission.manageGadgets },
   [WorkspaceAction.sendMessages]: { permission: Permission.sendMessages },
-  [WorkspaceAction.approveTaskRun]: { permission: Permission.manageTasks },
 }
 
 export class AuthorizationError extends Error {
@@ -64,17 +64,24 @@ export class AuthorizationError extends Error {
   }
 }
 
-/** The single workspace authorization boundary shared by HTTP, MCP, Agents, and Workflows. */
+/** The single workspace authorization boundary shared by HTTP, MCP, and Agents. */
 export function authorize(context: AuthorizationContext, action: WorkspaceAction): void {
   const rule = ACTION_RULES[action]
-  if (!context.principal.isOwner && !hasPermission(context.principal.permissions, rule.permission)) {
-    throw new AuthorizationError(`The ${context.principal.roleName} role cannot perform ${action}`)
+  const delegatedAuthority = context.credential.kind === 'agent_runtime' && context.delegation?.permissions !== undefined
+    ? {
+        permissions: context.delegation.permissions,
+        isOwner: context.delegation.isOwner === true,
+        roleName: context.delegation.roleName || 'delegating member',
+      }
+    : context.principal
+  if (!delegatedAuthority.isOwner && !hasPermission(delegatedAuthority.permissions, rule.permission)) {
+    throw new AuthorizationError(`The ${delegatedAuthority.roleName} role cannot perform ${action}`)
   }
   if (context.credential.kind === 'mcp' && rule.scope && !context.credential.scopes?.includes(rule.scope)) {
     throw new AuthorizationError(`Access token is missing the ${rule.scope} scope`)
   }
   if (context.delegation?.actions && !context.delegation.actions.includes(action)) {
-    throw new AuthorizationError(`The delegated run cannot perform ${action}`)
+    throw new AuthorizationError(`The delegated Agent cannot perform ${action}`)
   }
 }
 
@@ -84,6 +91,5 @@ export function auditAttribution(context: AuthorizationContext): Record<string, 
     credentialKind: context.credential.kind,
     ...(context.credential.id ? { credentialId: context.credential.id } : {}),
     ...(context.delegation?.by ? { delegatedBy: context.delegation.by } : {}),
-    ...(context.delegation?.taskRunId ? { taskRunId: context.delegation.taskRunId } : {}),
   }
 }

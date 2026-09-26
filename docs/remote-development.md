@@ -42,8 +42,8 @@ hot reload. Requests to `/api` are proxied to the selected backend, with cookie
 and Origin rewriting. WebSockets connect directly to the remote backend using
 short-lived socket tickets.
 
-The deployed backend runs its own API, Durable Objects, Workflows, agent
-containers, and storage. Local server changes do not run in this mode. No
+The deployed backend runs its own API, Durable Objects, Workers AI, Browser Run,
+and storage. Local server changes do not run in this mode. No
 Cloudflare credentials or copy of the backend's `AUTH_SECRET` are needed for the
 frontend connection. Sign in separately on localhost; browser sessions are
 origin-scoped. Writes affect the selected installation.
@@ -56,7 +56,7 @@ remote frontend development until an explicit Access development bridge exists.
 ## Backend development
 
 Use a personal Cloudflare installation with its own Worker, D1, R2, KV, Durable
-Objects, Workflows, and agent containers. Deploy the current feature branch to
+Objects, Workers AI, and Browser Run. Deploy the current feature branch to
 that installation when testing backend changes, then exercise it through the
 local frontend. Keep its deployment config and credentials outside Git.
 
@@ -67,6 +67,6 @@ schema changes and experiments do not affect the shared installation.
 `pnpm dev:remote` only starts the frontend; it never deploys or applies migrations.
 For local backend execution, use `pnpm dev` or `pnpm dev:full` instead.
 
-A temporary `wrangler dev --remote` preview is not a complete substitute for a
-Discoflare installation: Cloudflare does not support Workflows or Containers in
-that mode. See [Cloudflare's development binding support](https://developers.cloudflare.com/workers/local-development/bindings-per-env/).
+A temporary `wrangler dev --remote` session is not a complete substitute for a
+Discoflare installation because local and remote binding behavior differs. See
+[Cloudflare's development binding support](https://developers.cloudflare.com/workers/local-development/bindings-per-env/).
