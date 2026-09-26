@@ -102,13 +102,13 @@ const installationSections = ['cloudflare', 'domains', 'backups', 'updates', 'te
 const installationNav = computed(() => isOwner.value
   ? [{
       id: 'cloudflare' as const,
-      label: 'Cloudflare',
-      icon: 'i-ph-cloud',
+      label: 'System',
+      icon: 'i-ph-hard-drives',
       aliases: installationSections,
       badge: updatesQ.data.value?.updateAvailable ? String(updatesQ.data.value.releasesBehind) : undefined,
       keywords: [
-        'management', 'instance token', 'managed', 'manual', 'deployment',
-        'domains', 'app domain', 'custom domain', 'email domain', 'dns', 'zone',
+        'cloudflare', 'installation', 'management', 'instance token', 'managed', 'manual', 'deployment',
+        'domain', 'app domain', 'custom domain', 'address', 'url', 'dns', 'zone',
         'backup', 'download', 'export', 'restore', 'd1', 'r2',
         'updates', 'release', 'version', 'upgrade', 'github',
         'telemetry', 'anonymous', 'heartbeat', 'privacy', 'stats',
@@ -120,7 +120,7 @@ const groups = computed(() => [
   { label: 'Workspace', items: workspaceNav.value },
   { label: 'Features', items: featureNav.value },
   { label: 'Access', items: accessNav.value },
-  { label: 'Installation', items: installationNav.value },
+  { items: installationNav.value },
 ].filter(group => group.items.length))
 const availableSections = computed(() => groups.value.flatMap(group => group.items.flatMap(item => 'aliases' in item ? item.aliases : [item.id])))
 

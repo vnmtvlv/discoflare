@@ -1,20 +1,18 @@
 <script setup lang="ts">
-import { useQuery, useQueryClient } from '@tanstack/vue-query'
-import * as z from 'zod'
-import type { FormSubmitEvent } from '@nuxt/ui'
+import { useQuery } from '@tanstack/vue-query'
 import type { InstallationDomainSettingsDTO, InstallationManagementStatusDTO } from '~~/shared/releases'
 
 const props = withDefaults(defineProps<{
   workspaceId: string
-  /** Installation status at a glance, or the App and Email Domain forms. */
+  /** Where the workspace runs at a glance, or its custom address. */
   view?: 'overview' | 'domains'
 }>(), { view: 'overview' })
+defineEmits<{ navigate: [section: string] }>()
+
 const { api } = useApi()
 const route = useRoute()
 const toast = useToast()
-const queryClient = useQueryClient()
 const appBusy = ref(false)
-const emailBusy = ref('')
 
 const managementQ = useQuery({
   queryKey: computed(() => ['installation-management', props.workspaceId]),
@@ -25,7 +23,7 @@ const domainsQ = useQuery({
   queryFn: () => api<InstallationDomainSettingsDTO>(`/api/workspaces/${props.workspaceId}/domains`),
   // Zones come from the Control Plane and take seconds to list. The Overview
   // starts the request in the background without waiting on it, and the result
-  // is kept for a while so the Domains tab opens instantly.
+  // is kept for a while so the Domain tab opens instantly.
   staleTime: 5 * 60_000,
 })
 const loading = computed(() => managementQ.isPending.value || (props.view === 'domains' && domainsQ.isPending.value))
@@ -34,70 +32,31 @@ function retryLoad() {
   return Promise.all([managementQ.refetch(), props.view === 'domains' ? domainsQ.refetch() : null])
 }
 
-// Disconnecting moves the workspace URL or stops mail, so both ask first.
-const confirmDisconnect = ref<{ kind: 'app' } | { kind: 'email', id: string, domain: string } | null>(null)
-async function runDisconnect() {
-  const target = confirmDisconnect.value
-  if (!target) return
-  if (target.kind === 'app') await disconnectApp()
-  else await disconnectEmail(target.id)
-  confirmDisconnect.value = null
-}
-
 const status = computed(() => managementQ.data.value)
 const domains = computed(() => domainsQ.data.value)
 const activeZones = computed(() => (domains.value?.zones ?? []).filter(zone => zone.status === 'active'))
-const zoneOptions = computed(() => activeZones.value.map(zone => ({ label: zone.name, value: zone.id })))
 
-const appSchema = z.object({
-  zoneId: z.string().min(1, 'Choose a Cloudflare zone'),
-  subdomain: z.string().trim().min(1, 'Enter a subdomain').max(63).regex(/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu, 'Use one DNS label, such as inchi'),
-})
-type AppSchema = z.output<typeof appSchema>
-const appState = reactive<Partial<AppSchema>>({ zoneId: '', subdomain: '' })
-
-const emailSchema = z.object({
-  zoneId: z.string().min(1, 'Choose a Cloudflare zone'),
-  subdomain: z.string().trim().max(63).refine(value => !value || /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(value), 'Use one DNS label, such as mail'),
-})
-type EmailSchema = z.output<typeof emailSchema>
-const emailState = reactive<Partial<EmailSchema>>({ zoneId: '', subdomain: '' })
-
+const appState = reactive({ zoneId: '', subdomain: '' })
+const appInput = ref<{ hostname: string } | null>(null)
+const appLabelValid = computed(() => !appState.subdomain.trim() || /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/iu.test(appState.subdomain.trim()))
 watch(activeZones, (zones) => {
-  const fallback = zones[0]?.id || ''
-  if (!zones.some(zone => zone.id === appState.zoneId)) appState.zoneId = fallback
-  if (!zones.some(zone => zone.id === emailState.zoneId)) emailState.zoneId = fallback
+  if (!zones.some(zone => zone.id === appState.zoneId)) appState.zoneId = zones[0]?.id || ''
 }, { immediate: true })
 
-function zoneName(zoneId: string | undefined) {
-  return activeZones.value.find(zone => zone.id === zoneId)?.name || ''
+// Disconnecting moves the workspace to another URL, so it asks first.
+const confirmDisconnect = ref<{ kind: 'app' } | null>(null)
+async function runDisconnect() {
+  await disconnectApp()
+  confirmDisconnect.value = null
 }
 
-function fullHostname(zoneId: string | undefined, subdomain: string | undefined, apex = false) {
-  const zone = zoneName(zoneId)
-  const label = subdomain?.trim().toLowerCase() || ''
-  if (!zone) return ''
-  if (!label && apex) return zone
-  return label ? `${label}.${zone}` : ''
-}
-
-const appPreview = computed(() => fullHostname(appState.zoneId, appState.subdomain))
-const emailPreview = computed(() => fullHostname(emailState.zoneId, emailState.subdomain, true))
-
-async function refreshDomains() {
-  await Promise.all([
-    domainsQ.refetch(),
-    managementQ.refetch(),
-    queryClient.invalidateQueries({ queryKey: ['mail-settings', props.workspaceId] }),
-  ])
-}
-
-async function connectApp(event: FormSubmitEvent<AppSchema>) {
+async function connectAppDomain() {
+  if (!appInput.value?.hostname || !appLabelValid.value) return
   appBusy.value = true
   try {
     const result = await api<{ hostname: string }>(`/api/workspaces/${props.workspaceId}/app-domain`, {
       method: 'PUT',
-      body: { zoneId: event.data.zoneId, hostname: event.data.subdomain },
+      body: { zoneId: appState.zoneId, hostname: appState.subdomain.trim() },
     })
     toast.add({ title: `${result.hostname} connected`, color: 'success' })
     await navigateTo(`https://${result.hostname}${route.fullPath}`, { external: true })
@@ -114,7 +73,7 @@ async function disconnectApp() {
   appBusy.value = true
   try {
     const result = await api<{ hostname: string }>(`/api/workspaces/${props.workspaceId}/app-domain`, { method: 'DELETE' })
-    toast.add({ title: 'App Domain disconnected', color: 'success' })
+    toast.add({ title: 'Custom address disconnected', color: 'success' })
     await navigateTo(`https://${result.hostname}${route.fullPath}`, { external: true })
   }
   catch (error) {
@@ -124,50 +83,15 @@ async function disconnectApp() {
     appBusy.value = false
   }
 }
-
-async function connectEmail(event: FormSubmitEvent<EmailSchema>) {
-  emailBusy.value = 'connect'
-  try {
-    const domain = fullHostname(event.data.zoneId, event.data.subdomain, true)
-    await api(`/api/workspaces/${props.workspaceId}/email-domains`, {
-      method: 'POST',
-      body: { zoneId: event.data.zoneId, domain },
-    })
-    emailState.subdomain = ''
-    await refreshDomains()
-    toast.add({ title: `${domain} connected`, color: 'success' })
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    emailBusy.value = ''
-  }
-}
-
-async function disconnectEmail(id: string) {
-  emailBusy.value = id
-  try {
-    await api(`/api/workspaces/${props.workspaceId}/email-domains/${id}`, { method: 'DELETE' })
-    await refreshDomains()
-    toast.add({ title: 'Email Domain disconnected', color: 'success' })
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    emailBusy.value = ''
-  }
-}
 </script>
 
 <template>
   <div>
     <SettingsHeader
-      :title="view === 'domains' ? 'Domains' : 'Cloudflare'"
+      :title="view === 'domains' ? 'Domain' : 'System'"
       :description="view === 'domains'
-        ? 'Where this workspace is reached, and which domains it receives email on.'
-        : 'This Installation on your Cloudflare account.'"
+        ? 'The address people open this workspace at.'
+        : 'Where this workspace runs and what it has enabled.'"
     />
 
     <LayoutSkeleton v-if="loading" variant="form" :rows="3" class="mt-8" />
@@ -183,11 +107,11 @@ async function disconnectEmail(id: string) {
     <template v-else-if="view === 'overview' && status">
       <div class="mt-8 grid gap-3 sm:grid-cols-2">
         <div class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">App Domain</p>
+          <p class="text-xs text-muted">Address</p>
           <p class="mt-1 truncate font-medium text-highlighted">{{ status.hostname || 'workers.dev' }}</p>
         </div>
         <div class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">Email Domains</p>
+          <p class="text-xs text-muted">Email domains</p>
           <p class="mt-1 break-words font-medium text-highlighted">{{ status.emailDomains.length ? status.emailDomains.join(', ') : 'None connected' }}</p>
         </div>
         <div class="rounded-lg border border-default p-4">
@@ -205,86 +129,49 @@ async function disconnectEmail(id: string) {
       </div>
       <p class="mt-6 flex items-start gap-2 text-sm text-muted">
         <UIcon name="i-ph-lock-simple" class="mt-0.5 size-4 shrink-0" />
-        Your Cloudflare credential stays in the Discoflare Control Plane. This workspace can only run fixed operations on its own Installation.
+        This workspace runs on your own Cloudflare account. Your Cloudflare credential stays in the Discoflare Control Plane, and the workspace can only run fixed operations on itself.
       </p>
     </template>
 
     <template v-else-if="view === 'domains' && domains">
-      <section class="mt-8">
-        <h2 class="text-[11px] font-bold uppercase tracking-wide text-muted">App Domain</h2>
-        <p class="mt-1 text-sm text-muted">The address people open this workspace at.</p>
-
-        <div v-if="domains.appDomain" class="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
-          <div class="min-w-0">
-            <p class="truncate font-medium text-highlighted">{{ domains.appDomain.hostname }}</p>
-            <p class="mt-1 text-xs text-muted">Cloudflare zone: {{ domains.appDomain.zoneName }}</p>
-          </div>
-          <UButton label="Disconnect" color="neutral" variant="outline" size="sm" :loading="appBusy" @click="confirmDisconnect = { kind: 'app' }" />
+      <div v-if="domains.appDomain" class="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-lg border border-default p-4">
+        <div class="min-w-0">
+          <p class="truncate font-medium text-highlighted">{{ domains.appDomain.hostname }}</p>
+          <p class="mt-1 text-xs text-muted">Cloudflare zone {{ domains.appDomain.zoneName }}</p>
         </div>
+        <UButton label="Disconnect" color="neutral" variant="outline" size="sm" :loading="appBusy" @click="confirmDisconnect = { kind: 'app' }" />
+      </div>
 
-        <UForm v-else :schema="appSchema" :state="appState" class="mt-3 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end" @submit="connectApp">
-          <UFormField name="zoneId" label="Cloudflare zone" required>
-            <USelect v-model="appState.zoneId" :items="zoneOptions" value-key="value" class="w-full" />
-          </UFormField>
-          <UFormField name="subdomain" label="Subdomain" :description="appPreview || 'For example: chat.example.com'" required>
-            <UInput v-model="appState.subdomain" placeholder="chat" class="w-full">
-              <template #trailing><span v-if="zoneName(appState.zoneId)" class="text-xs text-dimmed">.{{ zoneName(appState.zoneId) }}</span></template>
-            </UInput>
-          </UFormField>
-          <UButton type="submit" label="Connect" :loading="appBusy" />
-        </UForm>
-      </section>
+      <form v-else class="mt-8 max-w-lg" @submit.prevent="connectAppDomain">
+        <UFormField label="Custom address" :error="appLabelValid ? undefined : 'Use letters, numbers and hyphens, like chat'">
+          <SettingsDomainInput
+            ref="appInput"
+            v-model:label="appState.subdomain"
+            v-model:zone-id="appState.zoneId"
+            :zones="activeZones"
+            placeholder="chat"
+            :example="hostname => `People will open https://${hostname}`"
+          />
+        </UFormField>
+        <UButton type="submit" class="mt-3" label="Connect" :loading="appBusy" :disabled="!appInput?.hostname || !appLabelValid" />
+      </form>
 
-      <section class="mt-10">
-        <h2 class="text-[11px] font-bold uppercase tracking-wide text-muted">Email Domains</h2>
-        <p class="mt-1 text-sm text-muted">Domains this workspace receives mail on. Create addresses for them in Email settings.</p>
-
-        <ul v-if="domains.emailDomains.length" class="mt-3 divide-y divide-default rounded-lg border border-default">
-          <li v-for="domain in domains.emailDomains" :key="domain.id" class="flex flex-wrap items-center justify-between gap-4 px-4 py-3">
-            <div class="min-w-0">
-              <p class="truncate font-medium text-highlighted">{{ domain.domain }}</p>
-              <p class="mt-1 text-xs text-muted">Cloudflare zone: {{ domain.zoneName }}</p>
-            </div>
-            <UButton
-              label="Disconnect"
-              color="neutral"
-              variant="outline"
-              size="sm"
-              :loading="emailBusy === domain.id"
-              @click="confirmDisconnect = { kind: 'email', id: domain.id, domain: domain.domain }"
-            />
-          </li>
-        </ul>
-
-        <UForm :schema="emailSchema" :state="emailState" class="mt-3 grid gap-3 sm:grid-cols-[12rem_minmax(0,1fr)_auto] sm:items-end" @submit="connectEmail">
-          <UFormField name="zoneId" label="Cloudflare zone" required>
-            <USelect v-model="emailState.zoneId" :items="zoneOptions" value-key="value" class="w-full" />
-          </UFormField>
-          <UFormField name="subdomain" label="Subdomain" hint="Optional" :description="emailPreview ? `Will connect ${emailPreview}` : 'Leave blank to use the zone apex'">
-            <UInput v-model="emailState.subdomain" placeholder="mail" class="w-full">
-              <template #trailing><span v-if="zoneName(emailState.zoneId)" class="text-xs text-dimmed">.{{ zoneName(emailState.zoneId) }}</span></template>
-            </UInput>
-          </UFormField>
-          <UButton type="submit" label="Add domain" :loading="emailBusy === 'connect'" />
-        </UForm>
-      </section>
+      <p class="mt-8 text-sm text-muted">
+        Email domains are managed in <button type="button" class="text-highlighted underline-offset-2 hover:underline" @click="$emit('navigate', 'email')">Email settings</button>.
+      </p>
     </template>
 
     <UModal
       :open="Boolean(confirmDisconnect)"
-      :title="confirmDisconnect?.kind === 'app' ? 'Disconnect the App Domain?' : `Disconnect ${confirmDisconnect?.kind === 'email' ? confirmDisconnect.domain : ''}?`"
+      title="Disconnect the custom address?"
       @update:open="(value: boolean) => { if (!value) confirmDisconnect = null }"
     >
       <template #body>
-        <p class="text-sm text-muted">
-          {{ confirmDisconnect?.kind === 'app'
-            ? 'The workspace moves back to its workers.dev address and this page reloads there. Links to the current domain stop working.'
-            : 'This workspace stops sending and receiving mail on it. Delete its mailboxes in Email settings first.' }}
-        </p>
+        <p class="text-sm text-muted">The workspace moves back to its workers.dev address and this page reloads there. Links to the current address stop working.</p>
       </template>
       <template #footer>
-        <UButton color="neutral" variant="outline" label="Cancel" @click="confirmDisconnect = null" />
-        <UButton color="error" label="Disconnect" :loading="appBusy || Boolean(emailBusy)" @click="runDisconnect" />
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="confirmDisconnect = null" />
+        <UButton color="error" label="Disconnect" :loading="appBusy" @click="runDisconnect" />
       </template>
     </UModal>
   </div>

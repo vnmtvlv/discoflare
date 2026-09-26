@@ -34,6 +34,12 @@ const domains = computed(() => mail.value?.domains ?? [])
 const domainOptions = computed(() => domains.value.map(domain => ({ label: domain.domain, value: domain.id })))
 const selected = computed(() => mailboxes.value.find(mailbox => mailbox.channelId === selectedId.value) ?? null)
 const ownerId = computed(() => membersQ.data.value?.members.find(member => member.role.key === 'owner')?.user.id ?? null)
+const { mine } = usePermissions(computed(() => membersQ.data.value?.members))
+const isOwner = computed(() => mine.value?.role.key === 'owner')
+// With no domain yet there is nothing to create a mailbox on, so start where the fix is.
+watch(() => mail.value?.configured, (configured) => {
+  if (configured === false) tab.value = 'domains'
+}, { immediate: true })
 const permissionOptions = [
   { label: 'No access', value: 'none' },
   { label: 'Read only', value: 'read' },
@@ -164,14 +170,7 @@ async function saveMailbox() {
 
       <LayoutSkeleton v-if="mailQ.isPending.value" variant="rows" class="mt-6 -mx-2" />
       <LayoutLoadError v-else-if="mailQ.error.value" message="Email settings did not load." :retry="mailQ.refetch" />
-      <UAlert
-        v-else-if="!mail?.configured"
-        color="warning"
-        title="Email is not connected"
-        description="Connect an Email Domain in Workspace Settings → Cloudflare → Domains, then create addresses here."
-        class="mt-6"
-      />
-      <template v-else>
+      <template v-else-if="mail">
         <LayoutSegmentedTabs
           v-model="tab"
           :items="[
@@ -181,7 +180,13 @@ async function saveMailbox() {
           label="Email settings"
           class="mt-5"
         />
-        <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare → Domains." class="mt-5" />
+        <UAlert
+          v-if="mail.configured && !mail.sendingBound"
+          color="warning"
+          title="Sending is not set up yet"
+          description="Mail can be received, but this workspace cannot send until its email domain finishes connecting."
+          class="mt-5"
+        />
 
         <SettingsList
           v-if="tab === 'mailboxes'"
@@ -197,8 +202,14 @@ async function saveMailbox() {
             <div class="rounded-lg border border-dashed border-default px-4 py-8 text-center">
               <UIcon name="i-ph-envelope-simple" class="size-6 text-dimmed" />
               <p class="mt-2 text-sm font-medium text-highlighted">No mailboxes yet</p>
-              <p class="mt-1 text-sm text-muted">Create an address like support@ to start receiving mail.</p>
-              <UButton class="mt-4" size="sm" icon="i-ph-plus" label="New mailbox" @click="createOpen = true" />
+              <template v-if="domains.length">
+                <p class="mt-1 text-sm text-muted">Create an address like support@ to start receiving mail.</p>
+                <UButton class="mt-4" size="sm" icon="i-ph-plus" label="New mailbox" @click="createOpen = true" />
+              </template>
+              <template v-else>
+                <p class="mt-1 text-sm text-muted">Mailboxes need an email domain first.</p>
+                <UButton class="mt-4" size="sm" color="neutral" variant="soft" label="Go to Domains" @click="tab = 'domains'" />
+              </template>
             </div>
           </template>
           <template #row="{ item: mailbox }">
@@ -215,20 +226,7 @@ async function saveMailbox() {
           </template>
         </SettingsList>
 
-        <ul v-else class="mt-5 divide-y divide-default overflow-hidden rounded-lg border border-default">
-          <li v-for="domain in domains" :key="domain.id" class="flex items-center gap-3 px-4 py-3">
-            <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-elevated text-muted">
-              <UIcon name="i-ph-globe-simple" class="size-4" />
-            </span>
-            <span class="min-w-0 flex-1">
-              <span class="block truncate text-sm font-medium text-highlighted">{{ domain.domain }}</span>
-              <span class="block truncate text-xs text-muted">Managed for {{ domain.appHostname }}</span>
-            </span>
-            <span class="shrink-0 text-xs text-muted tabular-nums">
-              {{ mailboxes.filter(mailbox => mailbox.domainId === domain.id).length }} mailboxes
-            </span>
-          </li>
-        </ul>
+        <SettingsEmailDomains v-else class="mt-5" :workspace-id="workspaceId" :is-owner="isOwner" :mail="mail" />
       </template>
     </template>
 
