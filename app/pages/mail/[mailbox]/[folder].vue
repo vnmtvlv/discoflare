@@ -137,16 +137,19 @@ function messageSender(message: MailMessageDTO) {
     <div class="grid h-full min-h-0 min-w-0 grid-cols-1 md:grid-cols-[320px_minmax(0,1fr)]">
       <section class="min-h-0 overflow-y-auto border-e border-default" :class="activeThreadId ? 'hidden md:block' : 'block'">
         <div class="sticky top-0 z-10 flex h-12 items-center gap-2 border-b border-default bg-default/90 px-3 backdrop-blur">
-          <UButton icon="i-ph-list" color="neutral" variant="ghost" square aria-label="Open navigation" @click="useUiStore().mobilePane = 'channels'" />
+          <LayoutMobileMenuButton />
           <div class="min-w-0 flex-1">
             <p class="truncate text-sm font-medium text-highlighted">{{ folderLabel }}</p>
             <p class="truncate text-[11px] text-muted">{{ activeMailbox?.address || 'Mail' }}</p>
           </div>
           <UButton v-if="canSend" label="Compose" trailing-icon="i-ph-pencil-simple" size="sm" @click="nav.composeOpen.value = true" />
         </div>
-        <USkeleton v-if="threadsQ.isPending.value" class="m-4 h-24" />
-        <UAlert v-else-if="!mailboxes.length" class="m-4" color="neutral" title="No mailbox assigned" />
-        <UAlert v-else-if="!threads.length" class="m-4" color="neutral" :title="`No messages in ${folder}`" />
+        <LayoutSkeleton v-if="threadsQ.isPending.value" variant="rows" :rows="6" />
+        <div v-else-if="!mailboxes.length || !threads.length" class="px-6 py-16 text-center">
+          <UIcon :name="mailboxes.length ? 'i-ph-tray' : 'i-ph-envelope-simple'" class="size-8 text-dimmed" />
+          <p class="mt-3 text-sm font-medium text-highlighted">{{ mailboxes.length ? `${folderLabel} is empty` : 'No mailbox assigned' }}</p>
+          <p v-if="!mailboxes.length" class="mt-1 text-sm text-muted">Ask a workspace admin for access to a mailbox.</p>
+        </div>
         <button
           v-for="item in threads"
           :key="item.channelId"

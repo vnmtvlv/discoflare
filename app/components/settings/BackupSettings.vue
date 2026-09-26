@@ -229,7 +229,7 @@ onMounted(load)
         description="Do not use the R2 bucket already bound to Discoflare. Otherwise future archives can include previous backups, and one bucket failure can remove both the workspace files and their backups."
       />
 
-      <USkeleton v-if="loading" class="mt-5 h-72 w-full" />
+      <LayoutSkeleton v-if="loading" variant="form" class="mt-5" />
       <template v-else-if="destination">
         <UAlert
           v-if="destination.secretConfigured && !destination.secretReadable"

@@ -28,7 +28,7 @@ const save = useMutation({
     <h1 class="text-xl font-semibold text-highlighted">Telemetry</h1>
     <p class="mt-1 text-sm text-muted">Help show how many independent Discoflare installations are running.</p>
 
-    <USkeleton v-if="telemetryQ.isPending.value" class="mt-8 h-40" />
+    <LayoutSkeleton v-if="telemetryQ.isPending.value" variant="form" :rows="2" class="mt-8" />
     <UAlert
       v-else-if="telemetryQ.error.value"
       class="mt-8"

@@ -24,7 +24,7 @@ const activeId = computed(() => String(route.query.gadget || '') || gadgets.valu
     :create-label="gadgetsQ.data.value?.canManage ? 'Create Gadget' : undefined"
     @create="nav.createGadgetOpen.value = true"
   >
-    <USkeleton v-if="gadgetsQ.isPending.value" class="h-12" />
+    <LayoutSkeleton v-if="gadgetsQ.isPending.value" variant="nav" :rows="3" />
     <p v-else-if="gadgetsQ.error.value" class="px-2 py-2 text-sm text-error">Could not load Apps.</p>
     <p v-else-if="!gadgets.length" class="px-2 py-2 text-sm text-muted">No Gadgets yet.</p>
     <ul v-else>

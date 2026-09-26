@@ -59,7 +59,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
 
 <template>
   <div>
-    <USkeleton v-if="channelsQ.isPending.value" class="mx-2 h-24" />
+    <LayoutSkeleton v-if="channelsQ.isPending.value" variant="nav" />
     <UAlert v-else-if="channelsQ.error.value" color="error" title="Could not load channels." class="mx-2" />
     <template v-else>
       <LayoutNavSection

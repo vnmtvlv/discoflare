@@ -343,32 +343,35 @@ function roleAccessLabel(role: RoleDTO) {
 
 <template>
   <div class="flex h-full min-h-0 flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-3 border-b border-default px-4">
-      <span class="min-w-0 flex-1 truncate font-semibold">{{ activeSummary?.name || 'Apps' }}</span>
-      <UBadge v-if="activeSummary?.publishedVersion" color="neutral" variant="subtle" :label="`v${activeSummary.publishedVersion}`" />
-      <UButton
-        v-if="canManage && activeSummary && !editing"
-        color="neutral"
-        variant="ghost"
-        icon="i-ph-pencil-simple"
-        label="Edit"
-        @click="navigateTo(gadgetPath(activeSummary.id, true))"
-      />
-      <template v-if="editing && activeSummary">
-        <UButton v-if="activeSummary.publishedVersion" color="neutral" variant="ghost" label="Close" @click="navigateTo(gadgetPath(activeSummary.id))" />
-        <UButton color="neutral" variant="outline" label="Save draft" :loading="saving && !publishing" @click="saveDraft" />
-        <UButton label="Publish" icon="i-ph-paper-plane-tilt" :loading="publishing" :disabled="!draftSpec.sections.length" @click="publish" />
+    <LayoutPageHeader icon="i-ph-squares-four" :title="activeSummary?.name || 'Apps'" :loading="gadgetsQ.isPending.value">
+      <template #meta>
+        <UBadge v-if="activeSummary?.publishedVersion" color="neutral" variant="subtle" :label="`v${activeSummary.publishedVersion}`" />
       </template>
-    </header>
+      <template #actions>
+        <UButton
+          v-if="canManage && activeSummary && !editing"
+          color="neutral"
+          variant="ghost"
+          icon="i-ph-pencil-simple"
+          label="Edit"
+          @click="navigateTo(gadgetPath(activeSummary.id, true))"
+        />
+        <template v-if="editing && activeSummary">
+          <UButton v-if="activeSummary.publishedVersion" color="neutral" variant="ghost" label="Close" @click="navigateTo(gadgetPath(activeSummary.id))" />
+          <UButton color="neutral" variant="outline" label="Save draft" :loading="saving && !publishing" @click="saveDraft" />
+          <UButton label="Publish" icon="i-ph-paper-plane-tilt" :loading="publishing" :disabled="!draftSpec.sections.length" @click="publish" />
+        </template>
+      </template>
+    </LayoutPageHeader>
 
-    <div v-if="gadgetsQ.isPending.value" class="p-6"><USkeleton class="h-64" /></div>
+    <LayoutSkeleton v-if="gadgetsQ.isPending.value" variant="document" />
     <div v-else-if="!activeSummary" class="grid flex-1 place-items-center p-6">
       <UButton v-if="canManage" icon="i-ph-plus" label="Create first Gadget" @click="nav.createGadgetOpen.value = true" />
       <p v-else class="text-sm text-muted">No Apps are shared with your role.</p>
     </div>
 
     <main v-else-if="editing" class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-      <div v-if="detailQ.isPending.value" class="mx-auto max-w-5xl"><USkeleton class="h-64" /></div>
+      <LayoutSkeleton v-if="detailQ.isPending.value" variant="form" class="mx-auto max-w-5xl" />
       <div v-else-if="detailQ.error.value" class="mx-auto max-w-5xl"><UAlert color="error" title="Could not load the Gadget draft" :description="errorMessage(detailQ.error.value)" /></div>
       <div v-else class="mx-auto max-w-5xl space-y-8">
         <section class="grid gap-4 sm:grid-cols-2">
@@ -443,7 +446,7 @@ function roleAccessLabel(role: RoleDTO) {
     </main>
 
     <main v-else class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-      <div v-if="runtimeQ.isPending.value" class="mx-auto max-w-7xl"><USkeleton class="h-64" /></div>
+      <LayoutSkeleton v-if="runtimeQ.isPending.value" variant="table" class="mx-auto max-w-7xl" />
       <div v-else-if="runtimeQ.error.value" class="mx-auto max-w-7xl"><UAlert color="error" title="Could not open this Gadget" :description="errorMessage(runtimeQ.error.value)" /></div>
       <div v-else-if="runtimeQ.data.value" class="mx-auto max-w-7xl">
         <p v-if="runtimeQ.data.value.gadget.description" class="mb-6 text-sm text-muted">{{ runtimeQ.data.value.gadget.description }}</p>

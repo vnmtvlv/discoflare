@@ -30,7 +30,7 @@ const activeBoardId = computed(() => String(route.query.board || '') || boards.v
       :create-label="archived ? undefined : 'Create board'"
       @create="nav.createBoardOpen.value = true"
     >
-      <USkeleton v-if="boardsQ.isPending.value" class="h-16" />
+      <LayoutSkeleton v-if="boardsQ.isPending.value" variant="nav" :rows="3" />
       <p v-else-if="!boards.length" class="px-2 py-3 text-sm text-muted">
         {{ archived ? 'Nothing archived.' : 'No boards yet.' }}
       </p>

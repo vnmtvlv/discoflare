@@ -184,7 +184,7 @@ onMounted(load)
       />
     </div>
 
-    <USkeleton v-if="loading" class="mt-6 h-64 w-full" />
+    <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />
     <template v-else-if="realtimekit">
       <UAlert v-if="managed" class="mt-6" color="neutral" variant="subtle" :title="managedLabel" />
       <UAlert

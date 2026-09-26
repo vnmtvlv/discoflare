@@ -67,7 +67,7 @@ const isDm = computed(() => isDmType(type.value))
 const isGroup = computed(() => isDm.value && (channel.value?.participants?.length ?? 0) > 2)
 const others = computed(() => (channel.value?.participants ?? []).filter((p) => p.id !== session.user?.id))
 const headerName = computed(() => {
-  if (!isDm.value) return channel.value?.name || '…'
+  if (!isDm.value) return channel.value?.name || ''
   return channel.value?.title || dmTitle(channel.value?.name, channel.value?.participants ?? [], session.user?.id || '')
 })
 const frozen = computed(() => Boolean(oneQ.data.value?.frozen || channel.value?.frozen || ui.dmFrozen))
@@ -79,12 +79,19 @@ const canAttachFiles = computed(() => isDm.value ? !frozen.value : hasPermission
 const canStartHuddle = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.startHuddle))
 const canManageHuddles = computed(() => hasPermission(mine.value?.role.permissions ?? 0, Permission.manageChannels))
 const isConversation = computed(() => type.value !== 'thread')
-const composerDisabledPlaceholder = computed(() => frozen.value
-  ? 'You can no longer send messages to this user'
-  : 'You cannot send messages in this channel')
-const { width } = useWindowSize()
-const isMobile = computed(() => width.value > 0 && width.value < 768)
+// Until the channel and the member's role arrive, permissions are unknown rather
+// than denied: keep the composer quietly disabled instead of claiming "cannot send".
+const permissionsKnown = computed(() => Boolean(channel.value)
+  && (isDm.value || channel.value?.permissions !== undefined || Boolean(mine.value)))
+const composerDisabledPlaceholder = computed(() => {
+  if (!permissionsKnown.value) return composerPlaceholder.value
+  return frozen.value
+    ? 'You can no longer send messages to this user'
+    : 'You cannot send messages in this channel'
+})
+const isMobile = useIsMobile()
 const composerPlaceholder = computed(() => {
+  if (!headerName.value) return 'Message'
   if (isDm.value) return `Message @${headerName.value}`
   return `Message #${headerName.value}`
 })
@@ -97,6 +104,17 @@ const connection = computed(() => {
   if (channelConnection.value === 'reconnecting' || workspaceConnection.value === 'reconnecting') return 'reconnecting'
   return 'connecting'
 })
+// Sockets connect within a moment on every page load; only surface the badge when
+// the connection is actually lost or a (re)connect is taking noticeably long.
+const showConnection = ref(false)
+let connectionTimer: ReturnType<typeof setTimeout> | undefined
+watch(connection, (state) => {
+  clearTimeout(connectionTimer)
+  if (state === 'connected') showConnection.value = false
+  else if (state === 'offline') showConnection.value = true
+  else connectionTimer = setTimeout(() => { showConnection.value = true }, 2500)
+}, { immediate: true })
+onBeforeUnmount(() => clearTimeout(connectionTimer))
 const { start, join, leave } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
 
 const scheduledQ = useQuery({
@@ -289,23 +307,12 @@ defineShortcuts({
 <template>
   <div class="relative flex-1 min-h-0 h-full flex bg-default">
     <div class="flex-1 min-w-0 flex flex-col min-h-0">
-      <header class="h-12 pl-4 pr-2 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
-        <UButton
-          v-if="isMobile"
-          icon="i-ph-list"
-          color="neutral"
-          variant="ghost"
-          size="md"
-          square
-          class="size-11 shrink-0"
-          aria-label="Open channels"
-          aria-controls="channel-navigation"
-          :aria-expanded="ui.mobilePane === 'channels'"
-          @click="ui.mobilePane = 'channels'"
-        />
+      <header class="h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
+        <LayoutMobileMenuButton />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
         <UserAvatar v-else-if="!isGroup && others[0]" :user="others[0]" size="2xs" />
-        <UAvatar v-else size="2xs" :text="(others[0]?.displayName || headerName).slice(0, 1).toUpperCase()" />
+        <UAvatar v-else-if="channel" size="2xs" :text="(others[0]?.displayName || headerName).slice(0, 1).toUpperCase()" />
+        <USkeleton v-if="!channel" class="h-4 w-32" />
         <UInput
           v-if="isGroup && renaming"
           v-model="rename"
@@ -316,7 +323,7 @@ defineShortcuts({
           @keyup.escape="renaming = false"
         />
         <h1
-          v-else
+          v-else-if="channel"
           class="font-semibold text-[16px] truncate text-highlighted"
           :class="isGroup ? 'cursor-text' : ''"
           @dblclick="isGroup && (renaming = true)"
@@ -326,7 +333,7 @@ defineShortcuts({
         <p v-if="!isDm" class="text-sm text-muted truncate hidden lg:block min-w-0 flex-1">{{ channel?.topic }}</p>
         <div class="ml-auto flex items-center gap-2">
           <UBadge
-            v-if="connection !== 'connected'"
+            v-if="showConnection && connection !== 'connected'"
             :color="connection === 'offline' ? 'error' : 'neutral'"
             variant="subtle"
             size="sm"
@@ -463,7 +470,7 @@ defineShortcuts({
         :workspace-id="workspaceId"
         :members="members"
         :send="send"
-        :disabled="!canSendMessages"
+        :disabled="!permissionsKnown || !canSendMessages"
         :disabled-placeholder="composerDisabledPlaceholder"
         :can-attach="canAttachFiles"
         :agent-busy="agentBusy"

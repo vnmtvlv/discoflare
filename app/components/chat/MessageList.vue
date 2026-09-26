@@ -264,10 +264,10 @@ function jumpToMessage(id: string) {
 <template>
   <div ref="scroller" class="flex-1 overflow-y-auto flex flex-col" :class="prefs.compact ? 'text-[13px]' : ''" role="log" aria-live="polite" aria-relevant="additions" @scroll="onScroll">
     <div class="flex-1 min-h-4" />
-    <div v-if="q.isPending.value" class="p-6">
-      <USkeleton class="h-24" />
+    <div v-if="q.isPending.value" class="flex flex-1 flex-col">
+      <LayoutSkeleton variant="messages" class="flex-1" />
     </div>
-    <UAlert v-else-if="q.error.value" color="error" title="Could not load messages." class="m-3" />
+    <UAlert v-else-if="q.error.value" color="error" title="Could not load messages." class="m-3 w-auto" />
     <div v-else-if="showIntro !== false" class="px-4 pt-4 pb-2">
       <div class="size-16 rounded-full bg-accented flex items-center justify-center mb-2">
         <UIcon :name="isDm ? 'i-ph-at' : 'i-ph-hash'" class="size-9 text-highlighted" />
@@ -342,7 +342,7 @@ function jumpToMessage(id: string) {
           />
           <div v-if="ui.searchQuery.trim()" class="mt-2 max-h-96 overflow-y-auto">
             <div v-if="searchLoading" class="p-3">
-              <USkeleton class="h-16" />
+              <LayoutSkeleton variant="rows" :rows="3" />
             </div>
             <UAlert v-else-if="searchReady && searchQ.error.value" color="error" variant="subtle" title="Could not search messages." />
             <template v-else>

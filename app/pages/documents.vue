@@ -6,6 +6,7 @@ import type { DataResourcesDTO, DocumentDTO } from '~~/shared/types'
 definePageMeta({ layout: 'workspace', middleware: ['auth', 'manage-databases'] })
 
 const { workspaceId } = useWorkspace()
+const isMobile = useIsMobile()
 const { api } = useApi()
 const route = useRoute()
 const nav = useNavActions()
@@ -87,24 +88,22 @@ async function removeDocument() {
 
 <template>
   <div class="flex h-full min-h-0 min-w-0 flex-col">
-    <header class="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_0_var(--ui-border)]">
-      <UIcon name="i-ph-file-text" class="size-5" />
-      <span class="font-semibold">Docs</span>
-      <div class="ml-auto flex items-center gap-2">
+    <LayoutPageHeader icon="i-ph-file-text" :title="activeDocument ? (title || 'Untitled') : 'Docs'">
+      <template #actions>
         <span v-if="activeDocument" class="text-xs text-dimmed">{{ saving ? 'Saving…' : saveError ? 'Not saved' : dirty ? 'Unsaved' : 'Saved' }}</span>
         <DataBookmarkButton v-if="activeDocument" :workspace-id="workspaceId" target-type="document" :target-id="activeDocument.id" />
         <UButton color="neutral" variant="ghost" icon="i-ph-trash" aria-label="Delete document" :disabled="!activeDocument || saving || deleting" @click="showDelete = true" />
-        <UButton icon="i-ph-plus" label="Document" @click="nav.createDocumentOpen.value = true" />
-      </div>
-    </header>
+        <UButton icon="i-ph-plus" :label="isMobile ? undefined : 'Document'" aria-label="New document" @click="nav.createDocumentOpen.value = true" />
+      </template>
+    </LayoutPageHeader>
 
-    <div v-if="resourcesQ.isPending.value || (selectedId && documents.some(document => document.id === selectedId) && documentQ.isPending.value)" class="p-6"><USkeleton class="h-72" /></div>
-    <UAlert v-else-if="resourcesQ.error.value || documentQ.error.value" color="error" title="Could not load documents." class="m-6" />
+    <div v-if="resourcesQ.isPending.value || (selectedId && documents.some(document => document.id === selectedId) && documentQ.isPending.value)"><LayoutSkeleton variant="document" /></div>
+    <UAlert v-else-if="resourcesQ.error.value || documentQ.error.value" color="error" title="Could not load documents." class="m-6 w-auto" />
     <div v-else-if="!activeDocument" class="grid flex-1 place-items-center p-6">
       <UButton icon="i-ph-plus" label="Create first document" @click="nav.createDocumentOpen.value = true" />
     </div>
     <main v-else class="min-h-0 flex-1 overflow-y-auto">
-      <UAlert v-if="saveError" color="error" title="Document not saved" :description="errorMessage(saveError)" class="m-4">
+      <UAlert v-if="saveError" color="error" title="Document not saved" :description="errorMessage(saveError)" class="m-4 w-auto">
         <template #actions>
           <UButton label="Retry save" color="error" variant="soft" :loading="saving" @click="save()" />
           <UButton label="Reload latest" color="neutral" variant="outline" :disabled="saving" @click="showReload = true" />

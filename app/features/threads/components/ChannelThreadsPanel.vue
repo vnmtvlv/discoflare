@@ -25,9 +25,9 @@ function openThread(thread: ChannelThreadDTO) {
 
 <template>
   <div v-if="threadsQ.isPending.value" class="p-3">
-    <USkeleton class="h-24" />
+    <LayoutSkeleton variant="cards" />
   </div>
-  <UAlert v-else-if="threadsQ.error.value" color="error" title="Could not load threads." class="m-3" />
+  <UAlert v-else-if="threadsQ.error.value" color="error" title="Could not load threads." class="m-3 w-auto" />
   <p v-else-if="!threadsQ.data.value?.threads.length" class="p-3 text-sm text-muted">No threads yet.</p>
   <div v-else class="p-2">
     <button
