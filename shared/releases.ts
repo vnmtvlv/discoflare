@@ -30,6 +30,13 @@ export type InstallationManagementStatusDTO = {
   emailEligible: boolean
 }
 
+export type InstallationDomainSettingsDTO = {
+  managed: boolean
+  zones: Array<{ id: string, name: string, status: string }>
+  appDomain: null | { hostname: string, zoneId: string, zoneName: string }
+  emailDomains: Array<{ id: string, domain: string, zoneId: string, zoneName: string }>
+}
+
 type Semver = readonly [major: number, minor: number, patch: number]
 
 const DISCOFLARE_RELEASES_URL = 'https://github.com/vnmtvlv/discoflare/releases/tag'

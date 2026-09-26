@@ -175,11 +175,11 @@ One of the domains connected to an Installation for inbound routing and outbound
 _Avoid_: App Domain, one zone-wide catch-all, login email domain
 
 **Installation Control Credential**:
-A random, deployment-issued credential scoped to one Installation and stored hashed by the Control Plane. The workspace uses it only to create or delete an exact Cloudflare Email Routing rule when its Owner creates or deletes a Mailbox. It is not the Cloudflare OAuth credential and cannot call arbitrary Cloudflare operations.
+A random, deployment-issued credential scoped to one Installation and stored hashed by the Control Plane. The workspace Owner uses it through fixed App Domain, Email Domain, and exact Mailbox route operations. It is not the Cloudflare OAuth credential and cannot call arbitrary Cloudflare operations or manage another Installation.
 _Avoid_: Cloudflare token, workspace OAuth, general control-plane session
 
 **Primary Installation**:
-The first Discoflare Installation created in a Cloudflare account. It is the only Installation eligible to own account- or zone-wide resources such as mail routing and the RealtimeKit account integration.
+The first Discoflare Installation created in a Cloudflare account. It is the only Installation eligible to own account-wide integrations such as RealtimeKit; App Domains and Email Domains remain per-Installation resources.
 _Avoid_: Main workspace, control plane, permanent leader election
 
 **Independent Mode**:

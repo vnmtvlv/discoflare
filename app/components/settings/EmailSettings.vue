@@ -123,7 +123,7 @@ async function saveMailbox() {
       v-else-if="!mail?.configured"
       color="warning"
       title="Email is not connected"
-      description="Connect an Email Domain from this Installation's Settings in Discoflare Admin, then create addresses here."
+      description="Connect an Email Domain in Workspace Settings → Cloudflare, then create addresses here."
       class="mt-6"
     />
     <template v-else>
@@ -134,7 +134,7 @@ async function saveMailbox() {
           <p class="mt-1 text-xs text-muted">Managed for {{ domain.appHostname }}</p>
         </div>
       </div>
-      <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Discoflare Admin." class="mt-4" />
+      <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare." class="mt-4" />
 
       <div class="mt-8 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
         <UFormField label="Email domain">
