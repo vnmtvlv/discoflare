@@ -9,6 +9,18 @@
         "dev"
       ],
       "port": 3000
+    },
+    {
+      "name": "dev-remote",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "run",
+        "dev:remote",
+        "--",
+        "--env-file",
+        ".env.remote"
+      ],
+      "port": 3000
     }
   ]
 }

@@ -13,6 +13,25 @@ export default defineAppConfig({
         variant: 'subtle',
       },
     },
+    // Dialog actions sit on the right, primary last.
+    modal: {
+      slots: {
+        footer: 'justify-end',
+      },
+      // The default elevated scrim lightens a dark page; dim it instead.
+      variants: {
+        overlay: {
+          true: { overlay: 'bg-black/60' },
+        },
+      },
+    },
+    slideover: {
+      variants: {
+        overlay: {
+          true: { overlay: 'bg-black/60' },
+        },
+      },
+    },
     icons: {
       loading: 'i-ph-spinner',
       close: 'i-ph-x',

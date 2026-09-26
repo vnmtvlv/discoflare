@@ -144,11 +144,9 @@ defineShortcuts({
             </p>
 
             <template v-for="(group, index) in filtered" :key="group.label ?? index">
-              <template v-if="group.label">
-                <USeparator v-if="index" class="my-3" />
-                <p class="mb-1 px-2.5 text-[11px] font-bold uppercase tracking-wide text-muted">{{ group.label }}</p>
-              </template>
-              <nav class="space-y-0.5" :class="!group.label && index ? 'mt-3' : ''">
+              <USeparator v-if="index" class="my-3" />
+              <p v-if="group.label" class="mb-1 px-2.5 text-[11px] font-bold uppercase tracking-wide text-muted">{{ group.label }}</p>
+              <nav class="space-y-0.5">
                 <button
                   v-for="item in group.items"
                   :key="item.id"
