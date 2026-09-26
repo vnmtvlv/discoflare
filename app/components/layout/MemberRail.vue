@@ -21,10 +21,9 @@ const toast = useToast()
 const qc = useQueryClient()
 const ui = useUiStore()
 const { api } = useApi()
-const { width } = useWindowSize()
-const isMobile = computed(() => width.value > 0 && width.value < 768)
+const isMobile = useIsMobile()
 
-const { data, isPending, error } = useQuery({
+const { data, isPending, error, refetch } = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
   queryFn: ({ queryKey }) => {
     const id = String(queryKey[1] ?? '')
@@ -102,6 +101,11 @@ function itemsFor(m: MemberDTO): DropdownMenuItem[][] {
   return [actions]
 }
 
+const memberFilters = [
+  { value: 'all' as const, label: 'All' },
+  { value: 'online' as const, label: 'Online' },
+]
+
 function roleLabel(name: string) {
   if (name === 'owner') return 'Owner'
   if (name === 'admin') return 'Admin'
@@ -143,28 +147,13 @@ function roleLabel(name: string) {
       <LayoutRightPanelTabs v-model="ui.rightPanelTab" />
     </header>
     <div v-if="ui.rightPanelTab === 'members'" class="flex-1 min-h-0 overflow-y-auto">
-      <div class="flex items-center gap-0.5 px-3 pt-3" aria-label="Member filter">
-        <UButton
-          size="xs"
-          class="min-h-11 md:min-h-7"
-          color="neutral"
-          :variant="ui.memberTab === 'all' ? 'soft' : 'ghost'"
-          label="All"
-          @click="ui.memberTab = 'all'"
-        />
-        <UButton
-          size="xs"
-          class="min-h-11 md:min-h-7"
-          color="neutral"
-          :variant="ui.memberTab === 'online' ? 'soft' : 'ghost'"
-          label="Online"
-          @click="ui.memberTab = 'online'"
-        />
+      <div class="px-3 pt-3">
+        <LayoutSegmentedTabs v-model="ui.memberTab" :items="memberFilters" label="Member filter" />
       </div>
       <div v-if="isPending && !channelMembers?.length" class="p-3">
-        <USkeleton class="h-24" />
+        <LayoutSkeleton variant="rows" />
       </div>
-      <UAlert v-else-if="error && !channelMembers?.length" color="error" title="Could not load members." class="m-3" />
+      <LayoutLoadError v-else-if="error && !channelMembers?.length" message="Members did not load." :retry="refetch" />
       <p v-else-if="!list.length" class="p-3 text-sm text-muted">No members.</p>
       <div v-else class="px-2 py-4 space-y-4">
       <p v-if="isGroupDm" class="text-xs font-semibold text-muted px-1">Participants — {{ list.length }}</p>

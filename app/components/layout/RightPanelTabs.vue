@@ -12,21 +12,5 @@ const tabs: Array<{ value: RightPanelTab; label: string }> = [
 </script>
 
 <template>
-  <div role="tablist" aria-label="Right panel views" class="flex min-w-0 items-center">
-    <UButton
-      v-for="tab in tabs"
-      :key="tab.value"
-      :label="tab.label"
-      size="xs"
-      :color="model === tab.value ? 'primary' : 'neutral'"
-      :variant="model === tab.value ? 'soft' : 'ghost'"
-      :class="[
-        'min-h-11 shrink-0 justify-center px-2 md:min-h-8 md:px-1',
-        model === tab.value ? 'font-semibold' : 'text-muted hover:text-default',
-      ]"
-      role="tab"
-      :aria-selected="model === tab.value"
-      @click="model = tab.value"
-    />
-  </div>
+  <LayoutSegmentedTabs v-model="model" :items="tabs" label="Right panel views" block class="w-full" />
 </template>

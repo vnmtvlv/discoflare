@@ -310,12 +310,17 @@ onBeforeRouteLeave(async () => {
     return false
   }
 })
+
+function retryLoad() {
+  return Promise.all([resourcesQ.refetch(), canvasQ.refetch()])
+}
 </script>
 
 <template>
   <div class="flex h-full min-h-0 min-w-0 flex-col">
     <header class="flex min-h-12 shrink-0 flex-wrap items-center gap-2 px-3 py-2 shadow-[0_1px_0_var(--ui-border)]">
-      <UIcon name="i-ph-selection-background" class="size-5" />
+      <LayoutMobileMenuButton />
+      <UIcon name="i-ph-selection-background" class="size-5 text-muted" />
       <UInput v-if="activeCanvas" v-model="canvasTitle" variant="none" aria-label="Canvas title" class="min-w-0 flex-1 sm:flex-none" :disabled="saving" :ui="{ base: 'px-1 font-semibold' }" @change="renameCanvas" />
       <span v-else class="font-semibold">Canvases</span>
       <div class="ml-auto flex max-w-full flex-wrap items-center gap-1">
@@ -340,8 +345,8 @@ onBeforeRouteLeave(async () => {
     <div v-if="connecting" class="shrink-0 border-b border-default bg-primary/10 px-4 py-2 text-sm text-default">
       {{ connectFrom ? 'Choose the second item.' : 'Choose the first item to connect.' }}
     </div>
-    <div v-if="resourcesQ.isPending.value || (selectedId && canvases.some(canvas => canvas.id === selectedId) && canvasQ.isPending.value)" class="p-6"><USkeleton class="h-72" /></div>
-    <UAlert v-else-if="resourcesQ.error.value || canvasQ.error.value" color="error" title="Could not load canvases." class="m-6" />
+    <div v-if="resourcesQ.isPending.value || (selectedId && canvases.some(canvas => canvas.id === selectedId) && canvasQ.isPending.value)" class="p-6"><LayoutSkeleton variant="cards" /></div>
+    <LayoutLoadError v-else-if="resourcesQ.error.value || canvasQ.error.value" message="Canvases did not load." :retry="retryLoad" />
     <div v-else-if="!activeCanvas" class="grid flex-1 place-items-center p-6">
       <UButton icon="i-ph-plus" label="Create first canvas" @click="nav.createCanvasOpen.value = true" />
     </div>

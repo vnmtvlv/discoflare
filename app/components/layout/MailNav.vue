@@ -37,7 +37,7 @@ async function compose() {
     :create-label="canCompose ? 'Compose email' : undefined"
     @create="compose"
   >
-    <USkeleton v-if="mailboxesQ.isPending.value" class="h-16" />
+    <LayoutSkeleton v-if="mailboxesQ.isPending.value" variant="nav" :rows="3" />
     <p v-else-if="!mailboxes.length" class="px-2 py-3 text-sm text-muted">
       No mailbox assigned yet.
     </p>

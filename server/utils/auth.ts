@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm'
 import { authUsers, roles, users, workspace } from '../../drizzle/schema'
 import type { PublicUser, SessionUser } from '../../shared/types'
 import { nowIso } from '../../shared/ids'
-import { authFromEvent } from './better-auth'
+import { sessionAuthFromEvent } from './better-auth'
 import { loadAuthRuntimeConfig } from './auth-config'
 import { authMode, cloudflareAccessIdentity, type CloudflareAccessIdentity } from './cloudflare-access'
 import { provisionWorkspace } from './bootstrap'
@@ -122,7 +122,16 @@ export async function activateOpenMember(event: H3Event, userId: string) {
   waitUntil(signalMembersChanged(env, 'main'))
 }
 
-export async function currentUser(event: H3Event): Promise<SessionUser | null> {
+const CURRENT_USER = Symbol('discoflare.currentUser')
+
+/** Resolves the signed-in user once per request; guards call this repeatedly. */
+export function currentUser(event: H3Event): Promise<SessionUser | null> {
+  const context = event.context as { [CURRENT_USER]?: Promise<SessionUser | null> }
+  context[CURRENT_USER] ??= resolveCurrentUser(event)
+  return context[CURRENT_USER]
+}
+
+async function resolveCurrentUser(event: H3Event): Promise<SessionUser | null> {
   const { env } = cf(event)
   const db = getDb(env.DB)
   if (authMode(env) === 'access') {
@@ -133,7 +142,7 @@ export async function currentUser(event: H3Event): Promise<SessionUser | null> {
       || await ensureDomainUser(event, identity)
     return sessionUser(event, row, identity.email)
   }
-  const auth = await authFromEvent(event)
+  const auth = await sessionAuthFromEvent(event)
   const sess = await auth.api.getSession({ headers: event.headers })
   if (sess?.user?.id) {
     const row = (await db.select().from(users).where(eq(users.id, sess.user.id)).limit(1))[0]

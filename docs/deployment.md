@@ -14,7 +14,7 @@ Cloudflare asks for the complete supported lifecycle grant when an account is co
 
 Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 
-The Base Installation does not accept or persist App Domain or Email Domain choices. After the workspace is healthy on `workers.dev`, its Owner may connect one App Domain and multiple Email Domains from **Workspace Settings → Cloudflare**. The workspace calls only fixed lifecycle endpoints with its Installation Control Credential; the broad OAuth credential remains encrypted in the Control Plane. The App Domain is the canonical HTTP origin; Email Domains are independent inbound and outbound mail identities, and each Email Domain belongs to exactly one Installation.
+The Base Installation does not accept or persist App Domain or Email Domain choices. After the workspace is healthy on `workers.dev`, its Owner may connect one App Domain and multiple Email Domains from **Workspace Settings → Cloudflare → Domains**. The workspace calls only fixed lifecycle endpoints with its Installation Control Credential; the broad OAuth credential remains encrypted in the Control Plane. The App Domain is the canonical HTTP origin; Email Domains are independent inbound and outbound mail identities, and each Email Domain belongs to exactly one Installation.
 
 Connecting an Email Domain enables Cloudflare Email Routing DNS for that exact apex or subdomain, onboards the same domain for Email Sending, and adds it to the owning Worker's bindings. Creating a Mailbox inside the workspace creates one exact literal-address Email Routing rule through the same fixed Installation Control Credential; deleting the Mailbox removes that rule first. Multiple Installations can therefore share a zone without sharing mail, while unknown addresses never route to a workspace. A domain already owned by another Installation is refused instead of being moved implicitly.
 
@@ -32,7 +32,7 @@ The button hands the public repository to Cloudflare. Everything account-specifi
 
 1. Fork or connect the repository to Workers Builds.
 2. Create or select the D1 database, R2 bucket, and KV namespace in the target Cloudflare account.
-3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workflow, Workers AI, and Container bindings. Do not reuse the public sandbox's account-specific IDs or hostname.
+3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workflow, Workers AI, and Container bindings. Do not reuse the public sandbox's account-specific IDs or hostname. Keep `"placement": { "mode": "smart" }`: request handling makes several D1 round trips, so running the Worker near the D1 primary is much faster for members far from that region than running it at their nearest edge.
 4. Add `AUTH_SECRET`, `ADMIN_EMAIL`, and a random 32-character-or-longer `ADMIN_SETUP_TOKEN` as Worker secrets. Add optional provider, RealtimeKit, Web Push, and email values only for integrations you intend to operate.
 5. Configure `pnpm run build` as the build command and `pnpm run deploy:built` as the deploy command. The deploy command applies D1 migrations before publishing the already-built Worker.
 6. Attach the public hostname and manually configure any desired Email Routing, Email Sending, DNS, OAuth callbacks, and sender-domain settings.
@@ -59,7 +59,7 @@ Copy the token when it is created because its raw value is never stored or shown
 
 ### Manual workspace backups
 
-The owner can open **Workspace Settings → Backups** and create a streaming TAR archive in either of two places: download it to the current device, or upload it manually to a configured S3-compatible bucket. The Worker exports D1 as ordered SQL fragments and streams every object from its bound R2 bucket into the archive with a metadata sidecar that preserves the original R2 key, HTTP metadata, custom metadata, ETag, size, and upload timestamp.
+The owner can open **Workspace Settings → Cloudflare → Backups** and create a streaming TAR archive in either of two places: download it to the current device, or upload it manually to a configured S3-compatible bucket. The Worker exports D1 as ordered SQL fragments and streams every object from its bound R2 bucket into the archive with a metadata sidecar that preserves the original R2 key, HTTP metadata, custom metadata, ETag, size, and upload timestamp.
 
 To restore D1, concatenate `database/*.sql` in filename order into one `restore.sql` and import that entire file into an empty database with `wrangler d1 execute <database-name> --remote --file=restore.sql`. Do not import the fragments separately: related rows and cycles require deferred foreign-key checks across the complete import. Restore each numbered R2 `.bin` object under the original key and metadata from its adjacent `.json` file. Confirm `summary.json` is present before using the archive.
 
@@ -69,11 +69,11 @@ The S3 Endpoint, Region, Bucket, Prefix, Access Key ID, and Secret Access Key ar
 
 ### Managed server deletion
 
-Only the workspace Owner can start deletion from **Workspace Settings → Danger Zone**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
+Only the workspace Owner can start deletion from **Workspace Settings → Cloudflare → Delete**. The UI offers the Backups section first; backup remains optional. Managed installations create a random 15-minute, one-use deletion claim in the installation KV and carry it to `discoflare.com/uninstall` in the URL fragment. The installer then uses a temporary Cloudflare OAuth session, finds exactly one marked Discoflare Worker by its hostname, displays the matched resources, and requires the full server origin to be typed before deletion.
 
 The installer presents the claim back to the installed Worker immediately before deletion. The Worker consumes it and empties its live `FILES` bucket through the R2 binding in batches. The installer removes every literal mailbox rule and Email Sending domain recorded for that Installation, detaches its App Domain, removes recorded Access applications, and permanently removes the Worker with its Durable Object state plus the managed D1, R2, and KV resources. It leaves the zone-level Email Routing service enabled because unrelated domains or rules may share it. When Agent Computer was enabled, it also removes that Installation's Workflow and Container application. It never follows or deletes the independently configured S3 backup destination. Unrelated DNS or email rules are left alone.
 
-Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Danger Zone links to the Cloudflare dashboard for manual cleanup.
+Manual deployments are not automatically destroyed: bindings may point to shared or operator-managed resources, and the application has no reliable ownership marker for each of them. Their Delete tab links to the Cloudflare dashboard for manual cleanup.
 
 For a manual deployment, set the owner and auth secrets:
 
@@ -104,7 +104,7 @@ Then run `pnpm deploy`. It applies the D1 migrations through the `DB` binding an
 
 ### Anonymous project heartbeat
 
-The guided installer configures `DISCOFLARE_TELEMETRY_ID`, `DISCOFLARE_TELEMETRY_TOKEN`, and a weekly Cron Trigger. The scheduled request contains only the random installation ID, version, timestamp, and boolean capability flags. The workspace owner can disable it in **Workspace Settings → Telemetry**; the scheduled handler then makes no outbound request.
+The guided installer configures `DISCOFLARE_TELEMETRY_ID`, `DISCOFLARE_TELEMETRY_TOKEN`, and a weekly Cron Trigger. The scheduled request contains only the random installation ID, version, timestamp, and boolean capability flags. The workspace owner can disable it in **Workspace Settings → Cloudflare → Telemetry**; the scheduled handler then makes no outbound request.
 
 Manual deployments have the same Cron Trigger but no telemetry credentials, so they do not report by default. To opt a manual deployment in, provision a unique ID and secret with the project registry and configure the corresponding Worker values.
 
@@ -166,9 +166,9 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 The first discoflare.com account release does not provision RealtimeKit. A later Control Plane flow may create its account resources for the Primary Installation, but its broad Cloudflare credential must never enter the workspace.
 
-Manual installations may enable Huddles by configuring RealtimeKit later in **Workspace Settings → Huddles**. Settings-supplied credentials are encrypted in D1 with `AUTH_SECRET` and take effect without a Worker redeploy.
+Manual installations may enable Huddles by configuring RealtimeKit later in **Workspace Settings → Live**. Settings-supplied credentials are encrypted in D1 with `AUTH_SECRET` and take effect without a Worker redeploy.
 
-The owner can instead configure RealtimeKit in **Workspace Settings → Huddles**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
+The owner can instead configure RealtimeKit in **Workspace Settings → Live**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
 
 ```
 wrangler secret put ADMIN_EMAIL

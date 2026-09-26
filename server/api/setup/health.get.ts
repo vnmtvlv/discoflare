@@ -51,6 +51,12 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
   let migrated = false
   let users = 0
   let ready = false
+  const checkFiles = env.FILES
+    ? env.FILES.head('__health__').catch(() => {
+        // head of missing key still proves the binding works on most runtimes
+      })
+    : null
+  const realtimekit = loadRealtimeKitConfig(env).then(realtimekitConfigured)
   if (env.DB) {
     try {
       migrated = await ensureMigrated(env.DB)
@@ -59,8 +65,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     }
     catch {
       try {
-        users = await userCount(env.DB)
-        ready = await workspaceReady(env.DB)
+        ;[users, ready] = await Promise.all([userCount(env.DB), workspaceReady(env.DB)])
       }
       catch {
         users = 0
@@ -69,15 +74,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
   }
 
   const ownerSetup = readOwnerSetupEnv(env)
-
-  if (env.FILES) {
-    try {
-      await env.FILES.head('__health__')
-    }
-    catch {
-      // head of missing key still proves the binding works on most runtimes
-    }
-  }
+  await checkFiles
 
   return {
     version: env.DISCOFLARE_VERSION?.trim() || packageVersion,
@@ -90,7 +87,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     ownerSetup: Boolean(ownerSetup && !ready),
     ownerEmailHint: ownerSetup && !ready ? maskedOwnerEmail(ownerSetup.email) : null,
     bindings,
-    realtimekit: realtimekitConfigured(await loadRealtimeKitConfig(env)),
+    realtimekit: await realtimekit,
     twitterAuth: Boolean(env.TWITTER_CLIENT_ID?.trim() && env.TWITTER_CLIENT_SECRET?.trim()),
     ...readAppBranding(env),
   }

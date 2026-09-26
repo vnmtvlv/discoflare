@@ -17,9 +17,9 @@ const filesQ = useQuery({
 
 <template>
   <div v-if="filesQ.isPending.value" class="p-3">
-    <USkeleton class="h-24" />
+    <LayoutSkeleton variant="cards" />
   </div>
-  <UAlert v-else-if="filesQ.error.value" color="error" title="Could not load files." class="m-3" />
+  <LayoutLoadError v-else-if="filesQ.error.value" message="Files did not load." :retry="filesQ.refetch" />
   <p v-else-if="!filesQ.data.value?.files.length" class="p-3 text-sm text-muted">No files yet.</p>
   <div v-else class="px-3 pb-3">
     <AttachmentGallery :attachments="filesQ.data.value?.files ?? []" />

@@ -77,15 +77,24 @@ export const INIT_SQL = d1ExecSql([
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */
+// An isolate serves one installation, so a schema that was present once stays
+// present for the isolate's lifetime. Skipping the probes saves three D1 round
+// trips on every public request.
+let migratedInIsolate = false
+
 export async function ensureMigrated(db: D1Database): Promise<boolean> {
+  if (migratedInIsolate) return true
   try {
     await db.prepare('SELECT id FROM workspace LIMIT 1').first()
   }
   catch {
     await db.exec(INIT_SQL)
   }
-  await db.prepare('SELECT kind FROM users LIMIT 1').first()
-  await db.prepare('SELECT user_id FROM agents LIMIT 1').first()
+  await Promise.all([
+    db.prepare('SELECT kind FROM users LIMIT 1').first(),
+    db.prepare('SELECT user_id FROM agents LIMIT 1').first(),
+  ])
+  migratedInIsolate = true
   return true
 }
 

@@ -15,6 +15,7 @@ import { boardPath } from '~~/shared/paths'
 definePageMeta({ layout: 'workspace', middleware: ['auth', 'manage-tasks'] })
 
 const { workspaceId } = useWorkspace()
+const isMobile = useIsMobile()
 const { api } = useApi()
 const qc = useQueryClient()
 const toast = useToast()
@@ -480,21 +481,21 @@ const boardMenu = computed(() => [[
 <template>
   <div class="flex h-full min-h-0 min-w-0 flex-col">
     <main class="flex-1 min-w-0 min-h-0 flex flex-col">
-      <header class="h-12 px-4 flex items-center gap-2 shrink-0 shadow-[0_1px_0_var(--ui-border)]">
-        <UIcon name="i-ph-kanban" class="size-5" />
-        <span class="truncate font-semibold">{{ activeBoard?.name || 'Tasks' }}</span>
-        <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
-        <div class="ml-auto flex items-center gap-1">
-          <UInput v-model="taskSearch" icon="i-ph-magnifying-glass" placeholder="Search tasks" aria-label="Search tasks" class="w-44" />
+      <LayoutPageHeader icon="i-ph-kanban" :title="activeBoard?.name || 'Tasks'" :loading="boardsQ.isPending.value">
+        <template #meta>
+          <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
+        </template>
+        <template #actions>
+          <UInput v-model="taskSearch" icon="i-ph-magnifying-glass" placeholder="Search tasks" aria-label="Search tasks" class="w-28 sm:w-44" />
           <UDropdownMenu v-if="activeBoard" :items="boardMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Board actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived" icon="i-ph-plus" label="Task" :disabled="!activeBoard" @click="openCreateTask" />
-        </div>
-      </header>
+          <UButton v-if="!showArchived" icon="i-ph-plus" :label="isMobile ? undefined : 'Task'" aria-label="New task" :disabled="!activeBoard" @click="openCreateTask" />
+        </template>
+      </LayoutPageHeader>
 
-      <div v-if="boardsQ.isPending.value" class="p-6"><USkeleton class="h-64" /></div>
-      <UAlert v-else-if="boardsQ.error.value" color="error" title="Could not load task boards." class="m-6" />
+      <LayoutSkeleton v-if="boardsQ.isPending.value" variant="board" />
+      <LayoutLoadError v-else-if="boardsQ.error.value" message="Task boards did not load." :retry="boardsQ.refetch" />
       <div v-else class="flex-1 min-h-0 overflow-auto p-4">
         <div v-if="!activeBoard" class="h-full flex items-center justify-center">
           <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first board" @click="openCreateBoard" />
@@ -631,8 +632,8 @@ const boardMenu = computed(() => [[
 
     <USlideover :open="Boolean(selectedTaskId)" :title="selectedTask ? taskLabel(selectedTask) : 'Task'" :ui="{ content: 'w-full max-w-2xl' }" @update:open="value => { if (!value) selectedTaskId = null }">
       <template #body>
-        <div v-if="taskQ.isPending.value" class="space-y-3"><USkeleton class="h-10" /><USkeleton class="h-64" /></div>
-        <UAlert v-else-if="taskQ.error.value" color="error" title="Could not load task." />
+        <LayoutSkeleton v-if="taskQ.isPending.value" variant="form" />
+        <LayoutLoadError v-else-if="taskQ.error.value" message="This task did not load." :retry="taskQ.refetch" />
         <div v-else-if="selectedTask" class="space-y-6">
           <div v-if="selectedTask.status === 'running'" class="flex items-center gap-2">
             <UButton color="error" variant="soft" icon="i-ph-stop" label="Cancel" @click="cancelTask(selectedTask.id)" />

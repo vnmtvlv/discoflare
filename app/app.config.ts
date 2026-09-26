@@ -7,6 +7,12 @@ export default defineAppConfig({
       primary: 'cloudflare',
       neutral: 'neutral',
     },
+    // Solid alerts read as alarms; the tinted style is the house default.
+    alert: {
+      defaultVariants: {
+        variant: 'subtle',
+      },
+    },
     icons: {
       loading: 'i-ph-spinner',
       close: 'i-ph-x',

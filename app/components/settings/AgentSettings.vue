@@ -205,8 +205,8 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
     description="Agents can talk in channels and read public URLs through Cloudflare Browser Run. Linux command execution is a later connection: enable Agent Computer after Workers Paid."
   />
 
-  <USkeleton v-if="agentsQ.isPending.value" class="h-64 mt-6" />
-  <UAlert v-else-if="agentsQ.error.value" color="error" title="Could not load agents." class="mt-6" />
+  <LayoutSkeleton v-if="agentsQ.isPending.value" variant="cards" class="mt-6" />
+  <LayoutLoadError v-else-if="agentsQ.error.value" message="Agents did not load." :retry="agentsQ.refetch" />
   <div v-else class="mt-6 grid min-h-[520px] gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
     <div class="space-y-1">
       <button

@@ -62,9 +62,9 @@ async function unpin(messageId: string) {
 
 <template>
   <div v-if="pinsQ.isPending.value" class="p-3">
-    <USkeleton class="h-24" />
+    <LayoutSkeleton variant="cards" />
   </div>
-  <UAlert v-else-if="pinsQ.error.value" color="error" title="Could not load pinned messages." class="m-3" />
+  <LayoutLoadError v-else-if="pinsQ.error.value" message="Pinned messages did not load." :retry="pinsQ.refetch" />
   <p v-else-if="!pinsQ.data.value?.messages.length" class="p-3 text-sm text-muted">No pinned messages yet.</p>
   <ul v-else class="p-2">
     <li

@@ -95,7 +95,7 @@ onMounted(load)
 <template>
   <div>
     <h1 class="text-xl font-semibold text-highlighted">Authentication</h1>
-    <USkeleton v-if="loading" class="mt-6 h-64 w-full" />
+    <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />
     <UAlert
       v-else-if="auth?.mode === 'access'"
       class="mt-6"

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { authAccounts, authProviderCredentials, authSettings } from '../../../../drizzle/schema'
 import type { AuthCredentialProvider, AuthSettingsAdminDTO } from '../../../../shared/types'
 import { nowIso, WORKSPACE_ID } from '../../../../shared/ids'
-import { AUTH_PROVIDERS, authSecret, authSettingsAdminDto, loadAuthRuntimeConfig } from '../../../utils/auth-config'
+import { AUTH_PROVIDERS, authSecret, authSettingsAdminDto, forgetSessionAuthConfig, loadAuthRuntimeConfig } from '../../../utils/auth-config'
 import { encryptAuthSecret } from '../../../utils/auth-secrets'
 import { cf, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
@@ -160,5 +160,6 @@ export default defineEventHandler(async (event): Promise<{ auth: AuthSettingsAdm
       credentials: changedCredentials,
     },
   })
+  forgetSessionAuthConfig()
   return { auth: authSettingsAdminDto(await loadAuthRuntimeConfig(env, getRequestURL(event).origin)) }
 })

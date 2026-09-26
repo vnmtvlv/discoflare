@@ -63,8 +63,8 @@ const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMa
       :create-label="archived ? undefined : 'Create database'"
       @create="nav.createDatabaseOpen.value = true"
     >
-      <USkeleton v-if="resourcesQ.isPending.value" class="h-12" />
-      <p v-else-if="resourcesQ.error.value" class="px-2 py-2 text-sm text-error">Could not load Data.</p>
+      <LayoutSkeleton v-if="resourcesQ.isPending.value" variant="nav" :rows="2" />
+      <LayoutLoadError v-else-if="resourcesQ.error.value" inline message="Data did not load." :retry="resourcesQ.refetch" />
       <p v-else-if="!databases.length" class="px-2 py-2 text-sm text-muted">{{ archived ? 'Nothing archived.' : 'No databases yet.' }}</p>
       <ul v-else>
         <li v-for="database in databases" :key="database.id">
@@ -78,7 +78,7 @@ const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMa
     </LayoutNavSection>
 
     <LayoutNavSection label="Docs" collapse-key="data:documents" create-label="Create document" @create="nav.createDocumentOpen.value = true">
-      <USkeleton v-if="resourcesQ.isPending.value" class="h-12" />
+      <LayoutSkeleton v-if="resourcesQ.isPending.value" variant="nav" :rows="2" />
       <p v-else-if="!documents.length" class="px-2 py-2 text-sm text-muted">No documents yet.</p>
       <ul v-else>
         <li v-for="document in documents" :key="document.id">
@@ -91,7 +91,7 @@ const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMa
     </LayoutNavSection>
 
     <LayoutNavSection label="Canvases" collapse-key="data:canvases" create-label="Create canvas" @create="nav.createCanvasOpen.value = true">
-      <USkeleton v-if="resourcesQ.isPending.value" class="h-12" />
+      <LayoutSkeleton v-if="resourcesQ.isPending.value" variant="nav" :rows="2" />
       <p v-else-if="!canvases.length" class="px-2 py-2 text-sm text-muted">No canvases yet.</p>
       <ul v-else>
         <li v-for="canvas in canvases" :key="canvas.id">

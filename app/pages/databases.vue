@@ -8,6 +8,7 @@ import type { DataResourcesDTO, DatabaseDTO, DatabaseFieldDTO, DatabaseItemDTO, 
 definePageMeta({ layout: 'workspace', middleware: ['auth', 'manage-databases'] })
 
 const { workspaceId } = useWorkspace()
+const isMobile = useIsMobile()
 const { api } = useApi()
 const route = useRoute()
 const nav = useNavActions()
@@ -540,26 +541,34 @@ const viewMenu = computed(() => activeView.value ? [[
 ], [
   { label: 'Delete view', icon: 'i-ph-trash', color: 'error' as const, disabled: views.value.length <= 1, onSelect: () => deleteView(activeView.value!) },
 ]] : [])
+
+function retryLoad() {
+  return Promise.all([resourcesQ.refetch(), databaseQ.refetch()])
+}
 </script>
 
 <template>
   <div class="flex h-full min-h-0 min-w-0 flex-col">
     <main class="flex min-h-0 min-w-0 flex-1 flex-col">
-      <header class="flex h-12 shrink-0 items-center gap-2 px-4 shadow-[0_1px_0_var(--ui-border)]">
-        <UIcon :name="activeView ? viewIcon(activeView.layout) : 'i-ph-table'" class="size-5" />
-        <span class="truncate font-semibold">{{ activeDatabase?.name || 'Data' }}</span>
-        <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
-        <div class="ml-auto flex items-center gap-1">
+      <LayoutPageHeader
+        :icon="activeView ? viewIcon(activeView.layout) : 'i-ph-table'"
+        :title="activeDatabase?.name || 'Data'"
+        :loading="resourcesQ.isPending.value || (Boolean(activeDatabaseSummary) && databaseQ.isPending.value)"
+      >
+        <template #meta>
+          <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
+        </template>
+        <template #actions>
           <DataBookmarkButton v-if="activeView" :workspace-id="workspaceId" target-type="database_view" :target-id="activeView.id" />
           <UDropdownMenu v-if="activeDatabase" :items="databaseMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Database actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived" icon="i-ph-plus" label="Record" :disabled="!activeDatabase" @click="addItem" />
-        </div>
-      </header>
+          <UButton v-if="!showArchived" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" :disabled="!activeDatabase" @click="addItem" />
+        </template>
+      </LayoutPageHeader>
 
-      <div v-if="resourcesQ.isPending.value || (activeDatabaseSummary && databaseQ.isPending.value)" class="p-6"><USkeleton class="h-64" /></div>
-      <UAlert v-else-if="resourcesQ.error.value || databaseQ.error.value" color="error" title="Could not load databases." class="m-6" />
+      <div v-if="resourcesQ.isPending.value || (activeDatabaseSummary && databaseQ.isPending.value)"><LayoutSkeleton variant="table" /></div>
+      <LayoutLoadError v-else-if="resourcesQ.error.value || databaseQ.error.value" message="Data did not load." :retry="retryLoad" />
       <div v-else-if="!activeDatabase" class="grid flex-1 place-items-center p-6">
         <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first database" @click="openCreateDatabase" />
         <span v-else class="text-sm text-muted">Nothing archived</span>

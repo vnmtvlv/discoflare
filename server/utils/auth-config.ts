@@ -84,10 +84,37 @@ async function ensureSettings(env: DiscoflareEnv) {
   return (await db.select().from(authSettings).where(eq(authSettings.id, 'main')).limit(1))[0]!
 }
 
+// Session checks run on every API request. Reading two settings rows from a
+// distant D1 primary each time dominated request latency, so session-only
+// callers reuse the resolved config briefly within an isolate. Sign-in, signup
+// and settings flows still read the rows fresh.
+const SESSION_CONFIG_TTL_MS = 30_000
+let sessionConfigCache: { key: string, expiresAt: number, value: Promise<AuthRuntimeConfig> } | null = null
+
+export function loadSessionAuthConfig(env: DiscoflareEnv, baseURL?: string): Promise<AuthRuntimeConfig> {
+  const key = baseURL ?? ''
+  const now = Date.now()
+  if (sessionConfigCache && sessionConfigCache.key === key && sessionConfigCache.expiresAt > now) {
+    return sessionConfigCache.value
+  }
+  const value = loadAuthRuntimeConfig(env, baseURL)
+  sessionConfigCache = { key, expiresAt: now + SESSION_CONFIG_TTL_MS, value }
+  value.catch(() => {
+    if (sessionConfigCache?.value === value) sessionConfigCache = null
+  })
+  return value
+}
+
+export function forgetSessionAuthConfig() {
+  sessionConfigCache = null
+}
+
 export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string): Promise<AuthRuntimeConfig> {
   const db = getDb(env.DB)
-  const settings = await ensureSettings(env)
-  const stored = await db.select().from(authProviderCredentials)
+  const [settings, stored] = await Promise.all([
+    ensureSettings(env),
+    db.select().from(authProviderCredentials),
+  ])
   const credentials: Partial<Record<AuthCredentialProvider, Credential>> = {}
   const secret = authSecret(env, baseURL)
 

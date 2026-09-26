@@ -34,7 +34,7 @@ const adminUrl = 'https://discoflare.com/admin'
       />
     </div>
 
-    <USkeleton v-if="updateQ.isPending.value" class="mt-8 h-44" />
+    <LayoutSkeleton v-if="updateQ.isPending.value" variant="form" :rows="2" class="mt-8" />
     <UAlert
       v-else-if="updateQ.error.value"
       class="mt-8"

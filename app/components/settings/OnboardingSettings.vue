@@ -118,7 +118,7 @@ onMounted(load)
       />
     </div>
 
-    <USkeleton v-if="loading" class="mt-6 h-80 w-full" />
+    <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />
     <template v-else>
       <div class="mt-6 flex flex-wrap gap-2">
         <UButton

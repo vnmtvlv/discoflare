@@ -123,12 +123,19 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   return { userId, workspaceId, channelId: generalId }
 }
 
+// Deployment variables only change with a new deployment (and a new isolate),
+// so once the workspace exists and mail is synced there is nothing left to do.
+let bootstrappedInIsolate = false
+
 export async function ensureAdminFromEnv(event: H3Event): Promise<{ users: number; provisioned: boolean }> {
   const { env } = cf(event)
   await ensureMigrated(env.DB)
   const users = await userCount(env.DB)
   if (users > 0) {
-    await ensureWorkspaceMailFromEnv(env)
+    if (!bootstrappedInIsolate) {
+      await ensureWorkspaceMailFromEnv(env)
+      bootstrappedInIsolate = true
+    }
     return { users, provisioned: false }
   }
   const seed = readAdminEnv(env)
