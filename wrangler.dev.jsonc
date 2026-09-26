@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "discoflare-dev",
-  // Local Nuxt skips AI, Browser, Workflows, and Containers: those bindings
+  // Local Nuxt skips AI and Browser: those bindings
   // start a remote wrangler session and fail without CLOUDFLARE_API_TOKEN.
   "main": "workers/index.ts",
   "compatibility_date": "2026-09-02",

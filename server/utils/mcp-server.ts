@@ -25,7 +25,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
   const server = new McpServer({ name: 'Discoflare', version: packageVersion })
 
   server.registerTool('list_task_boards', {
-    description: 'List task boards with their tasks, labels, dependencies, checklist counts, and latest run status.',
+    description: 'List task boards with their tasks, labels, dependencies, and checklist counts.',
     inputSchema: { includeArchived: z.boolean().default(false) },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ includeArchived }) => {
@@ -33,7 +33,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
   })
 
   server.registerTool('get_task', {
-    description: 'Get one task by UUID or human-readable number, with its labels, dependencies, checklist, attachments, and run history.',
+    description: 'Get one task by UUID or human-readable number, with its labels, dependencies, checklist, and attachments.',
     inputSchema: { taskId: taskReferenceSchema.describe('Task UUID or human-readable number') },
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async ({ taskId }) => {
@@ -61,7 +61,7 @@ export function createDiscoflareMcpServer({ env, principal, schedule }: McpServe
   })
 
   server.registerTool('update_task', {
-    description: 'Update, move, archive, or restore a task by UUID or human-readable number. A running task must be cancelled before it can be changed.',
+    description: 'Update, move, archive, or restore a task by UUID or human-readable number.',
     inputSchema: {
       taskId: taskReferenceSchema.describe('Task UUID or human-readable number'),
       title: z.string().trim().min(1).max(160).optional(),

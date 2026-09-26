@@ -4,9 +4,6 @@
 .nuxt
 .nitro
 .installer
-.preview
-.wrangler.preview.generated.jsonc
-.wrangler.preview-migrations.generated.jsonc
 .cache
 dist
 

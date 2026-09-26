@@ -19,11 +19,9 @@ Nuxt/Nitro Worker
   ├─ WorkspaceDO presence
   ├─ NotificationDO D1 outbox delivery + retries
   ├─ RateLimitDO per ip:/user:
-  ├─ AgentDO      one coordinator + isolated Think facets; optional Computer files
-  ├─ Workflows    durable Task Runs (Agent Computer)
+  ├─ AgentDO      one coordinator + isolated Think facets
   ├─ Workers AI   default model inference
-  ├─ Browser Run  public URL markdown, screenshots, and links
-  └─ Container    optional Linux execution backend for Agent Computers
+  └─ Browser Run  public URL markdown, screenshots, and links
 
 RealtimeKit
   Live audio/video  ◄── participant token from Worker
@@ -42,18 +40,18 @@ RealtimeKit
 8. A login method is effective only when both its owner-controlled switch and credentials/capability are present. Deployment credentials override encrypted D1 credentials and are never editable through the app.
 9. Web Push subscriptions and its delivery outbox live in D1. Message and Live session writes enqueue notification rows in the same D1 batch; `NotificationDO` uses alarms to deliver and retry without another Worker or process.
 10. Agents are real Members in the shared author/access model, but never authentication identities. `users.kind` distinguishes humans from agents; only humans map to either verified Access identities or Better Auth identities and sessions.
-11. One top-level `DiscoflareAgent` coordinator is named `agent:<agentId>`. Each Channel or Thread gets a `DiscoflareThink` sub-agent with its own SQLite transcript; each Task Run gets a separate Think sub-agent. Conversation memory and concurrent task reasoning cannot leak across those facets.
+11. One top-level `DiscoflareAgent` coordinator is named `agent:<agentId>`. Each Channel or Thread gets a `DiscoflareThink` sub-agent with its own SQLite transcript, so conversation memory cannot leak across facets.
 12. The default Member Role is chat-only. Task reads and writes require `manageTasks`; Agent discovery, chat invocation, control, and configuration require `manageWorkspace`. Task managers receive only a redacted Agent assignment list. The UI hides unavailable administrative surfaces, but the Worker API and Durable Objects are the authorization boundary.
-13. One Task Run maps to one Cloudflare Workflow instance. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for execution.
+13. Chat turns use Think's durable FIFO submission ledger directly, including idempotent admission, cancellation, recovery, and approval continuation. D1 mirrors only workspace-visible active-turn state; Think remains authoritative for the conversation.
 14. Terms, Privacy, and Workspace rules are one immutable onboarding revision in D1. Access, email, and social admissions record acceptance of the current revision before a pending User can become an active Member; later publications apply only to future admissions.
-15. Chat and public-web tools do not require Agent Computer. Computer is an optional connection: `@cloudflare/computer` keeps the filesystem in the Agent DO's SQLite storage, and a Container is the replaceable Linux execution backend. Durable Task Runs that execute commands require Computer. The Container is never the source of Agent identity.
+15. Agents reply in chat and may read or create Tasks through the same authorized domain operations as HTTP and MCP. They have no project, repository, filesystem, shell, Workflow, or Container execution capability. Those connections are deferred until their lifecycle and isolation model is designed separately.
 16. Default inference is Workers AI through the `AI` binding. A profile stores a model id, not a vendor key. Public-web reading uses the `BROWSER` binding (Cloudflare Browser Run Quick Actions) on a caller-supplied http(s) URL after SSRF checks. That is not a search index. The core architecture has no Hermes, OpenRouter Spawn, Neon, or external machine dependency.
 17. A Mailbox is a private text Channel marked by `email_mailboxes`; an Email Conversation is its ordinary child Thread. Email messages extend `messages`, while Internal Notes remain plain Messages. D1 owns the searchable conversation facts and mailbox registry, while R2 owns raw MIME and attachment bytes. Each Installation may own multiple Email Domains and an Email Sending binding; an Email Domain belongs to exactly one Installation. Every Mailbox has one exact Cloudflare literal-address routing rule to that workspace Worker, so multiple Installations can share a zone without sharing mail and unknown addresses never reach the application. Agent mail tools treat external fields as untrusted data, use the same Mailbox grants as humans, and require durable human approval before external sending.
 18. Guided installation authority lives in the private discoflare.com Control Plane. It stores a renewable Cloudflare OAuth credential encrypted at rest and exposes only fixed Installation lifecycle operations; the credential never enters a workspace Worker. The first Installation in an account is Primary and is the only one eligible to own account-wide integrations such as RealtimeKit. Each workspace receives a random Installation Control Credential for its own App Domain, Email Domains, and exact Mailbox routes; the Control Plane stores its hash and never exposes a general Cloudflare proxy. The Owner invokes those fixed operations from Workspace Settings. Workspace chat, files, Data, and Agent state remain in the customer's Cloudflare account and continue if the Control Plane is unavailable; provisioning and other infrastructure changes pause. No separate account-local Admin Worker exists. Because Cloudflare permissions are account- and zone-scoped, a dedicated Cloudflare account is the effective isolation boundary.
 19. A fresh Access installation becomes ready when the deployment-selected Owner email first arrives with a verified Access identity. A fresh builtin installation remains unavailable until that Owner completes the private Owner Setup Claim. Both paths create the Owner and Workspace atomically, and other identities cannot bootstrap the installation.
 20. Data is human-managed workspace state. The `manageDatabases` Grant controls Database discovery, shared Views, schema and Record mutations, Documents, and Canvases; the default Member Role remains chat-only. Bookmark writes derive the User from the authenticated session and can change only that User's private shortcuts. The Data navigation index returns only lightweight resource and View metadata, while an active Database View, Document, or Canvas body loads on demand. Tasks and Mail remain purpose-built models rather than special cases of Data.
 21. Gadgets are declarative, versioned internal applications, not generated code sandboxes. A published Gadget can compose multiple Database Views through explicit Bindings. Each Version snapshots the Gadget's name, description, interface, Bindings, and Role access so draft changes remain manager-only until publication. Each Binding freezes semantic Database, View, Field, and operation identifiers; runtime reads and mutations re-authorize the current member against both their Gadget Grant and the published Version's Role access. Jev may select from prepared sources and presentation candidates while authoring a draft, but no model runs when a published Gadget opens or invokes an action.
-22. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. A token names an active Human or Agent principal separately from the Human who created it. Every request resolves that principal's current Role Grants and intersects them with the credential's scopes. Browser, MCP, Agent, and Workflow writes reuse the same authorized Task and Document domain operations. Audit entries name the acting principal and retain credential, delegator, and Task Run attribution; no raw SQL or general browser-session bypass is exposed.
+22. The same Nuxt Worker serves stateless Streamable HTTP MCP at `/mcp`. MCP Access Tokens are owner-issued, revocable credentials whose raw value is shown once and whose SHA-256 digest is stored in D1. A token names an active Human or Agent principal separately from the Human who created it. Every request resolves that principal's current Role Grants and intersects them with the credential's scopes. Browser, MCP, and Agent calls reuse the same authorized Task and Document domain operations. Audit entries name the acting principal and retain credential and delegator attribution; no raw SQL or general browser-session bypass is exposed.
 
 ## Email flow
 
@@ -66,26 +64,17 @@ New email/reply → mailbox send permission → owning workspace Worker → Emai
 Internal note   → ordinary Message in the same Thread → workspace only
 ```
 
-## Agent task flow
+## Agent task access
 
 ```
-Human creates Task in D1
-  → D1 atomically claims the Task and snapshots its Task and Agent configuration
-  → Worker asks agent:<id> Agent DO to start
-  → Agent coordinator opens an isolated Think facet for the run
-  → Think facet creates Workflow with run id
-  → Workflow marks Task Run running in D1
-  → Think runs the model through Workers AI
-  → tools read and write the Agent DO's durable Computer filesystem
-  → a risky command parks durably and appears on the Task Run for a task manager to approve or reject
-  → command tools synchronize that filesystem with the Container backend and execute
-  → Workflow records review/done/failed in D1 and clears the active-run claim
-  → optional result Message is authored by the Agent
+Human talks to an Agent in a Channel or Thread
+  → Agent resolves its current Role and the initiating Human delegation
+  → list_tasks or get_task reads authorized Task data from D1
+  → create_task writes through the shared Task domain service
+  → Workspace DO fans out the Task change to connected clients
 ```
 
-Only a Workflow can enter or leave `running`. Cancellation terminates the Workflow and restores the pre-run Task status; reconciliation repairs Task and Task Run state from the Workflow status after an interrupted request. Task mutations and live progress fan out through the Workspace DO.
-
-The separation is intentional: D1 answers “what does the workspace believe?”, the Agent DO and Computer answer “what does this agent remember and keep?”, Workflow answers “where is this execution?”, Container answers “where does Linux code run?”, and R2 answers “which large workspace attachments must survive?”.
+Task assignment is organizational metadata; it does not start autonomous execution. D1 remains the Task source of truth and the Agent Durable Object retains only conversation state.
 
 ## Agent chat flow
 
@@ -97,7 +86,7 @@ Human mentions Agent, or sends a DM containing an Agent
   → Think durably queues one idempotent submission for that Message
   → Lifecycle hooks expose tool progress and stream one editable Agent Message
   → Public http(s) URLs may be read through Browser Run Quick Actions after SSRF checks
-  → Risky Computer or mail actions park durably until an authorized Member approves or rejects them
+  → External mail actions park durably until an authorized Member approves or rejects them
   → In a 1:1 DM, the facet creates/reuses a Thread rooted at that Message
 ```
 
@@ -117,7 +106,7 @@ Replies in that DM Thread keep addressing the same Agent without another mention
 
 - `pnpm dev` — Nuxt development server with locally simulated Cloudflare bindings.
 - `pnpm dev:full` — built Worker in local Wrangler, including WebSockets and Durable Object hibernation.
-- Agent Computer execution development additionally needs Docker and remote Workers AI access; container startup takes longer than ordinary Worker startup. Browser Run in local Wrangler uses the remote binding.
+- Browser Run in local Wrangler uses the remote binding.
 - `pnpm dev:remote` — local frontend with HTTP requests proxied to a selected deployment and WebSockets connected directly to it. Personal targets live in ignored env files; see [Remote development](remote-development.md).
 - `pnpm deploy` — build, apply D1 migrations by binding name, then deploy.
 - The weekly telemetry Cron is best-effort and owner-controlled. Its payload is limited to a random installation ID, release version, timestamp, and capability booleans; workspace data never crosses this boundary.

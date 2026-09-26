@@ -26,8 +26,6 @@ export default defineEventHandler(async (event) => {
   await requireBoard(env, boardId)
   const moving = await requireTask(env, body.taskId)
   if (moving.boardId !== boardId || moving.archivedAt) fail(404, 'not_found', 'Task not found on this board')
-  if (moving.status === 'running') fail(409, 'task_running', 'Cancel the running task before moving it')
-
   const destination = await db.select({ id: tasks.id }).from(tasks)
     .where(and(eq(tasks.boardId, boardId), eq(tasks.status, body.status), isNull(tasks.archivedAt)))
     .orderBy(tasks.position, tasks.createdAt)

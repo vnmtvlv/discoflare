@@ -3,7 +3,7 @@ import { taskAttachments, tasks } from '../../../drizzle/schema'
 import { WORKSPACE_ID } from '../../../shared/ids'
 import { Permission } from '../../../shared/permissions'
 import { signalTasksChanged } from '../../../workers/task-events'
-import { cf, fail } from '../../utils/cf'
+import { cf } from '../../utils/cf'
 import { getDb } from '../../utils/db'
 import { requireMember } from '../../utils/guards'
 import { writeAudit } from '../../utils/messages'
@@ -15,7 +15,6 @@ export default defineEventHandler(async (event) => {
   const { env, waitUntil } = cf(event)
   const db = getDb(env.DB)
   const task = await requireTask(env, id)
-  if (task.status === 'running') fail(409, 'task_running', 'Cancel the running task before deleting it')
   const taskId = task.id
   const attachments = await db.select({ r2Key: taskAttachments.r2Key }).from(taskAttachments).where(eq(taskAttachments.taskId, taskId))
   await db.delete(tasks).where(eq(tasks.id, taskId))

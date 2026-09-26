@@ -4,12 +4,10 @@ import { WorkspaceDurableObject } from './workspace-do'
 import { RateLimitDurableObject } from './rate-limit-do'
 import { NotificationDurableObject } from './notification-do'
 import { DiscoflareAgent, DiscoflareThink } from './discoflare-agent'
-import { WorkspaceProxy } from './agent-computer'
-import { AgentTaskWorkflow } from './agent-task-workflow'
 import { receiveMailGatewayRequest } from './mail-gateway-ingress'
 import { receivePrimaryMailSend, routeWorkspaceEmail } from './primary-mail-router'
 
-export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, DiscoflareThink, AgentTaskWorkflow, WorkspaceProxy }
+export { ChannelDurableObject, WorkspaceDurableObject, RateLimitDurableObject, NotificationDurableObject, DiscoflareAgent, DiscoflareThink }
 
 export default {
   async fetch(request: Request, env: DiscoflareEnv): Promise<Response> {

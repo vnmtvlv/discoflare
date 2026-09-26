@@ -119,10 +119,6 @@ async function disconnectApp() {
           <p class="mt-1 truncate font-medium text-highlighted">{{ status.workerName }}</p>
         </div>
         <div class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">Agent Computer</p>
-          <p class="mt-1 font-medium text-highlighted">{{ status.agentComputerEnabled ? 'Enabled' : 'Not enabled' }}</p>
-        </div>
-        <div class="rounded-lg border border-default p-4">
           <p class="text-xs text-muted">Live</p>
           <p class="mt-1 font-medium text-highlighted">{{ status.huddlesEnabled ? 'RealtimeKit connected' : 'Not connected' }}</p>
         </div>

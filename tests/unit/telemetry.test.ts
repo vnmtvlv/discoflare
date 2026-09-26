@@ -11,7 +11,6 @@ function env(overrides: Partial<DiscoflareEnv> = {}) {
     TICKETS: {},
     AI: {},
     AGENT_DO: {},
-    AGENT_TASK_WORKFLOW: {},
     DISCOFLARE_VERSION: '0.2.0',
     DISCOFLARE_TELEMETRY_ID: '019c-test-installation',
     DISCOFLARE_TELEMETRY_TOKEN: 'private-token',
@@ -51,11 +50,8 @@ describe('anonymous telemetry', () => {
     }))
   })
 
-  it('reports Agents from Workers AI and the Agent Durable Object without Agent Computer', () => {
-    const heartbeat = telemetryHeartbeat(env({
-      DISCOFLARE_AGENT_COMPUTER_ENABLED: 'false',
-      AGENT_TASK_WORKFLOW: undefined,
-    }))
+  it('reports Agents from Workers AI and the Agent Durable Object', () => {
+    const heartbeat = telemetryHeartbeat(env())
     expect(heartbeat?.capabilities.agents).toBe(true)
   })
 

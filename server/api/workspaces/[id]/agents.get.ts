@@ -21,7 +21,6 @@ export default defineEventHandler(async (event): Promise<{ agents: AgentDTO[] }>
       model: profile.model,
       instructions: profile.instructions,
       status: profile.status,
-      computerId: profile.computerId,
       lastActiveAt: profile.lastActiveAt,
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,

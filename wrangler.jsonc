@@ -4,7 +4,6 @@
   "main": ".output/server/index.mjs",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat"],
-  "preview_urls": true,
   "assets": {
     "binding": "ASSETS",
     "directory": ".output/public"
@@ -23,12 +22,6 @@
   ],
   "ai": { "binding": "AI" },
   "browser": { "binding": "BROWSER" },
-  "workflows": [
-    { "binding": "AGENT_TASK_WORKFLOW", "name": "discoflare-sandbox-agent-tasks", "class_name": "AgentTaskWorkflow" }
-  ],
-  "containers": [
-    { "class_name": "DiscoflareAgent", "image": "./Dockerfile.computer", "instance_type": "lite", "max_instances": 10 }
-  ],
   "d1_databases": [
     {
       "binding": "DB",
@@ -88,6 +81,5 @@
     "AUTH_REGISTRATION_MODE": "open",
     "APP_NAME": "Discoflare Sandbox",
     "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
-  },
-  "previews": {}
+  }
 }

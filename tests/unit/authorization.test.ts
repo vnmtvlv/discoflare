@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { authorize, AuthorizationError, WorkspaceAction, type AuthorizationContext } from '../../shared/authorization'
 import { Permission } from '../../shared/permissions'
-import { taskRunIdFromTurnMetadata } from '../../workers/agent-task-context'
 
 function context(overrides: Partial<AuthorizationContext> = {}): AuthorizationContext {
   return {
@@ -13,8 +12,8 @@ function context(overrides: Partial<AuthorizationContext> = {}): AuthorizationCo
 }
 
 describe('workspace authorization', () => {
-  it('intersects current role, credential scope, and run delegation', () => {
-    const allowed = context({ delegation: { by: 'human-1', taskRunId: 'run-1', actions: [WorkspaceAction.readTasks] } })
+  it('intersects current role, credential scope, and delegation', () => {
+    const allowed = context({ delegation: { by: 'human-1', actions: [WorkspaceAction.readTasks] } })
     expect(() => authorize(allowed, WorkspaceAction.readTasks)).not.toThrow()
     expect(() => authorize(allowed, WorkspaceAction.writeTasks)).toThrow(AuthorizationError)
 
@@ -25,12 +24,20 @@ describe('workspace authorization', () => {
     expect(() => authorize(missingRole, WorkspaceAction.readTasks)).toThrow('Agent role')
   })
 
-  it('resolves the durable Workflow id as the Task Run id', () => {
-    expect(taskRunIdFromTurnMetadata({
-      __thinkWorkflowPrompt: { workflow: { name: 'AGENT_TASK_WORKFLOW', id: 'run-42' } },
-    })).toBe('run-42')
-    expect(taskRunIdFromTurnMetadata({
-      __thinkWorkflowPrompt: { workflow: { name: 'OTHER_WORKFLOW', id: 'run-42' } },
-    })).toBeNull()
+  it('uses the invoking human authority for bounded Agent tools', () => {
+    const delegated = context({
+      principal: { ...context().principal, permissions: Permission.sendMessages, roleName: 'Member' },
+      credential: { kind: 'agent_runtime', id: 'channel-general' },
+      delegation: {
+        by: 'owner-1',
+        permissions: 0,
+        isOwner: true,
+        roleName: 'Owner',
+        actions: [WorkspaceAction.readTasks, WorkspaceAction.writeTasks],
+      },
+    })
+    expect(() => authorize(delegated, WorkspaceAction.readTasks)).not.toThrow()
+    expect(() => authorize(delegated, WorkspaceAction.writeTasks)).not.toThrow()
+    expect(() => authorize(delegated, WorkspaceAction.writeDocuments)).toThrow(AuthorizationError)
   })
 })

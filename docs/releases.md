@@ -40,12 +40,10 @@ GitHub Actions. Require PRs and resolved review conversations, allow only squash
 merges, block force pushes and deletion, and keep required approvals at zero
 while the maintainer is the only reviewer.
 
-CI builds the Worker without deploying or applying remote migrations. Agent Computer
-browser checks and release artifact verification remain separate release gates.
-The separate Worker Preview workflow may deploy an isolated PR environment after
-the repository's Preview credentials are configured. A Preview is branch evidence,
-not a release, sandbox promotion, or installer artifact. See
-[Worker Previews](worker-previews.md).
+CI builds the Worker without deploying or applying remote migrations. Browser
+checks and release artifact verification remain separate release gates. PRs do
+not currently create Cloudflare Worker Previews; that workflow will be designed
+and tested separately from the release path.
 
 ## Preparing a release
 

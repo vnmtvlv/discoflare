@@ -1,7 +1,6 @@
 import type { InstallationManagementStatusDTO } from '../../../../shared/releases'
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
-import { agentComputerConfigured } from '../../../../workers/env'
 import { workspaceMailDomains } from '../../../utils/workspace-mail'
 
 export default defineEventHandler(async (event): Promise<InstallationManagementStatusDTO> => {
@@ -24,7 +23,6 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
     primary: env.DISCOFLARE_PRIMARY === 'true',
     customDomainEnabled: env.DISCOFLARE_CUSTOM_DOMAIN === 'true',
     huddlesEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
-    agentComputerEnabled: agentComputerConfigured(env),
     emailEnabled: emailDomains.length > 0,
     emailDomains,
     emailEligible: env.DISCOFLARE_PRIMARY === 'true',

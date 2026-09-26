@@ -26,6 +26,7 @@ import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_
 import dataViewsAndBookmarksSql from '../../drizzle/migrations/0023_data_views_and_bookmarks.sql?raw'
 import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 import multipleEmailDomainsSql from '../../drizzle/migrations/0025_multiple_email_domains.sql?raw'
+import retireTaskExecutionSql from '../../drizzle/migrations/0026_retire_task_execution.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -74,6 +75,7 @@ export const INIT_SQL = d1ExecSql([
   dataViewsAndBookmarksSql,
   gadgetsSql,
   multipleEmailDomainsSql,
+  retireTaskExecutionSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

@@ -181,7 +181,8 @@ export const agents = sqliteTable('agents', {
   model: text('model').notNull().default('@cf/moonshotai/kimi-k2.7-code'),
   instructions: text('instructions').notNull().default(''),
   status: text('status', { enum: ['active', 'paused'] }).notNull().default('active'),
-  computerId: text('computer_id').notNull().unique(),
+  // Retained for compatibility with existing databases; no external runtime is provisioned.
+  legacyRuntimeId: text('computer_id').notNull().unique(),
   createdBy: text('created_by').notNull().references(() => users.id),
   lastActiveAt: text('last_active_at'),
   ...isoTimestamps(),
@@ -793,7 +794,7 @@ export const tasks = sqliteTable('tasks', {
   boardId: text('board_id').notNull().references(() => taskBoards.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description').notNull().default(''),
-  status: text('status', { enum: ['backlog', 'ready', 'running', 'review', 'done', 'failed'] }).notNull().default('backlog'),
+  status: text('status', { enum: ['backlog', 'ready', 'review', 'done', 'failed'] }).notNull().default('backlog'),
   priority: text('priority', { enum: ['low', 'normal', 'high', 'urgent'] }).notNull().default('normal'),
   dueAt: text('due_at'),
   position: integer('position').notNull().default(0),
@@ -803,13 +804,12 @@ export const tasks = sqliteTable('tasks', {
   resultSummary: text('result_summary'),
   resultDetails: text('result_details'),
   lastError: text('last_error'),
-  activeRunId: text('active_run_id'),
   archivedAt: text('archived_at'),
   ...isoTimestamps(),
 }, table => [
   index('tasks_board_status_position_idx').on(table.boardId, table.status, table.position),
   index('tasks_assignee_id_idx').on(table.assigneeId),
-  check('tasks_status_check', sql`${table.status} in ('backlog', 'ready', 'running', 'review', 'done', 'failed')`),
+  check('tasks_status_check', sql`${table.status} in ('backlog', 'ready', 'review', 'done', 'failed')`),
   check('tasks_priority_check', sql`${table.priority} in ('low', 'normal', 'high', 'urgent')`),
 ])
 
@@ -886,36 +886,6 @@ export const taskAttachments = sqliteTable('task_attachments', {
   check('task_attachments_size_check', sql`${table.sizeBytes} > 0`),
 ])
 
-export const taskRuns = sqliteTable('task_runs', {
-  id: text('id').primaryKey(),
-  taskId: text('task_id').notNull().references(() => tasks.id, { onDelete: 'cascade' }),
-  agentId: text('agent_id').notNull().references(() => agents.userId),
-  workflowId: text('workflow_id').unique(),
-  status: text('status', { enum: ['queued', 'running', 'completed', 'failed', 'cancelled'] }).notNull().default('queued'),
-  triggeredBy: text('triggered_by').references(() => users.id),
-  titleSnapshot: text('title_snapshot').notNull().default(''),
-  descriptionSnapshot: text('description_snapshot').notNull().default(''),
-  channelIdSnapshot: text('channel_id_snapshot'),
-  agentModelSnapshot: text('agent_model_snapshot').notNull().default(''),
-  agentInstructionsSnapshot: text('agent_instructions_snapshot').notNull().default(''),
-  taskStatusBefore: text('task_status_before', { enum: ['backlog', 'ready', 'review', 'done', 'failed'] }).notNull().default('ready'),
-  summary: text('summary'),
-  details: text('details'),
-  error: text('error'),
-  progress: text('progress'),
-  approvalJson: text('approval_json'),
-  startedAt: text('started_at'),
-  completedAt: text('completed_at'),
-  cancelledAt: text('cancelled_at'),
-  cancelledBy: text('cancelled_by').references(() => users.id),
-  createdAt: text('created_at').notNull(),
-}, table => [
-  index('task_runs_task_created_idx').on(table.taskId, table.createdAt),
-  index('task_runs_agent_status_idx').on(table.agentId, table.status),
-  check('task_runs_status_check', sql`${table.status} in ('queued', 'running', 'completed', 'failed', 'cancelled')`),
-  check('task_runs_previous_status_check', sql`${table.taskStatusBefore} in ('backlog', 'ready', 'review', 'done', 'failed')`),
-])
-
 export const schema = {
   identityKeys,
   authUsers,
@@ -970,5 +940,4 @@ export const schema = {
   taskDependencies,
   taskChecklistItems,
   taskAttachments,
-  taskRuns,
 }
