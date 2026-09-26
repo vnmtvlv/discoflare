@@ -168,7 +168,7 @@ async function saveMailbox() {
         v-else-if="!mail?.configured"
         color="warning"
         title="Email is not connected"
-        description="Connect an Email Domain in Workspace Settings → Cloudflare, then create addresses here."
+        description="Connect an Email Domain in Workspace Settings → Cloudflare → Domains, then create addresses here."
         class="mt-6"
       />
       <template v-else>
@@ -181,7 +181,7 @@ async function saveMailbox() {
           label="Email settings"
           class="mt-5"
         />
-        <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare." class="mt-5" />
+        <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare → Domains." class="mt-5" />
 
         <SettingsList
           v-if="tab === 'mailboxes'"

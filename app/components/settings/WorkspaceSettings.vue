@@ -98,7 +98,7 @@ const accessNav = computed(() => [
   ...(isOwner.value ? [{ id: 'onboarding' as const, label: 'Onboarding', icon: 'i-ph-flag-banner', keywords: ['welcome', 'first run', 'branding'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'audit' as const, label: 'Audit Log', icon: 'i-ph-list-magnifying-glass', keywords: ['history', 'activity', 'log'] }] : []),
 ])
-const installationSections = ['cloudflare', 'backups', 'updates', 'telemetry', 'danger']
+const installationSections = ['cloudflare', 'domains', 'backups', 'updates', 'telemetry', 'danger']
 const installationNav = computed(() => isOwner.value
   ? [{
       id: 'cloudflare' as const,
@@ -108,6 +108,7 @@ const installationNav = computed(() => isOwner.value
       badge: updatesQ.data.value?.updateAvailable ? String(updatesQ.data.value.releasesBehind) : undefined,
       keywords: [
         'management', 'instance token', 'managed', 'manual', 'deployment',
+        'domains', 'app domain', 'custom domain', 'email domain', 'dns', 'zone',
         'backup', 'download', 'export', 'restore', 'd1', 'r2',
         'updates', 'release', 'version', 'upgrade', 'github',
         'telemetry', 'anonymous', 'heartbeat', 'privacy', 'stats',

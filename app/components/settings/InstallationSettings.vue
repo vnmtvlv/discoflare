@@ -14,6 +14,7 @@ const section = defineModel<string>('section', { required: true })
 
 const tabs = computed(() => [
   { value: 'cloudflare', label: 'Overview' },
+  { value: 'domains', label: 'Domains' },
   { value: 'backups', label: 'Backups' },
   { value: 'updates', label: 'Updates', count: props.updatesBehind || undefined },
   { value: 'telemetry', label: 'Telemetry' },
@@ -24,7 +25,7 @@ const tabs = computed(() => [
 <template>
   <div>
     <LayoutSegmentedTabs v-model="section" :items="tabs" label="Installation settings" class="mb-8" />
-    <SettingsCloudflareSettings v-if="section === 'cloudflare'" :workspace-id="workspaceId" />
+    <SettingsCloudflareSettings v-if="section === 'cloudflare' || section === 'domains'" :workspace-id="workspaceId" :view="section === 'domains' ? 'domains' : 'overview'" />
     <SettingsBackupSettings v-else-if="section === 'backups'" :workspace-id="workspaceId" />
     <SettingsUpdateSettings v-else-if="section === 'updates'" :workspace-id="workspaceId" />
     <SettingsTelemetrySettings v-else-if="section === 'telemetry'" :workspace-id="workspaceId" />
