@@ -104,15 +104,16 @@ const connection = computed(() => {
   if (channelConnection.value === 'reconnecting' || workspaceConnection.value === 'reconnecting') return 'reconnecting'
   return 'connecting'
 })
-// Sockets connect within a moment on every page load; only surface the badge when
-// the connection is actually lost or a (re)connect is taking noticeably long.
+// The live connection only carries new events; content loads over HTTP. So say
+// nothing while it (re)connects normally, show a thin bar if reconnecting drags
+// on, and a quiet icon when the device is offline.
 const showConnection = ref(false)
 let connectionTimer: ReturnType<typeof setTimeout> | undefined
 watch(connection, (state) => {
   clearTimeout(connectionTimer)
   if (state === 'connected') showConnection.value = false
   else if (state === 'offline') showConnection.value = true
-  else connectionTimer = setTimeout(() => { showConnection.value = true }, 2500)
+  else connectionTimer = setTimeout(() => { showConnection.value = true }, state === 'connecting' ? 8000 : 3000)
 }, { immediate: true })
 onBeforeUnmount(() => clearTimeout(connectionTimer))
 const { start, join, leave } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
@@ -307,7 +308,7 @@ defineShortcuts({
 <template>
   <div class="relative flex-1 min-h-0 h-full flex bg-default">
     <div class="flex-1 min-w-0 flex flex-col min-h-0">
-      <header class="@container h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
+      <header class="@container relative h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
         <LayoutMobileMenuButton />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
         <UserAvatar v-else-if="!isGroup && others[0]" :user="others[0]" size="2xs" />
@@ -332,15 +333,11 @@ defineShortcuts({
         <USeparator v-if="!isDm && channel?.topic" orientation="vertical" class="h-4" />
         <p v-if="!isDm" class="text-sm text-muted truncate hidden lg:block min-w-0 flex-1">{{ channel?.topic }}</p>
         <div class="ml-auto flex items-center gap-2">
-          <UBadge
-            v-if="showConnection && connection !== 'connected'"
-            :color="connection === 'offline' ? 'error' : 'neutral'"
-            variant="subtle"
-            size="sm"
-            :icon="connection === 'offline' ? 'i-ph-wifi-slash' : 'i-ph-circle-notch'"
-            :class="connection === 'offline' ? '' : '[&_svg]:animate-spin'"
-            :label="connection === 'offline' ? 'Offline' : connection === 'reconnecting' ? 'Reconnecting' : 'Connecting'"
-          />
+          <UTooltip v-if="showConnection && connection === 'offline'" text="You're offline. New messages will appear when you reconnect.">
+            <span class="flex size-7 items-center justify-center text-muted" role="status" aria-label="Offline">
+              <UIcon name="i-ph-wifi-slash" class="size-4" />
+            </span>
+          </UTooltip>
           <!-- The header's own width decides, not the window's: with both side panels open the column can be narrow on a wide screen. -->
           <UButton
             class="@xl:hidden"
@@ -418,6 +415,7 @@ defineShortcuts({
             @click="ui.mobilePane = 'members'"
           />
         </div>
+        <LayoutActivityBar v-if="showConnection && connection !== 'connected' && connection !== 'offline'" label="Reconnecting to live updates" />
       </header>
       <div v-if="addOpen" class="border-b border-default p-2 shrink-0">
         <UInput v-model="addQ" size="sm" icon="i-ph-magnifying-glass" placeholder="Add people" />
