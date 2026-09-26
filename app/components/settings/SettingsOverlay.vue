@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useWindowSize } from '@vueuse/core'
 import { discoflareReleaseUrl } from '~~/shared/releases'
 
 export type SettingsItem = {
@@ -9,6 +8,8 @@ export type SettingsItem = {
   badge?: string
   /** Extra terms the search box should match, for settings people look for by another name. */
   keywords?: string[]
+  /** Sub-sections (tabs inside the pane) that keep this item highlighted. */
+  aliases?: string[]
 }
 export type SettingsGroup = { label?: string; items: SettingsItem[] }
 
@@ -16,6 +17,8 @@ const props = defineProps<{
   groups: SettingsGroup[]
   /** Shown above the nav — the account name or the workspace name. */
   title: string
+  /** The section list depends on data that is still loading. */
+  loading?: boolean
 }>()
 
 const open = defineModel<boolean>('open', { default: false })
@@ -23,8 +26,7 @@ const section = defineModel<string>('section', { default: '' })
 
 const appConfig = useAppConfig()
 const releaseUrl = computed(() => discoflareReleaseUrl(appConfig.version))
-const { width } = useWindowSize()
-const isMobile = computed(() => width.value > 0 && width.value < 768)
+const isMobile = useIsMobile()
 
 const query = ref('')
 /** On mobile the two panes become two screens: pick a section, then read it. */
@@ -43,9 +45,13 @@ const filtered = computed<SettingsGroup[]>(() => {
 })
 
 const visibleItems = computed(() => filtered.value.flatMap(group => group.items))
+function isActive(item: SettingsItem) {
+  return item.id === section.value || Boolean(item.aliases?.includes(section.value))
+}
+
 const activeLabel = computed(() => props.groups
   .flatMap(group => group.items)
-  .find(item => item.id === section.value)?.label ?? '')
+  .find(isActive)?.label ?? '')
 
 function select(id: string) {
   section.value = id
@@ -63,7 +69,7 @@ function submitSearch() {
 function step(delta: 1 | -1) {
   const items = visibleItems.value
   if (!items.length) return
-  const index = items.findIndex(item => item.id === section.value)
+  const index = items.findIndex(isActive)
   const next = items[Math.min(Math.max(index + delta, 0), items.length - 1)]
   if (next) section.value = next.id
 }
@@ -132,7 +138,8 @@ defineShortcuts({
               @keydown.up.prevent="step(-1)"
             />
 
-            <p v-if="!filtered.length" class="px-2.5 py-3 text-sm text-muted">
+            <LayoutSkeleton v-if="loading && !groups.some(group => group.items.length)" variant="nav" :rows="8" class="-mx-2" />
+            <p v-else-if="!filtered.length" class="px-2.5 py-3 text-sm text-muted">
               Nothing matches “{{ query }}”.
             </p>
 
@@ -147,10 +154,10 @@ defineShortcuts({
                   :key="item.id"
                   type="button"
                   class="flex h-11 w-full items-center gap-2 rounded-md px-2.5 text-start text-sm md:h-8"
-                  :class="section === item.id
+                  :class="isActive(item)
                     ? 'bg-accented text-highlighted'
                     : 'text-muted hover:bg-elevated hover:text-default'"
-                  :aria-current="section === item.id ? 'page' : undefined"
+                  :aria-current="isActive(item) ? 'page' : undefined"
                   @click="select(item.id)"
                 >
                   <UIcon :name="item.icon" class="size-[18px] shrink-0" />

@@ -5,6 +5,11 @@ import type { MailSettingsDTO, MailboxPermission, MemberDTO } from '~~/shared/ty
 const props = defineProps<{ workspaceId: string }>()
 const toast = useToast()
 const qc = useQueryClient()
+const { api } = useApi()
+const tab = ref<'mailboxes' | 'domains'>('mailboxes')
+const createOpen = ref(false)
+const deleteOpen = ref(false)
+const accessQuery = ref('')
 const selectedId = ref<string | null>(null)
 const localPart = ref('')
 const domainId = ref('')
@@ -17,11 +22,11 @@ const grants = reactive<Record<string, 'none' | MailboxPermission>>({})
 
 const mailQ = useQuery({
   queryKey: computed(() => ['mail-settings', props.workspaceId]),
-  queryFn: () => $fetch<{ mail: MailSettingsDTO }>(`/api/workspaces/${props.workspaceId}/mail`),
+  queryFn: () => api<{ mail: MailSettingsDTO }>(`/api/workspaces/${props.workspaceId}/mail`),
 })
 const membersQ = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
-  queryFn: () => $fetch<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
+  queryFn: () => api<{ members: MemberDTO[] }>(`/api/workspaces/${props.workspaceId}/members`),
 })
 const mail = computed(() => mailQ.data.value?.mail)
 const mailboxes = computed(() => mail.value?.mailboxes ?? [])
@@ -36,21 +41,44 @@ const permissionOptions = [
   { label: 'Manage', value: 'manage' },
 ]
 
+// No selection shows the mailbox list; a deleted mailbox drops back to it.
 watch(mailboxes, (items) => {
-  if (!selectedId.value || !items.some(item => item.channelId === selectedId.value)) selectedId.value = items[0]?.channelId ?? null
-}, { immediate: true })
+  if (selectedId.value && !items.some(item => item.channelId === selectedId.value)) selectedId.value = null
+})
 
 watch(domains, (items) => {
   if (!items.some(item => item.id === domainId.value)) domainId.value = items[0]?.id ?? ''
 }, { immediate: true })
 
-watch(selected, (mailbox) => {
+function resetDraft() {
+  const mailbox = selected.value
   displayName.value = mailbox?.displayName || ''
   enabled.value = mailbox?.enabled ?? true
   for (const key of Object.keys(grants)) grants[key] = 'none'
   for (const member of membersQ.data.value?.members ?? []) grants[member.user.id] = 'none'
   for (const access of mailbox?.access ?? []) grants[access.userId] = access.permission
-}, { immediate: true })
+}
+watch(selected, resetDraft, { immediate: true })
+
+const members = computed(() => membersQ.data.value?.members ?? [])
+const filteredMembers = computed(() => {
+  const term = accessQuery.value.trim().toLocaleLowerCase()
+  if (!term) return members.value
+  return members.value.filter(member => (member.nickname || member.user.displayName).toLocaleLowerCase().includes(term))
+})
+const dirty = computed(() => {
+  const mailbox = selected.value
+  if (!mailbox) return false
+  if (displayName.value.trim() !== (mailbox.displayName || '') || enabled.value !== mailbox.enabled) return true
+  const saved = new Map(mailbox.access.map(access => [access.userId, access.permission]))
+  return Object.entries(grants).some(([userId, permission]) => (saved.get(userId) ?? 'none') !== permission)
+})
+const grantedCount = (mailbox: MailSettingsDTO['mailboxes'][number]) => mailbox.access.length
+
+function openMailbox(mailbox: MailSettingsDTO['mailboxes'][number]) {
+  selectedId.value = mailbox.channelId
+  accessQuery.value = ''
+}
 
 watch(() => membersQ.data.value?.members, (members) => {
   for (const member of members ?? []) if (!(member.user.id in grants)) grants[member.user.id] = 'none'
@@ -66,11 +94,12 @@ async function createMailbox() {
   if (!localPart.value.trim() || !domainId.value) return
   creating.value = true
   try {
-    await $fetch(`/api/workspaces/${props.workspaceId}/mailboxes`, {
+    await api(`/api/workspaces/${props.workspaceId}/mailboxes`, {
       method: 'POST',
       body: { domainId: domainId.value, localPart: localPart.value, displayName: localPart.value, access: [] },
     })
     localPart.value = ''
+    createOpen.value = false
     await Promise.all([
       mailQ.refetch(),
       qc.invalidateQueries({ queryKey: ['mailboxes'] }),
@@ -85,7 +114,9 @@ async function deleteMailbox() {
   if (!selected.value) return
   deleting.value = true
   try {
-    await $fetch(`/api/workspaces/${props.workspaceId}/mailboxes/${selected.value.channelId}`, { method: 'DELETE' })
+    await api(`/api/workspaces/${props.workspaceId}/mailboxes/${selected.value.channelId}`, { method: 'DELETE' })
+    deleteOpen.value = false
+    selectedId.value = null
     await Promise.all([
       mailQ.refetch(),
       qc.invalidateQueries({ queryKey: ['mailboxes'] }),
@@ -100,7 +131,7 @@ async function saveMailbox() {
   if (!selected.value || !displayName.value.trim()) return
   saving.value = true
   try {
-    await $fetch(`/api/workspaces/${props.workspaceId}/mailboxes/${selected.value.channelId}`, {
+    await api(`/api/workspaces/${props.workspaceId}/mailboxes/${selected.value.channelId}`, {
       method: 'PATCH',
       body: { displayName: displayName.value.trim(), enabled: enabled.value, access: accessPayload() },
     })
@@ -117,74 +148,172 @@ async function saveMailbox() {
 
 <template>
   <div>
-    <h1 class="text-xl font-semibold text-highlighted">Email</h1>
-    <UAlert v-if="mailQ.isPending.value" color="neutral" title="Loading email settings" class="mt-6" />
-    <UAlert
-      v-else-if="!mail?.configured"
-      color="warning"
-      title="Email is not connected"
-      description="Connect an Email Domain in Workspace Settings → Cloudflare, then create addresses here."
-      class="mt-6"
-    />
-    <template v-else>
-      <div class="mt-6 grid gap-3 sm:grid-cols-2">
-        <div v-for="domain in domains" :key="domain.id" class="rounded-lg border border-default p-4">
-          <p class="text-xs text-muted">Email domain</p>
-          <p class="mt-1 font-medium text-highlighted">{{ domain.domain }}</p>
-          <p class="mt-1 text-xs text-muted">Managed for {{ domain.appHostname }}</p>
-        </div>
-      </div>
-      <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare." class="mt-4" />
+    <template v-if="!selected">
+      <SettingsHeader title="Email" description="Addresses on your email domains. Mail arrives in the Mail app for everyone with access.">
+        <template #actions>
+          <UButton
+            v-if="mail?.configured && tab === 'mailboxes'"
+            icon="i-ph-plus"
+            label="New mailbox"
+            size="sm"
+            :disabled="!domains.length"
+            @click="createOpen = true"
+          />
+        </template>
+      </SettingsHeader>
 
-      <div class="mt-8 grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-        <UFormField label="Email domain">
-          <USelect v-model="domainId" :items="domainOptions" value-key="value" class="w-full" />
-        </UFormField>
-        <UFormField label="New mailbox" class="min-w-0 flex-1">
-          <UInput v-model="localPart" class="w-full" placeholder="support" />
-        </UFormField>
-        <UButton label="Create" icon="i-ph-plus" :loading="creating" :disabled="!localPart.trim() || !domainId" @click="createMailbox" />
-      </div>
+      <LayoutSkeleton v-if="mailQ.isPending.value" variant="rows" class="mt-6 -mx-2" />
+      <UAlert v-else-if="mailQ.error.value" color="error" title="Could not load email settings" class="mt-6" />
+      <UAlert
+        v-else-if="!mail?.configured"
+        color="warning"
+        title="Email is not connected"
+        description="Connect an Email Domain in Workspace Settings → Cloudflare, then create addresses here."
+        class="mt-6"
+      />
+      <template v-else>
+        <LayoutSegmentedTabs
+          v-model="tab"
+          :items="[
+            { value: 'mailboxes', label: 'Mailboxes', count: mailboxes.length },
+            { value: 'domains', label: 'Domains', count: domains.length },
+          ]"
+          label="Email settings"
+          class="mt-5"
+        />
+        <UAlert v-if="!mail.sendingBound" color="warning" title="Sending is unavailable" description="Finish connecting the Email Domain in Workspace Settings → Cloudflare." class="mt-5" />
 
-      <div v-if="mailboxes.length" class="mt-8 grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-        <nav class="space-y-1">
-          <button
-            v-for="mailbox in mailboxes"
-            :key="mailbox.channelId"
-            type="button"
-            class="block w-full rounded-md px-3 py-2 text-start text-sm"
-            :class="mailbox.channelId === selectedId ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated'"
-            @click="selectedId = mailbox.channelId"
-          >
-            <span class="block truncate font-medium">{{ mailbox.address }}</span>
-            <span class="text-xs">{{ mailbox.enabled ? 'Active' : 'Paused' }}</span>
-          </button>
-        </nav>
-        <div v-if="selected" class="min-w-0">
-          <UFormField label="Display name">
-            <UInput v-model="displayName" class="w-full" />
-          </UFormField>
-          <UCheckbox v-model="enabled" label="Receive email" class="mt-4" />
-          <h2 class="mt-8 text-sm font-semibold text-highlighted">Access</h2>
-          <div class="mt-2 divide-y divide-default">
-            <div v-for="member in membersQ.data.value?.members ?? []" :key="member.user.id" class="flex items-center gap-3 py-3">
-              <UserAvatar :user="member.user" size="sm" />
-              <span class="min-w-0 flex-1 truncate text-sm text-default">{{ member.nickname || member.user.displayName }}</span>
-              <USelect
-                v-model="grants[member.user.id]"
-                :items="permissionOptions"
-                value-key="value"
-                class="w-40"
-                :disabled="member.user.id === ownerId"
-              />
+        <SettingsList
+          v-if="tab === 'mailboxes'"
+          class="mt-5"
+          :items="mailboxes"
+          :item-key="mailbox => mailbox.channelId"
+          :search-text="mailbox => `${mailbox.address} ${mailbox.displayName ?? ''}`"
+          placeholder="Search mailboxes"
+          :noun="['mailbox', 'mailboxes']"
+          @select="openMailbox"
+        >
+          <template #empty>
+            <div class="rounded-lg border border-dashed border-default px-4 py-8 text-center">
+              <UIcon name="i-ph-envelope-simple" class="size-6 text-dimmed" />
+              <p class="mt-2 text-sm font-medium text-highlighted">No mailboxes yet</p>
+              <p class="mt-1 text-sm text-muted">Create an address like support@ to start receiving mail.</p>
+              <UButton class="mt-4" size="sm" icon="i-ph-plus" label="New mailbox" @click="createOpen = true" />
             </div>
-          </div>
-          <div class="mt-6 flex justify-between gap-3">
-            <UButton label="Delete mailbox" color="error" variant="soft" :loading="deleting" @click="deleteMailbox" />
-            <UButton label="Save changes" :loading="saving" @click="saveMailbox" />
-          </div>
-        </div>
-      </div>
+          </template>
+          <template #row="{ item: mailbox }">
+            <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-elevated text-muted">
+              <UIcon name="i-ph-envelope-simple" class="size-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-medium text-highlighted">{{ mailbox.address }}</span>
+              <span class="block truncate text-xs text-muted">
+                {{ mailbox.displayName || 'No display name' }} · {{ grantedCount(mailbox) }} with access
+              </span>
+            </span>
+            <UBadge :label="mailbox.enabled ? 'Active' : 'Paused'" :color="mailbox.enabled ? 'success' : 'neutral'" variant="subtle" size="sm" />
+          </template>
+        </SettingsList>
+
+        <ul v-else class="mt-5 divide-y divide-default overflow-hidden rounded-lg border border-default">
+          <li v-for="domain in domains" :key="domain.id" class="flex items-center gap-3 px-4 py-3">
+            <span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-elevated text-muted">
+              <UIcon name="i-ph-globe-simple" class="size-4" />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate text-sm font-medium text-highlighted">{{ domain.domain }}</span>
+              <span class="block truncate text-xs text-muted">Managed for {{ domain.appHostname }}</span>
+            </span>
+            <span class="shrink-0 text-xs text-muted tabular-nums">
+              {{ mailboxes.filter(mailbox => mailbox.domainId === domain.id).length }} mailboxes
+            </span>
+          </li>
+        </ul>
+      </template>
     </template>
+
+    <template v-else>
+      <SettingsHeader :title="selected.address" back="Mailboxes" @back="selectedId = null">
+        <template #badge>
+          <UBadge :label="selected.enabled ? 'Active' : 'Paused'" :color="selected.enabled ? 'success' : 'neutral'" variant="subtle" size="sm" />
+        </template>
+      </SettingsHeader>
+
+      <section class="mt-6 space-y-5">
+        <UFormField label="Display name" help="Shown as the sender name on outgoing mail.">
+          <UInput v-model="displayName" class="w-full max-w-md" />
+        </UFormField>
+        <div class="flex items-start justify-between gap-6 rounded-lg border border-default px-4 py-3">
+          <div>
+            <p class="text-sm font-medium text-highlighted">Receive email</p>
+            <p class="mt-0.5 text-xs text-muted">When paused, new mail is not accepted and the mailbox is hidden from Mail. Nothing is deleted.</p>
+          </div>
+          <USwitch v-model="enabled" aria-label="Receive email" />
+        </div>
+      </section>
+
+      <section class="mt-8">
+        <h2 class="text-[11px] font-bold uppercase tracking-wide text-muted">Access</h2>
+        <UInput
+          v-if="members.length >= 6"
+          v-model="accessQuery"
+          icon="i-ph-magnifying-glass"
+          placeholder="Search members"
+          aria-label="Search members"
+          class="mt-2 w-full"
+        />
+        <ul class="mt-2 divide-y divide-default rounded-lg border border-default">
+          <li v-for="member in filteredMembers" :key="member.user.id" class="flex items-center gap-3 px-4 py-2.5">
+            <UserAvatar :user="member.user" size="sm" />
+            <span class="min-w-0 flex-1 truncate text-sm text-default">{{ member.nickname || member.user.displayName }}</span>
+            <USelect
+              v-model="grants[member.user.id]"
+              :items="permissionOptions"
+              value-key="value"
+              size="sm"
+              class="w-36"
+              :disabled="member.user.id === ownerId"
+              :aria-label="`Access for ${member.nickname || member.user.displayName}`"
+            />
+          </li>
+        </ul>
+      </section>
+
+      <div class="mt-8 rounded-lg border border-error/30 p-4">
+        <p class="text-sm font-medium text-highlighted">Delete mailbox</p>
+        <p class="mt-1 text-sm text-muted">Removes the address and its conversations.</p>
+        <UButton class="mt-3" color="error" variant="soft" size="sm" label="Delete mailbox" @click="deleteOpen = true" />
+      </div>
+
+      <SettingsSaveBar :dirty="dirty" :saving="saving" :disabled="!displayName.trim()" @save="saveMailbox" @reset="resetDraft" />
+    </template>
+
+    <UModal v-model:open="createOpen" title="New mailbox">
+      <template #body>
+        <div class="space-y-4">
+          <UFormField label="Address">
+            <div class="flex items-center gap-2">
+              <UInput v-model="localPart" placeholder="support" class="min-w-0 flex-1" autofocus @keyup.enter="createMailbox" />
+              <span class="text-muted">@</span>
+              <USelect v-model="domainId" :items="domainOptions" value-key="value" class="min-w-0 flex-1" aria-label="Email domain" />
+            </div>
+          </UFormField>
+        </div>
+      </template>
+      <template #footer>
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="createOpen = false" />
+        <UButton label="Create mailbox" :loading="creating" :disabled="!localPart.trim() || !domainId" @click="createMailbox" />
+      </template>
+    </UModal>
+
+    <UModal v-model:open="deleteOpen" title="Delete this mailbox?">
+      <template #body>
+        <p class="text-sm text-muted">{{ selected?.address }} and its conversations will be removed. This cannot be undone.</p>
+      </template>
+      <template #footer>
+        <UButton color="neutral" variant="outline" label="Cancel" @click="deleteOpen = false" />
+        <UButton color="error" label="Delete mailbox" :loading="deleting" @click="deleteMailbox" />
+      </template>
+    </UModal>
   </div>
 </template>

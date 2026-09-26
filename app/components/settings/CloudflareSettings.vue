@@ -142,7 +142,7 @@ async function disconnectEmail(id: string) {
     <h1 class="text-xl font-semibold text-highlighted">Cloudflare</h1>
     <p class="mt-1 text-sm text-muted">Connect this workspace's App Domain and Email Domains after the base Installation is ready.</p>
 
-    <USkeleton v-if="managementQ.isPending.value || domainsQ.isPending.value" class="mt-8 h-64" />
+    <LayoutSkeleton v-if="managementQ.isPending.value || domainsQ.isPending.value" variant="form" :rows="3" class="mt-8" />
     <UAlert v-else-if="managementQ.error.value || domainsQ.error.value" class="mt-8" color="error" title="Could not read Cloudflare settings" :description="errorMessage(managementQ.error.value || domainsQ.error.value)" />
     <UAlert
       v-else-if="!status?.available || !domains?.managed"
