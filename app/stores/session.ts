@@ -16,19 +16,12 @@ export const useSessionStore = defineStore('session', () => {
   const ready = ref(false)
 
   async function refresh(fetcher: SessionFetcher = asSessionFetcher($fetch)) {
-    try {
-      health.value = await fetcher('/api/setup/health') as SetupHealth
-    }
-    catch {
-      health.value = null
-    }
-    try {
-      const res = await fetcher('/api/me') as { user: SessionUser }
-      user.value = res.user
-    }
-    catch {
-      user.value = null
-    }
+    const [healthResult, meResult] = await Promise.allSettled([
+      fetcher('/api/setup/health') as Promise<SetupHealth>,
+      fetcher('/api/me') as Promise<{ user: SessionUser }>,
+    ])
+    health.value = healthResult.status === 'fulfilled' ? healthResult.value : null
+    user.value = meResult.status === 'fulfilled' ? meResult.value.user : null
     ready.value = true
   }
 

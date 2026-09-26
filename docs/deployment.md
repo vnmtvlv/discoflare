@@ -32,7 +32,7 @@ The button hands the public repository to Cloudflare. Everything account-specifi
 
 1. Fork or connect the repository to Workers Builds.
 2. Create or select the D1 database, R2 bucket, and KV namespace in the target Cloudflare account.
-3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workflow, Workers AI, and Container bindings. Do not reuse the public sandbox's account-specific IDs or hostname.
+3. Adapt `wrangler.jsonc` with unique Worker and resource names, the target resource IDs, routes, and the required Durable Object, Workflow, Workers AI, and Container bindings. Do not reuse the public sandbox's account-specific IDs or hostname. Keep `"placement": { "mode": "smart" }`: request handling makes several D1 round trips, so running the Worker near the D1 primary is much faster for members far from that region than running it at their nearest edge.
 4. Add `AUTH_SECRET`, `ADMIN_EMAIL`, and a random 32-character-or-longer `ADMIN_SETUP_TOKEN` as Worker secrets. Add optional provider, RealtimeKit, Web Push, and email values only for integrations you intend to operate.
 5. Configure `pnpm run build` as the build command and `pnpm run deploy:built` as the deploy command. The deploy command applies D1 migrations before publishing the already-built Worker.
 6. Attach the public hostname and manually configure any desired Email Routing, Email Sending, DNS, OAuth callbacks, and sender-domain settings.

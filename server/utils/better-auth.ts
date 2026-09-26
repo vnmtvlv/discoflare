@@ -6,7 +6,7 @@ import { authAccounts, authSessions, authUsers, authVerifications } from '../../
 import type { DiscoflareEnv } from '../../workers/env'
 import { readAppBranding } from '../../shared/app-branding'
 import { sendAuthEmail as deliverAuthEmail } from '../../workers/mail-transport'
-import { authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, publicAuthConfig } from './auth-config'
+import { authSecret, credentialReady, emailVerificationRequired, loadAuthRuntimeConfig, loadSessionAuthConfig, publicAuthConfig, type AuthRuntimeConfig } from './auth-config'
 import { cf } from './cf'
 import { getDb } from './db'
 import { hashPassword, verifyPassword } from './password'
@@ -61,8 +61,13 @@ async function sendAuthEmail(
   })
 }
 
-export async function createAuth(env: DiscoflareEnv, baseURL: string, waitUntil: (promise: Promise<unknown>) => void = promise => void promise) {
-  const config = await loadAuthRuntimeConfig(env, baseURL)
+export async function createAuth(
+  env: DiscoflareEnv,
+  baseURL: string,
+  waitUntil: (promise: Promise<unknown>) => void = promise => void promise,
+  runtimeConfig?: AuthRuntimeConfig,
+) {
+  const config = runtimeConfig ?? await loadAuthRuntimeConfig(env, baseURL)
   const publicConfig = publicAuthConfig(config)
   const github = config.credentials.github
   const twitter = config.credentials.twitter
@@ -215,4 +220,11 @@ export function resolveAuthBaseURL(configuredOrigin: string | undefined, request
 export async function authFromEvent(event: H3Event) {
   const { env, waitUntil } = cf(event)
   return createAuth(env, resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin), waitUntil)
+}
+
+/** Auth instance for reading the current session; uses the briefly cached runtime config. */
+export async function sessionAuthFromEvent(event: H3Event) {
+  const { env, waitUntil } = cf(event)
+  const baseURL = resolveAuthBaseURL(env.PUBLIC_ORIGIN, getRequestURL(event).origin)
+  return createAuth(env, baseURL, waitUntil, await loadSessionAuthConfig(env, baseURL))
 }

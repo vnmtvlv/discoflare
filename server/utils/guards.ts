@@ -35,18 +35,21 @@ export async function requireMember(event: H3Event, workspaceId: string, flag?: 
   const user = await requireUser(event)
   const { env } = cf(event)
   const db = getDb(env.DB)
-  const rows = await db.select({
-    roleId: users.roleId,
-    roleName: roles.name,
-    perms: roles.permissionsBitmask,
-  }).from(users)
-    .innerJoin(roles, eq(roles.id, users.roleId))
-    .where(and(eq(users.id, user.id), eq(users.status, 'active')))
-    .limit(1)
+  const [rows, homes] = await Promise.all([
+    db.select({
+      roleId: users.roleId,
+      roleName: roles.name,
+      perms: roles.permissionsBitmask,
+    }).from(users)
+      .innerJoin(roles, eq(roles.id, users.roleId))
+      .where(and(eq(users.id, user.id), eq(users.status, 'active')))
+      .limit(1),
+    db.select({ ownerId: workspace.ownerId }).from(workspace).where(eq(workspace.id, WORKSPACE_ID)).limit(1),
+  ])
 
   const row = rows[0]
   if (!row) fail(403, 'forbidden', 'Not a member of this workspace')
-  const home = (await db.select({ ownerId: workspace.ownerId }).from(workspace).where(eq(workspace.id, WORKSPACE_ID)).limit(1))[0]
+  const home = homes[0]
   if (!home) fail(404, 'not_found', 'Workspace not found')
   const isOwner = home.ownerId === user.id
   const perms = isOwner ? ALL_PERMISSIONS : row.perms
@@ -85,7 +88,14 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   const user = await requireUser(event)
   const { env } = cf(event)
   const db = getDb(env.DB)
-  const channel = (await db.select().from(channels).where(eq(channels.id, channelId)).limit(1))[0]
+  // Membership does not depend on the channel, so both lookups share one round trip.
+  // Settle both and report failures in the original order: missing channel first.
+  const [channelResult, memberResult] = await Promise.allSettled([
+    db.select().from(channels).where(eq(channels.id, channelId)).limit(1),
+    requireMember(event, WORKSPACE_ID),
+  ])
+  if (channelResult.status === 'rejected') throw channelResult.reason
+  const channel = channelResult.value[0]
   if (!channel) fail(404, 'not_found', 'Channel not found')
 
   const type = channel.type
@@ -97,21 +107,26 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   }
 
   const rootType = accessRoot.type
-  const baseMember = await requireMember(event, WORKSPACE_ID)
+  if (memberResult.status === 'rejected') throw memberResult.reason
+  const baseMember = memberResult.value
 
-  if (accessRoot.visibility === 'private') {
-    const part = (await db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1))[0]
-    if (!part) fail(404, 'not_found', 'Channel not found')
-  }
-
-  const mailbox = (await db.select({ enabled: emailMailboxes.enabled }).from(emailMailboxes)
-    .where(eq(emailMailboxes.channelId, accessRoot.id)).limit(1))[0]
-  if (mailbox) {
-    if (!mailbox.enabled) fail(404, 'not_found', 'Channel not found')
-    const grant = (await db.select({ permission: emailMailboxAccess.permission }).from(emailMailboxAccess).where(and(
+  const [privateParts, mailboxes, grants] = await Promise.all([
+    accessRoot.visibility === 'private'
+      ? db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1)
+      : null,
+    db.select({ enabled: emailMailboxes.enabled }).from(emailMailboxes)
+      .where(eq(emailMailboxes.channelId, accessRoot.id)).limit(1),
+    db.select({ permission: emailMailboxAccess.permission }).from(emailMailboxAccess).where(and(
       eq(emailMailboxAccess.channelId, accessRoot.id),
       eq(emailMailboxAccess.userId, user.id),
-    )).limit(1))[0]
+    )).limit(1),
+  ])
+  if (privateParts && !privateParts[0]) fail(404, 'not_found', 'Channel not found')
+
+  const mailbox = mailboxes[0]
+  if (mailbox) {
+    if (!mailbox.enabled) fail(404, 'not_found', 'Channel not found')
+    const grant = grants[0]
     if (!grant) fail(404, 'not_found', 'Channel not found')
     if (flag === Permission.manageChannels) fail(403, 'forbidden', 'Manage mailboxes in email settings')
     if (flag === Permission.startHuddle) fail(403, 'forbidden', 'Live sessions are unavailable for mailboxes')
@@ -129,9 +144,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     if (participants.some(participant => participant.kind === 'agent') && !canManageAgents) {
       fail(404, 'not_found', 'Channel not found')
     }
-    const memberRows = await db.select({ userId: users.id }).from(users)
-      .where(and(inArray(users.id, parts.map((p) => p.userId)), eq(users.status, 'active')))
-    const stillIn = new Set(memberRows.map((m) => m.userId))
+    const stillIn = new Set(userRows.filter(row => row.status === 'active').map(row => row.id))
     const frozen = parts.some((p) => !stillIn.has(p.userId))
     const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
     if (flag === Permission.startHuddle && frozen) fail(403, 'forbidden', 'This direct message can no longer start calls')
