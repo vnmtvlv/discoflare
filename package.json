@@ -12,6 +12,9 @@
     "dev:remote": "node scripts/dev-remote.mjs --",
     "dev:full": "pnpm db:migrate:local && pnpm build && wrangler dev .output/server/index.mjs --assets .output/public -c wrangler.dev.jsonc --port 3000",
     "preview": "nuxt build && wrangler dev",
+    "preview:prepare": "node scripts/preview-resources.mjs prepare",
+    "preview:cleanup": "node scripts/preview-resources.mjs cleanup",
+    "preview:sweep": "node scripts/preview-resources.mjs sweep",
     "deploy": "pnpm build && pnpm deploy:built",
     "deploy:built": "pnpm db:migrate && wrangler deploy",
     "release:installer": "pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .installer/bundle && node scripts/build-installer-release.mjs",
@@ -167,7 +170,7 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260908.1",
+    "@cloudflare/workers-types": "^5.20260926.1",
     "@nuxt/eslint": "^1.17.0",
     "@types/node": "^26.4.1",
     "@vue/test-utils": "^2.5.0",
@@ -179,7 +182,7 @@
     "typescript": "^5.9.2",
     "vitest": "^4.1.11",
     "vue-tsc": "^3.3.11",
-    "wrangler": "^4.128.0"
+    "wrangler": "^4.141.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

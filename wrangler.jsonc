@@ -4,6 +4,7 @@
   "main": ".output/server/index.mjs",
   "compatibility_date": "2026-09-02",
   "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": true,
   "assets": {
     "binding": "ASSETS",
     "directory": ".output/public"
@@ -87,5 +88,6 @@
     "AUTH_REGISTRATION_MODE": "open",
     "APP_NAME": "Discoflare Sandbox",
     "AGENT_MODEL": "@cf/moonshotai/kimi-k2.7-code"
-  }
+  },
+  "previews": {}
 }
