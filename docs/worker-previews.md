@@ -48,6 +48,12 @@ Configure these GitHub Actions secrets:
 Optionally set the `DISCOFLARE_PREVIEW_ADMIN_EMAIL` repository variable. It
 defaults to `preview@discoflare.invalid`.
 
+After Access and every secret are ready, set the repository variable
+`DISCOFLARE_WORKER_PREVIEWS_ENABLED` to `true`. This is the final activation
+step; until then, deploy, cleanup, and sweep jobs are skipped so an incomplete
+setup cannot publish an unprotected Preview. Do not disable it while Preview
+resources still exist; close their PRs and let cleanup complete first.
+
 Secrets are not available to pull requests from forks. The workflow explicitly
 skips those pull requests instead of exposing Cloudflare credentials.
 
