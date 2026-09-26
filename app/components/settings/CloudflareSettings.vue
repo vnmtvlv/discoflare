@@ -23,8 +23,10 @@ const managementQ = useQuery({
 const domainsQ = useQuery({
   queryKey: computed(() => ['installation-domains', props.workspaceId]),
   queryFn: () => api<InstallationDomainSettingsDTO>(`/api/workspaces/${props.workspaceId}/domains`),
-  // Zones come from the Control Plane; only the Domains tab needs them.
-  enabled: computed(() => props.view === 'domains'),
+  // Zones come from the Control Plane and take seconds to list. The Overview
+  // starts the request in the background without waiting on it, and the result
+  // is kept for a while so the Domains tab opens instantly.
+  staleTime: 5 * 60_000,
 })
 const loading = computed(() => managementQ.isPending.value || (props.view === 'domains' && domainsQ.isPending.value))
 const loadError = computed(() => managementQ.error.value || (props.view === 'domains' ? domainsQ.error.value : null))
@@ -186,7 +188,7 @@ async function disconnectEmail(id: string) {
         </div>
         <div class="rounded-lg border border-default p-4">
           <p class="text-xs text-muted">Email Domains</p>
-          <p class="mt-1 truncate font-medium text-highlighted">{{ status.emailDomains.length ? status.emailDomains.join(', ') : 'None connected' }}</p>
+          <p class="mt-1 break-words font-medium text-highlighted">{{ status.emailDomains.length ? status.emailDomains.join(', ') : 'None connected' }}</p>
         </div>
         <div class="rounded-lg border border-default p-4">
           <p class="text-xs text-muted">Worker</p>

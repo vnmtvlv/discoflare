@@ -307,7 +307,7 @@ defineShortcuts({
 <template>
   <div class="relative flex-1 min-h-0 h-full flex bg-default">
     <div class="flex-1 min-w-0 flex flex-col min-h-0">
-      <header class="h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
+      <header class="@container h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
         <LayoutMobileMenuButton />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
         <UserAvatar v-else-if="!isGroup && others[0]" :user="others[0]" size="2xs" />
@@ -324,7 +324,7 @@ defineShortcuts({
         />
         <h1
           v-else-if="channel"
-          class="font-semibold text-[16px] truncate text-highlighted"
+          class="min-w-12 font-semibold text-[16px] truncate text-highlighted"
           :class="isGroup ? 'cursor-text' : ''"
           @dblclick="isGroup && (renaming = true)"
         >{{ headerName }}</h1>
@@ -341,9 +341,20 @@ defineShortcuts({
             :class="connection === 'offline' ? '' : '[&_svg]:animate-spin'"
             :label="connection === 'offline' ? 'Offline' : connection === 'reconnecting' ? 'Reconnecting' : 'Connecting'"
           />
+          <!-- The header's own width decides, not the window's: with both side panels open the column can be narrow on a wide screen. -->
+          <UButton
+            class="@xl:hidden"
+            icon="i-ph-magnifying-glass"
+            color="neutral"
+            variant="ghost"
+            size="sm"
+            square
+            aria-label="Search messages"
+            @click="ui.searchOpen = true"
+          />
           <button
             type="button"
-            class="hidden sm:flex w-40 h-8 items-center gap-2 rounded-md bg-muted px-2 text-xs text-muted hover:text-default"
+            class="hidden @xl:flex w-40 h-8 items-center gap-2 rounded-md bg-muted px-2 text-xs text-muted hover:text-default"
             aria-label="Search messages"
             @click="ui.searchOpen = true"
           >
