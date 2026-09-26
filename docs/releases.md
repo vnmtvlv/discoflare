@@ -42,6 +42,10 @@ while the maintainer is the only reviewer.
 
 CI builds the Worker without deploying or applying remote migrations. Agent Computer
 browser checks and release artifact verification remain separate release gates.
+The separate Worker Preview workflow may deploy an isolated PR environment after
+the repository's Preview credentials are configured. A Preview is branch evidence,
+not a release, sandbox promotion, or installer artifact. See
+[Worker Previews](worker-previews.md).
 
 ## Preparing a release
 

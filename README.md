@@ -177,6 +177,9 @@ pnpm db:seed
 | Remote backend | `pnpm dev:remote` | Local frontend against a deployed server. Configure `.env`, pass `--env-file .env.personal`, or pass its URL. |
 
 See [remote development](docs/remote-development.md) for selecting a backend and keeping personal environments outside Git.
+Pull requests from this repository can also receive isolated
+[Cloudflare Worker Previews](docs/worker-previews.md) for browser review without
+publishing a release tag.
 
 ### Static client build
 
