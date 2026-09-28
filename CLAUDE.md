@@ -1,7 +1,6 @@
 # Discoflare
 
-Read and follow `AGENTS.md` before changing this repository. It defines the
-product and runtime invariants shared by every coding agent.
+@AGENTS.md
 
 For feature and fix work, follow the agent workflow in
 `docs/worker-previews.md`. Work in a focused branch or worktree, open a
