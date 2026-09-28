@@ -45,7 +45,7 @@ const statusLabel = computed(() => {
           <span class="block text-[11px] text-muted truncate">{{ statusLabel }}</span>
         </span>
       </button>
-      <UTooltip text="Mute">
+      <UTooltip :text="huddle.muted ? 'Unmute' : 'Mute'">
         <UButton
           :icon="huddle.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
           :color="huddle.muted ? 'error' : 'neutral'"
@@ -53,11 +53,11 @@ const statusLabel = computed(() => {
           size="sm"
           square
           :aria-pressed="huddle.muted"
-          aria-label="Mute"
+          :aria-label="huddle.muted ? 'Unmute' : 'Mute'"
           @click="huddle.toggleMute()"
         />
       </UTooltip>
-      <UTooltip text="Deafen">
+      <UTooltip :text="huddle.deafened ? 'Undeafen' : 'Deafen'">
         <UButton
           :icon="huddle.deafened ? 'i-ph-speaker-slash' : 'i-ph-headphones'"
           :color="huddle.deafened ? 'error' : 'neutral'"
@@ -65,7 +65,7 @@ const statusLabel = computed(() => {
           size="sm"
           square
           :aria-pressed="huddle.deafened"
-          aria-label="Deafen"
+          :aria-label="huddle.deafened ? 'Undeafen' : 'Deafen'"
           @click="huddle.toggleDeafen()"
         />
       </UTooltip>

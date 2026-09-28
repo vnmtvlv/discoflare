@@ -15,7 +15,8 @@ const emit = defineEmits<{
 
 const huddle = useHuddleStore()
 const preview = useTemplateRef<HTMLVideoElement>('preview')
-const audio = ref(true)
+// Start from the mute preference set in the user panel.
+const audio = ref(!huddle.muted)
 const video = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -81,7 +82,10 @@ async function startPreview() {
 }
 
 watch(() => props.open, (open) => {
-  if (open) void startPreview()
+  if (open) {
+    audio.value = !huddle.muted
+    void startPreview()
+  }
   else stopPreview()
 })
 watch([audio, video, audioInputId, videoInputId], () => {

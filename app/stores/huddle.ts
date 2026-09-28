@@ -75,13 +75,24 @@ export const useHuddleStore = defineStore('huddle', () => {
     if (next && !next.active && incoming.value?.channelId === channelId) incoming.value = null
   }
 
+  /** Deafen covers everyone in the call, including people who join or republish audio later. */
+  function silenceIfDeafened() {
+    for (const participant of remoteParticipants.value) {
+      if (participant.audioTrack) participant.audioTrack.enabled = !deafened.value
+    }
+  }
+
   function syncParticipants() {
     const active = meeting.value
     selfParticipant.value = active?.self ? markRaw(active.self) : null
     remoteParticipants.value = (active?.participants.joined.toArray() ?? []).map(participant => markRaw(participant))
     cleanupParticipantEvents?.()
     const eventSources = remoteParticipants.value.map(participant => participant as unknown as MeetingEventSource)
-    const updateMedia = () => { mediaRevision.value += 1 }
+    const updateMedia = () => {
+      silenceIfDeafened()
+      mediaRevision.value += 1
+    }
+    silenceIfDeafened()
     for (const source of eventSources) {
       source.on('videoUpdate', updateMedia)
       source.on('audioUpdate', updateMedia)
@@ -144,8 +155,8 @@ export const useHuddleStore = defineStore('huddle', () => {
     activeSpeakerId.value = null
     currentChannelId.value = null
     currentTitle.value = null
-    muted.value = false
-    deafened.value = false
+    // Mute and deafen are the person's preferences, not per-call state: they carry
+    // into the next call instead of resetting when this one ends.
     camera.value = false
     screenSharing.value = false
     connection.value = 'idle'
@@ -183,13 +194,19 @@ export const useHuddleStore = defineStore('huddle', () => {
     await applyMute(!muted.value)
   }
 
+  // Deafening also mutes; undeafening restores whatever the mic was before.
+  let mutedBeforeDeafen = false
   async function toggleDeafen() {
     const next = !deafened.value
     deafened.value = next
-    for (const participant of remoteParticipants.value) {
-      if (participant.audioTrack) participant.audioTrack.enabled = !next
+    silenceIfDeafened()
+    if (next) {
+      mutedBeforeDeafen = muted.value
+      await applyMute(true)
     }
-    if (next) await applyMute(true)
+    else {
+      await applyMute(mutedBeforeDeafen)
+    }
   }
 
   async function toggleCamera() {
