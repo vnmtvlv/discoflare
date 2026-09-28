@@ -66,7 +66,8 @@ defineShortcuts({
       <UTooltip text="Back">
         <UButton class="size-10 shrink-0 justify-center md:size-8" size="sm" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back" @click="close" />
       </UTooltip>
-      <span class="min-w-0 truncate text-sm font-semibold">{{ threadTitle }}</span>
+      <USkeleton v-if="threadQ.isPending.value" class="h-3.5 w-32" />
+      <span v-else class="min-w-0 truncate text-sm font-semibold">{{ threadTitle }}</span>
       <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
     </header>
     <ChatMessageList
