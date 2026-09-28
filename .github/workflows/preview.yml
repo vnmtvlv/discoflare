@@ -55,6 +55,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate migration sequence
+        run: pnpm db:migrations:check
+
       - name: Validate Preview credentials
         shell: bash
         run: |

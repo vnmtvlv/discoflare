@@ -27,6 +27,8 @@
     "test:watch": "vitest",
     "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.dev.jsonc",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
+    "db:migration:create": "node scripts/create-migration.mjs",
+    "db:migrations:check": "node scripts/check-migrations.mjs",
     "db:seed": "node scripts/seed.mjs",
     "cf:types": "wrangler types",
     "prepare:clients": "node scripts/prepare-clients.mjs all",

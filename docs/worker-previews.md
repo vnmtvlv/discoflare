@@ -27,6 +27,33 @@ Agents do not create release tags or deploy `sandbox.discoflare.com` as part of
 feature development. Updating the PR branch updates the same Preview and the
 same isolated resources automatically.
 
+### Migration PRs
+
+Feature work can happen in parallel, but D1 migrations form one ordered,
+append-only log. The last migration on `main` owns the latest number; a number
+chosen from an older branch is provisional until that branch is integrated.
+
+Before marking a migration PR ready to merge:
+
+1. Update the branch from current `origin/main`.
+2. If another migration has landed, renumber the branch's new migration so it
+   starts immediately after the latest migration on `main`.
+3. Use `pnpm db:migration:create <lowercase_name>` for a new migration instead
+   of choosing a number manually.
+4. Run `pnpm db:migrations:check` and the normal test suite.
+5. Push the updated branch and wait for its Worker Preview to be rebuilt before
+   reporting it ready.
+
+Migration SQL already present on `main` is immutable. The `migrations` CI check
+rejects changed or deleted history, duplicate numbers, gaps, stale numbering,
+and migration chains that cannot be applied to a fresh local D1 database. Main
+requires branches to be current before merge, so migration PRs integrate one at
+a time even while their feature work and initial Previews run in parallel.
+
+After a migration file is added, the bootstrap schema picks it up
+automatically; agents do not maintain a second import list. A release later
+applies every migration merged since the previous release in sequence.
+
 ## GitHub environment
 
 Create a GitHub Actions environment named `preview` with:

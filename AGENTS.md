@@ -20,4 +20,5 @@ Repository invariants:
 - Personal development targets belong in ignored env files or local deployment configs. Use the generic `dev:remote` command; never add personal hostnames, accounts, or per-installation commands to tracked code, tests, or documentation.
 - Land focused feature and fix branches through squash-merged PRs directly to protected `main`. Keep `main` releasable; published releases are immutable version tags and GitHub Releases, so `main` may be ahead of the latest release.
 - For feature and fix work, follow the agent workflow in `docs/worker-previews.md`: open a same-repository PR, wait for its isolated Worker Preview, and verify the change there before asking to merge.
+- Treat D1 migrations as a serialized integration log. Before finalizing a migration PR, update it from current `origin/main`, create the next migration with `pnpm db:migration:create <lowercase_name>`, and rerun its Preview. Never edit migration SQL that already exists on `main`; follow the migration procedure in `docs/worker-previews.md`.
 - Keep changes within the shipped product and documented runtime boundaries unless explicitly requested.
