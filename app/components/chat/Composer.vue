@@ -20,22 +20,36 @@ const props = defineProps<{
   disabledPlaceholder?: string
   canAttach?: boolean
   agentBusy?: boolean
+  /** Changing this value focuses the message field (for example when a new thread opens). */
+  focusKey?: number
 }>()
 
 const emit = defineEmits<{ last: [] }>()
 
 // Focus the message field: after choosing Reply or Edit, and when a view such as
 // a new thread asks for it through `focus()`.
-const textarea = useTemplateRef<{ textareaRef?: HTMLTextAreaElement | null }>('textarea')
-function focus() {
+// The field is found through this component's own root element; a disabled
+// field (permissions still loading) keeps the request until it is usable.
+const root = useTemplateRef<HTMLFormElement>('root')
+let focusPending = false
+function applyFocus() {
+  if (!focusPending) return
   void nextTick(() => {
-    const el = textarea.value?.textareaRef
+    const el = root.value?.querySelector('textarea')
     if (!el || el.disabled) return
+    focusPending = false
     el.focus()
     el.setSelectionRange(el.value.length, el.value.length)
   })
 }
-defineExpose({ focus })
+function focus() {
+  focusPending = true
+  applyFocus()
+}
+watch(() => props.disabled, applyFocus)
+watch(() => props.focusKey, (key) => {
+  if (key) focus()
+}, { immediate: true, flush: 'post' })
 
 const ui = useUiStore()
 const session = useSessionStore()
@@ -256,7 +270,7 @@ onUnmounted(() => typing.stop())
 </script>
 
 <template>
-  <form class="px-4 pb-6 pt-2" @submit.prevent="submit">
+  <form ref="root" class="px-4 pb-6 pt-2" @submit.prevent="submit">
     <div
       class="df-composer overflow-hidden"
       :class="replyToId || editingId ? 'rounded-b-lg' : 'rounded-lg'"
@@ -315,7 +329,6 @@ onUnmounted(() => typing.stop())
         </div>
         <UTextarea
           v-else
-          ref="textarea"
           v-model="draft"
           autoresize
           :rows="1"
