@@ -65,7 +65,11 @@ async function unpin(messageId: string) {
     <LayoutSkeleton variant="cards" />
   </div>
   <LayoutLoadError v-else-if="pinsQ.error.value" message="Pinned messages did not load." :retry="pinsQ.refetch" />
-  <p v-else-if="!pinsQ.data.value?.messages.length" class="p-3 text-sm text-muted">No pinned messages yet.</p>
+  <div v-else-if="!pinsQ.data.value?.messages.length" class="px-4 py-10 text-center">
+    <UIcon name="i-ph-push-pin" class="size-6 text-dimmed" />
+    <p class="mt-2 text-sm font-medium text-highlighted">No pinned messages</p>
+    <p class="mt-1 text-xs text-muted">Pin a message to keep it one tap away for everyone here.</p>
+  </div>
   <ul v-else class="p-2">
     <li
       v-for="message in pinsQ.data.value?.messages"

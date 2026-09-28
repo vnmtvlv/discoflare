@@ -20,7 +20,11 @@ const filesQ = useQuery({
     <LayoutSkeleton variant="cards" />
   </div>
   <LayoutLoadError v-else-if="filesQ.error.value" message="Files did not load." :retry="filesQ.refetch" />
-  <p v-else-if="!filesQ.data.value?.files.length" class="p-3 text-sm text-muted">No files yet.</p>
+  <div v-else-if="!filesQ.data.value?.files.length" class="px-4 py-10 text-center">
+    <UIcon name="i-ph-paperclip" class="size-6 text-dimmed" />
+    <p class="mt-2 text-sm font-medium text-highlighted">No files yet</p>
+    <p class="mt-1 text-xs text-muted">Files shared in this conversation collect here.</p>
+  </div>
   <div v-else class="px-3 pb-3">
     <AttachmentGallery :attachments="filesQ.data.value?.files ?? []" />
   </div>

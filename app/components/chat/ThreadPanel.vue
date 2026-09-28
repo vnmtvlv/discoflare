@@ -28,13 +28,14 @@ const presence = usePresenceStore()
 const agentBusy = computed(() => Boolean(threadId.value && presence.agentTurnsIn(threadId.value).length))
 const canApproveAgent = computed(() => hasPermission(effectivePermissions.value, Permission.manageWorkspace))
 
-const route = useRoute()
+// The router's live route: the page-level route misses thread-only URL changes.
+const liveRoute = useRouter().currentRoute
 function close() {
   const parentId = ui.threadParentId
   ui.threadId = null
   ui.threadParentId = null
   // A thread opened by URL returns to its channel's URL.
-  if (route.params.threadId && parentId) void navigateTo(channelPath(parentId), { replace: true })
+  if (liveRoute.value.params.threadId && parentId) void navigateTo(channelPath(parentId), { replace: true })
 }
 
 function onReply(id: string) {

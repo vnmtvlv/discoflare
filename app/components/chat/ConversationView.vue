@@ -176,12 +176,17 @@ async function endHuddle() {
 watch([workspaceId, channelId], () => {
   ui.remember(workspaceId.value, channelId.value)
   huddle.view(channelId.value)
-  // Changing channel closes the open thread, unless the link names a thread in
-  // the new channel (for example a thread in the navigation); then open that one.
-  const linkedThread = route.params.threadId ? String(route.params.threadId) : null
-  ui.threadId = linkedThread
-  if (linkedThread) {
-    ui.threadParentId = channelId.value
+}, { immediate: true })
+
+// The thread URL is a child of this page's route, and the page-level route does
+// not update when only the child changes, so follow the router's live route.
+// A thread in the URL opens it; no thread closes it, and so does changing channel.
+const liveRoute = useRouter().currentRoute
+const linkedThread = computed(() => liveRoute.value.params.threadId ? String(liveRoute.value.params.threadId) : null)
+watch([channelId, linkedThread], ([channel, thread]) => {
+  ui.threadId = thread
+  if (thread) {
+    ui.threadParentId = channel
     ui.rightPanelOpen = true
     ui.rightPanelTab = 'threads'
   }
@@ -200,9 +205,8 @@ watch([() => huddle.pendingJoin, channelId], ([pending]) => {
 
 watch(() => oneQ.data.value?.channel, (ch) => {
   if (!ch) return
-  const threadId = route.params.threadId ? String(route.params.threadId) : undefined
-  const want = channelPath(ch, threadId)
-  if (route.path !== want) void navigateTo(want, { replace: true })
+  const want = channelPath(ch, linkedThread.value ?? undefined)
+  if (liveRoute.value.path !== want) void navigateTo(want, { replace: true })
 })
 
 const typingLine = computed(() => {

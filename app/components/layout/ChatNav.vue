@@ -6,7 +6,6 @@ import { channelPath } from '~~/shared/paths'
 import { isVoiceType } from '~~/shared/dm'
 
 const props = defineProps<{ workspaceId: string }>()
-const route = useRoute()
 const huddle = useHuddleStore()
 const { api } = useApi()
 const nav = useNavActions()
@@ -33,8 +32,10 @@ const channelGroups = computed(() => {
   if (uncategorized.length) groups.push({ id: 'uncategorized', name: 'Uncategorized', channels: uncategorized })
   return groups
 })
-const selected = computed(() => String(route.params.channel || route.params.channelId || ''))
-const selectedThread = computed(() => String(route.params.threadId || ''))
+// The router's live route, so a thread-only URL change (same channel) updates the highlight.
+const liveRoute = useRouter().currentRoute
+const selected = computed(() => String(liveRoute.value.params.channel || liveRoute.value.params.channelId || ''))
+const selectedThread = computed(() => String(liveRoute.value.params.threadId || ''))
 
 // Recently active threads sit under their channel, like Discord.
 const threadsByChannel = computed(() => {
@@ -53,7 +54,7 @@ function threadsFor(ch: Ch) {
 function isActive(ch: Ch) {
   if (selectedThread.value && threadsFor(ch).some(thread => thread.id === selectedThread.value)) return false
   const path = channelPath(ch)
-  return selected.value === ch.id || route.path === path || route.path.startsWith(`${path}/`)
+  return selected.value === ch.id || liveRoute.value.path === path || liveRoute.value.path.startsWith(`${path}/`)
 }
 
 function hasActiveThread(ch: Ch) {
@@ -70,7 +71,7 @@ function huddleFor(ch: Ch) {
 
 watch(() => channelsQ.data.value?.channels, (list) => {
   if (!list?.length) return
-  if (route.path === '/channels') {
+  if (liveRoute.value.path === '/channels') {
     const first = list.find(channel => channel.type === 'text') ?? list[0]
     if (first) void navigateTo(channelPath(first), { replace: true })
   }

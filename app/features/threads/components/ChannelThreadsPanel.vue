@@ -28,7 +28,11 @@ function openThread(thread: ChannelThreadDTO) {
     <LayoutSkeleton variant="cards" />
   </div>
   <LayoutLoadError v-else-if="threadsQ.error.value" message="Threads did not load." :retry="threadsQ.refetch" />
-  <p v-else-if="!threadsQ.data.value?.threads.length" class="p-3 text-sm text-muted">No threads yet.</p>
+  <div v-else-if="!threadsQ.data.value?.threads.length" class="px-4 py-10 text-center">
+    <UIcon name="i-ph-chats" class="size-6 text-dimmed" />
+    <p class="mt-2 text-sm font-medium text-highlighted">No threads yet</p>
+    <p class="mt-1 text-xs text-muted">Start one from any message to keep a side conversation together.</p>
+  </div>
   <div v-else class="p-2">
     <button
       v-for="thread in threadsQ.data.value?.threads"
@@ -40,11 +44,10 @@ function openThread(thread: ChannelThreadDTO) {
       <UserAvatar :user="thread.author" size="xs" />
       <span class="min-w-0 flex-1">
         <span class="block truncate text-sm font-medium text-highlighted">{{ thread.title }}</span>
-        <span class="mt-0.5 flex items-center gap-1 text-xs text-muted">
-          <span>{{ thread.author.displayName }}</span>
-          <span>·</span>
-          <span>{{ thread.replyCount }} {{ thread.replyCount === 1 ? 'reply' : 'replies' }}</span>
-          <span v-if="thread.lastReplyAt">· {{ formatMessageTime(thread.lastReplyAt) }}</span>
+        <!-- One line that truncates, so a narrow panel never splits it into columns. -->
+        <span class="mt-0.5 block truncate text-xs text-muted">
+          <span class="font-medium text-primary">{{ thread.replyCount }} {{ thread.replyCount === 1 ? 'reply' : 'replies' }}</span>
+          · {{ thread.author.displayName }}<template v-if="thread.lastReplyAt"> · {{ formatMessageTime(thread.lastReplyAt) }}</template>
         </span>
       </span>
     </button>

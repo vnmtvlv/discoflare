@@ -6,7 +6,6 @@ const ui = useUiStore()
 const props = defineProps<{
   workspaceId?: string
 }>()
-const route = useRoute()
 const { workspaceId: defaultWorkspaceId } = useWorkspace()
 
 const isMobile = useIsMobile()
@@ -21,7 +20,10 @@ const { connection: workspaceConnection } = useWorkspaceSocket(() => workspaceId
 provide(workspaceConnectionKey, workspaceConnection)
 const open = computed(() => ui.mobilePane === 'channels')
 
-watch(() => route.fullPath, () => {
+// Follow the router's live route: page-level routes miss child-only changes,
+// such as opening a thread of the current channel from the drawer.
+const liveRoute = useRouter().currentRoute
+watch(() => liveRoute.value.fullPath, () => {
   if (isMobile.value) ui.mobilePane = 'chat'
 })
 
