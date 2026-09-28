@@ -278,8 +278,8 @@ watch(nav.inviteOpen, (open) => {
       <!-- Which apps show depends on permissions; hold their place until they are known. -->
       <template v-if="membersQ.isPending.value">
         <div v-for="index in 5" :key="index" class="flex h-[46px] flex-col items-center justify-center gap-1.5 rounded-md">
-          <USkeleton class="size-[18px] rounded" />
-          <USkeleton class="h-2 w-7" />
+          <USkeleton class="size-[18px] rounded bg-accented" />
+          <USkeleton class="h-2 w-7 bg-accented" />
         </div>
       </template>
       <template v-else>

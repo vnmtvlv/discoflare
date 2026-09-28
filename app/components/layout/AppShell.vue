@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useMounted } from '@vueuse/core'
 import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
 
 const ui = useUiStore()
@@ -96,8 +97,14 @@ function onTouchEnd(event: TouchEvent) {
   ui.mobilePane = shouldOpen ? 'channels' : 'chat'
 }
 
+// The phone/desktop split lives in CSS (see .channel-drawer) so the first paint is
+// right before hydration; script only adds the open state and finger tracking.
+const mounted = useMounted()
 const drawerStyle = computed(() => {
-  if (!isMobile.value) return { width: `${ui.channelPaneWidth}px` }
+  // The saved width lives in localStorage, which the server cannot see; apply it
+  // after mount so hydration matches and the CSS default covers the first paint.
+  if (!mounted.value) return {}
+  if (!isMobile.value) return { '--channel-pane-width': `${ui.channelPaneWidth}px` }
   if (dragOffset.value !== null) {
     return { transform: `translateX(calc(${dragOffset.value}px - 100%))`, transition: 'none' }
   }
@@ -129,10 +136,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       v-if="workspaceId"
       id="channel-navigation"
       ref="drawer"
-      class="flex min-h-0 shrink-0 flex-col bg-muted pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]"
-      :class="isMobile
-        ? 'channel-drawer absolute inset-y-0 start-0 z-30 w-[min(22rem,86vw)] shadow-2xl'
-        : 'relative'"
+      class="channel-drawer flex min-h-0 shrink-0 flex-col bg-muted pb-[var(--df-safe-area-bottom)] pt-[var(--df-safe-area-top)]"
       :style="drawerStyle"
       :aria-hidden="isMobile && !open && dragOffset === null ? 'true' : undefined"
       :inert="isMobile && !open && dragOffset === null ? true : undefined"
@@ -148,9 +152,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
       />
     </aside>
     <button
-      v-if="isMobile && workspaceId"
+      v-if="workspaceId"
       type="button"
-      class="channel-backdrop absolute inset-0 z-20 bg-black/60"
+      class="channel-backdrop absolute inset-0 z-20 bg-black/60 md:hidden"
       :class="open || dragOffset !== null ? '' : 'pointer-events-none'"
       :style="{ opacity: backdropOpacity, transition: dragOffset !== null ? 'none' : undefined }"
       tabindex="-1"
@@ -164,9 +168,33 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown))
 </template>
 
 <style scoped>
+/* Phones: an off-canvas drawer over the page. */
 .channel-drawer {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 30;
+  width: min(22rem, 86vw);
+  transform: translateX(-100%);
+  box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.5);
   transition: transform 260ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
+}
+
+/* Wider screens: a resizable column beside the page. */
+@media (min-width: 768px) {
+  .channel-drawer {
+    position: relative;
+    z-index: auto;
+    width: var(--channel-pane-width, 240px);
+    transform: none;
+    box-shadow: none;
+    transition: none;
+  }
+}
+
+.channel-backdrop {
+  opacity: 0;
 }
 
 .channel-backdrop {
