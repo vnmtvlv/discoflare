@@ -4,6 +4,9 @@
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.3",
+  "engines": {
+    "node": ">=24 <25"
+  },
   "scripts": {
     "build": "NODE_OPTIONS=--max-old-space-size=4096 nuxt build",
     "generate:native": "node scripts/generate-native.mjs native",
@@ -172,7 +175,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",
     "@nuxt/eslint": "^1.17.0",
-    "@types/node": "^26.4.1",
+    "@types/node": "^24.19.0",
     "@vue/test-utils": "^2.5.0",
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.9.1",
@@ -182,15 +185,20 @@
     "typescript": "^5.9.2",
     "vitest": "^4.1.11",
     "vue-tsc": "^3.3.11",
-    "wrangler": "^4.141.0"
+    "wrangler": "4.142.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild",
       "better-sqlite3",
+      "esbuild",
       "unrs-resolver",
       "vue-demi",
       "workerd"
+    ],
+    "ignoredBuiltDependencies": [
+      "@mongodb-js/zstd",
+      "core-js-pure",
+      "node-liblzma"
     ]
   }
 }

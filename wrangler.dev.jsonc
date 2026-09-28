@@ -4,8 +4,7 @@
   // Local Nuxt skips AI and Browser: those bindings
   // start a remote wrangler session and fail without CLOUDFLARE_API_TOKEN.
   "main": "workers/index.ts",
-  "compatibility_date": "2026-09-02",
-  "compatibility_flags": ["nodejs_compat"],
+  "compatibility_date": "2026-09-28",
   "triggers": { "crons": ["17 4 * * 1"] },
   "d1_databases": [
     {
