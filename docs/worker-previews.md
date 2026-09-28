@@ -30,6 +30,11 @@ Storage, and Workers KV Storage. Scope it to the account used by
 `discoflare-sandbox`; no zone permission is needed because Previews use their
 generated `workers.dev` URLs.
 
+Before the first run, open `discoflare-sandbox` in the Cloudflare dashboard,
+select **Domains**, and turn on **Preview** under **Worker URL**. This is a
+one-time setting on the parent Worker. Without it Cloudflare creates the
+Preview and its deployment, but returns no usable URL.
+
 ## Isolation
 
 For PR `42`, the workflow creates or reuses these disposable resources:

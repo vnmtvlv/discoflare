@@ -53,6 +53,7 @@ describe('Worker Preview resources', () => {
     })
     expect(previewComment(deployment, 'abc123')).toContain('Exact deployment: https://deployment-1.example.workers.dev')
     expect(wranglerPreviewOutput(`${JSON.stringify({ type: 'wrangler-session' })}\n${JSON.stringify(output)}\n`)).toEqual(output)
+    expect(() => previewDeployment({ type: 'preview', preview_urls: [], deployment_urls: [] })).toThrow('enable Preview')
   })
 
   it('binds Preview-safe resources without inheriting production data or origins', () => {

@@ -24,7 +24,9 @@ export function wranglerPreviewOutput(raw) {
 export function previewDeployment(output) {
   const previewUrl = output.preview_urls?.[0] || output.preview?.urls?.[0]
   const deploymentUrl = output.deployment_urls?.[0] || output.deployment?.urls?.[0]
-  if (!previewUrl || !deploymentUrl) throw new Error('Wrangler Preview output did not contain both Preview and deployment URLs')
+  if (!previewUrl || !deploymentUrl) {
+    throw new Error('Cloudflare created the Preview without a URL. In discoflare-sandbox, open Domains > Worker URL and enable Preview, then rerun this job.')
+  }
   return {
     previewName: output.preview_name || output.preview?.name,
     previewUrl,
