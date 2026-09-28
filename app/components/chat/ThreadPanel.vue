@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/vue-query'
 import type { ChannelDTO, ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
 import { hasPermission, Permission } from '~~/shared/permissions'
+import { channelPath } from '~~/shared/paths'
 
 const props = defineProps<{
   workspaceId: string
@@ -27,9 +28,13 @@ const presence = usePresenceStore()
 const agentBusy = computed(() => Boolean(threadId.value && presence.agentTurnsIn(threadId.value).length))
 const canApproveAgent = computed(() => hasPermission(effectivePermissions.value, Permission.manageWorkspace))
 
+const route = useRoute()
 function close() {
+  const parentId = ui.threadParentId
   ui.threadId = null
   ui.threadParentId = null
+  // A thread opened by URL returns to its channel's URL.
+  if (route.params.threadId && parentId) void navigateTo(channelPath(parentId), { replace: true })
 }
 
 function onReply(id: string) {

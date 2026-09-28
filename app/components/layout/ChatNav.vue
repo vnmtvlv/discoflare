@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
-import type { ChannelCategoryDTO as Category, ChannelDTO as Ch, MemberDTO as M } from '~~/shared/types'
+import type { ChannelCategoryDTO as Category, ChannelDTO as Ch, MemberDTO as M, SidebarThreadDTO } from '~~/shared/types'
 import { Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
 import { isVoiceType } from '~~/shared/dm'
@@ -18,7 +18,7 @@ const membersQ = useQuery({
 const { can } = usePermissions(computed(() => membersQ.data.value?.members))
 const channelsQ = useQuery({
   queryKey: computed(() => ['channels', props.workspaceId]),
-  queryFn: () => api<{ categories: Category[]; channels: Ch[] }>(`/api/workspaces/${props.workspaceId}/channels`),
+  queryFn: () => api<{ categories: Category[]; channels: Ch[]; threads?: SidebarThreadDTO[] }>(`/api/workspaces/${props.workspaceId}/channels`),
 })
 
 const channels = computed(() => channelsQ.data.value?.channels ?? [])
@@ -34,10 +34,30 @@ const channelGroups = computed(() => {
   return groups
 })
 const selected = computed(() => String(route.params.channel || route.params.channelId || ''))
+const selectedThread = computed(() => String(route.params.threadId || ''))
+
+// Recently active threads sit under their channel, like Discord.
+const threadsByChannel = computed(() => {
+  const map = new Map<string, SidebarThreadDTO[]>()
+  for (const thread of channelsQ.data.value?.threads ?? []) {
+    const list = map.get(thread.parentId) ?? []
+    list.push(thread)
+    map.set(thread.parentId, list)
+  }
+  return map
+})
+function threadsFor(ch: Ch) {
+  return threadsByChannel.value.get(ch.id) ?? []
+}
 
 function isActive(ch: Ch) {
+  if (selectedThread.value && threadsFor(ch).some(thread => thread.id === selectedThread.value)) return false
   const path = channelPath(ch)
   return selected.value === ch.id || route.path === path || route.path.startsWith(`${path}/`)
+}
+
+function hasActiveThread(ch: Ch) {
+  return Boolean(selectedThread.value) && threadsFor(ch).some(thread => thread.id === selectedThread.value)
 }
 
 function participantName(id: string) {
@@ -76,6 +96,7 @@ watch(() => channelsQ.data.value?.channels, (list) => {
             <LayoutNavRow
               :to="channelPath(ch)"
               :active="isActive(ch)"
+              :ancestor="hasActiveThread(ch)"
               :unread="Boolean(ch.unread)"
             >
               <template #leading>
@@ -95,6 +116,35 @@ watch(() => channelsQ.data.value?.channels, (list) => {
                 />
               </template>
             </LayoutNavRow>
+            <ul v-if="threadsFor(ch).length" class="ms-[17px] pb-0.5" :aria-label="`Threads in ${ch.name}`">
+              <li
+                v-for="(thread, threadIndex) in threadsFor(ch)"
+                :key="thread.id"
+                class="relative ps-3"
+              >
+                <!-- Connector: a curve into each thread, continuing down to the next one. -->
+                <span class="pointer-events-none absolute start-0 top-0 h-1/2 w-2.5 rounded-es-md border-b border-s border-accented" aria-hidden="true" />
+                <span v-if="threadIndex < threadsFor(ch).length - 1" class="pointer-events-none absolute bottom-0 start-0 top-1/2 border-s border-accented" aria-hidden="true" />
+                <LayoutNavRow
+                  :to="channelPath(ch, thread.id)"
+                  :active="selectedThread === thread.id"
+                  :unread="thread.unread"
+                  dense
+                >
+                  {{ thread.title }}
+                  <template #trailing>
+                    <UBadge
+                      v-if="thread.unread && selectedThread !== thread.id"
+                      color="primary"
+                      variant="solid"
+                      size="sm"
+                      :label="thread.unreadCount > 99 ? '99+' : String(thread.unreadCount)"
+                      class="min-w-5 justify-center"
+                    />
+                  </template>
+                </LayoutNavRow>
+              </li>
+            </ul>
             <ul
               v-if="huddleFor(ch)?.active"
               class="space-y-0.5 pb-1 pl-8 pr-1"

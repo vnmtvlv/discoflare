@@ -1,6 +1,6 @@
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { channelUnreadCountSql, channelUnreadCountsSql, channelUnreadSql } from '../../workers/unread'
+import { channelUnreadCountSql, channelUnreadCountsSql, channelUnreadSql, recentThreadsSql } from '../../workers/unread'
 
 let db: DatabaseSync
 
@@ -111,3 +111,42 @@ describe('channel unread aggregation', () => {
     })
   })
 })
+
+describe('recent threads for the navigation', () => {
+  let tdb: DatabaseSync
+
+  beforeEach(() => {
+    tdb = new DatabaseSync(':memory:')
+    tdb.exec(`
+      CREATE TABLE channels (id TEXT PRIMARY KEY, type TEXT NOT NULL, parent_id TEXT, name TEXT NOT NULL);
+      CREATE TABLE messages (id TEXT PRIMARY KEY, channel_id TEXT NOT NULL, created_at TEXT NOT NULL);
+      CREATE TABLE channel_reads (channel_id TEXT NOT NULL, user_id TEXT NOT NULL, last_read_message_id TEXT, PRIMARY KEY (channel_id, user_id));
+      INSERT INTO channels VALUES
+        ('channel-1', 'text', NULL, 'general'),
+        ('recent', 'thread', 'channel-1', 'Recent thread'),
+        ('stale', 'thread', 'channel-1', 'Stale thread'),
+        ('stale-unread', 'thread', 'channel-1', 'Stale but unread'),
+        ('never-opened', 'thread', 'channel-1', 'Never opened');
+      INSERT INTO messages VALUES
+        ('m1', 'recent', '2026-09-27T10:00:00.000Z'),
+        ('m2', 'stale', '2026-09-01T10:00:00.000Z'),
+        ('m3', 'stale-unread', '2026-09-01T10:00:00.000Z'),
+        ('m4', 'stale-unread', '2026-09-01T11:00:00.000Z'),
+        ('m5', 'never-opened', '2026-09-01T10:00:00.000Z');
+      INSERT INTO channel_reads VALUES
+        ('stale', 'user-1', 'm2'),
+        ('stale-unread', 'user-1', 'm3');
+    `)
+  })
+
+  afterEach(() => tdb.close())
+
+  it('keeps recently active threads and older ones with unread replies the member has opened', () => {
+    const rows = tdb.prepare(recentThreadsSql).all('user-1', '2026-09-20T00:00:00.000Z') as Array<{ id: string, unreadCount: number, title: string }>
+    const byId = Object.fromEntries(rows.map(row => [row.id, row]))
+    expect(Object.keys(byId).sort()).toEqual(['recent', 'stale-unread'])
+    expect(byId['stale-unread']).toMatchObject({ title: 'Stale but unread', unreadCount: 1, opened: 1 })
+    expect(byId.recent).toMatchObject({ unreadCount: 0, opened: 0 })
+  })
+})
+

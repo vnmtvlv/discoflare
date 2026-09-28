@@ -259,4 +259,33 @@ describe('workspace unread cache events', () => {
 
     expect(cache.getQueryState(['members', 'main'])?.isInvalidated).toBe(true)
   })
+
+  it('counts replies as unread only in threads the member has opened, and clears them on read', () => {
+    const cache = new QueryClient()
+    const thread = (id: string, opened: boolean) => ({ id, parentId: 'parent', title: id, lastMessageAt: '2026-09-27T10:00:00.000Z', opened, unread: false, unreadCount: 0 })
+    cache.setQueryData(['channels', 'main'], { channels: [{ id: 'parent', unread: false }], threads: [thread('opened', true), thread('new', false)] })
+    const activity = (sourceChannelId: string, n: number) => applyWorkspaceRealtimeEvent(cache, {
+      t: 'channel.activity',
+      sourceChannelId,
+      rootChannelId: 'parent',
+      messageId: `01990000-0000-7000-8000-00000000000${n}`,
+      notification: { title: 'Alice', body: 'hi', url: `/channels/parent/threads/${sourceChannelId}` },
+    })
+
+    activity('opened', 1)
+    activity('new', 2)
+    type Threads = { threads: Array<{ id: string, unread: boolean, unreadCount: number }> }
+    const threads = () => Object.fromEntries((cache.getQueryData<Threads>(['channels', 'main'])?.threads ?? []).map(item => [item.id, item]))
+    expect(threads().opened).toMatchObject({ unread: true, unreadCount: 1 })
+    expect(threads().new).toMatchObject({ unread: false, unreadCount: 0 })
+
+    applyWorkspaceRealtimeEvent(cache, {
+      t: 'channel.read',
+      sourceChannelId: 'opened',
+      rootChannelId: 'parent',
+      messageId: '01990000-0000-7000-8000-000000000003',
+      unread: false,
+    })
+    expect(threads().opened).toMatchObject({ unread: false, unreadCount: 0 })
+  })
 })
