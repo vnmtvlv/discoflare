@@ -140,7 +140,8 @@ const saving = ref(false)
  * match its filters, like Notion. Otherwise a new record would vanish on the next poll.
  */
 const createdHere = ref(new Map<string, DatabaseItemDTO>())
-watch(() => [activeDatabaseSummary.value?.id, selectedViewId.value, showArchived.value], () => {
+// Separate sources compare by value; one getter returning an array would fire on every poll.
+watch([() => activeDatabaseSummary.value?.id, selectedViewId, showArchived], () => {
   createdHere.value = new Map()
 })
 
@@ -229,7 +230,8 @@ const loadedItemIds = computed(() => new Set(activeDatabase.value?.items.map(ite
 /** Records created here that the view's filters leave out; they show until you leave. */
 const outsideView = computed(() => [...createdHere.value.values()].filter(item => !loadedItemIds.value.has(item.id)))
 const visibleItems = computed(() => [...activeDatabase.value?.items ?? [], ...outsideView.value].map(rowEdits.display))
-const outsideViewIds = computed(() => new Set(outsideView.value.map(item => item.id)))
+/** Marked only in filtered views; elsewhere a record missing from the page is on another page. */
+const outsideViewIds = computed(() => new Set(activeView.value?.config.filters.length ? outsideView.value.map(item => item.id) : []))
 const selectFields = computed(() => activeDatabase.value?.fields.filter(field => field.type === 'select') ?? [])
 const dateFields = computed(() => activeDatabase.value?.fields.filter(field => field.type === 'date') ?? [])
 const layoutOptions = DatabaseViewLayouts.map(layout => ({ label: layout.charAt(0).toUpperCase() + layout.slice(1), value: layout }))
@@ -601,6 +603,9 @@ async function createRecord(title: string, key = ++pendingKey) {
   }
   finally {
     pendingRecords.value = pendingRecords.value.filter(record => record.key !== key)
+    // Once a burst of typed records has saved, reload the view so the ones its
+    // filters leave out are marked; they stay on screen through createdHere.
+    if (!pendingRecords.value.length && activeView.value?.config.filters.length) void databaseQ.refetch()
   }
 }
 
