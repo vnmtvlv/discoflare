@@ -272,36 +272,44 @@ watch(nav.inviteOpen, (open) => {
     </UDropdownMenu>
 
     <nav
-      class="m-2 grid shrink-0 gap-0.5 rounded-lg bg-elevated/60 p-0.5"
-      :style="{ gridTemplateColumns: `repeat(${modes.length}, minmax(0, 1fr))` }"
+      class="m-2 grid shrink-0 grid-flow-col auto-cols-fr gap-0.5 rounded-lg bg-elevated/60 p-0.5"
       aria-label="App"
     >
-      <NuxtLink
-        v-for="item in modes"
-        :key="item.value"
-        :to="item.to"
-        class="relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-[11px]"
-        :class="commandHeld
-          ? 'bg-primary/10 text-highlighted ring-1 ring-inset ring-primary/50'
-          : mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
-        :aria-current="mode === item.value ? 'page' : undefined"
-        :aria-keyshortcuts="`Meta+${item.shortcut}`"
-      >
-        <span
-          v-if="commandHeld"
-          class="flex size-[18px] items-center justify-center rounded bg-primary text-[11px] font-bold leading-none text-inverted shadow-sm"
-          aria-hidden="true"
+      <!-- Which apps show depends on permissions; hold their place until they are known. -->
+      <template v-if="membersQ.isPending.value">
+        <div v-for="index in 5" :key="index" class="flex h-[46px] flex-col items-center justify-center gap-1.5 rounded-md">
+          <USkeleton class="size-[18px] rounded" />
+          <USkeleton class="h-2 w-7" />
+        </div>
+      </template>
+      <template v-else>
+        <NuxtLink
+          v-for="item in modes"
+          :key="item.value"
+          :to="item.to"
+          class="relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-[11px]"
+          :class="commandHeld
+            ? 'bg-primary/10 text-highlighted ring-1 ring-inset ring-primary/50'
+            : mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
+          :aria-current="mode === item.value ? 'page' : undefined"
+          :aria-keyshortcuts="`Meta+${item.shortcut}`"
         >
-          {{ item.shortcut }}
-        </span>
-        <UIcon v-else :name="item.icon" class="size-[18px]" />
-        <span>{{ item.label }}</span>
-        <span
-          v-if="item.dot && mode !== item.value"
-          class="absolute end-[calc(50%-15px)] top-1 size-1.5 rounded-full bg-primary"
-          aria-hidden="true"
-        />
-      </NuxtLink>
+          <span
+            v-if="commandHeld"
+            class="flex size-[18px] items-center justify-center rounded bg-primary text-[11px] font-bold leading-none text-inverted shadow-sm"
+            aria-hidden="true"
+          >
+            {{ item.shortcut }}
+          </span>
+          <UIcon v-else :name="item.icon" class="size-[18px]" />
+          <span>{{ item.label }}</span>
+          <span
+            v-if="item.dot && mode !== item.value"
+            class="absolute end-[calc(50%-15px)] top-1 size-1.5 rounded-full bg-primary"
+            aria-hidden="true"
+          />
+        </NuxtLink>
+      </template>
     </nav>
 
     <div class="flex-1 overflow-y-auto pb-2">
