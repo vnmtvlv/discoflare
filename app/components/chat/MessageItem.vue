@@ -3,7 +3,7 @@ import type { ChannelThreadDTO, MessageDTO } from '~~/shared/types'
 import { formatMessageTime, formatTime } from '~~/shared/format'
 import AttachmentGallery from '~/features/attachments/components/AttachmentGallery.vue'
 
-defineProps<{
+const props = defineProps<{
   message: MessageDTO
   thread?: ChannelThreadDTO
   names: Record<string, string>
@@ -24,6 +24,58 @@ const emit = defineEmits<{
 }>()
 
 const EMOJI = ['👍', '❤️', '😂']
+const SHEET_EMOJI = ['👍', '❤️', '😂', '😮', '😢', '🙏']
+
+// Phones cannot hover, so the toolbar is unreachable there. A long press opens
+// the same actions in a bottom sheet instead.
+const actionsOpen = ref(false)
+let pressTimer: ReturnType<typeof setTimeout> | undefined
+let pressStart: { x: number, y: number } | null = null
+const actionable = computed(() => !props.message.deletedAt && !props.message.id.startsWith('tmp:'))
+
+function onTouchStart(event: TouchEvent) {
+  if (!actionable.value || event.touches.length !== 1) return
+  const target = event.target as Element | null
+  if (target?.closest('a, button, video, audio, input, textarea')) return
+  const touch = event.touches[0]!
+  pressStart = { x: touch.clientX, y: touch.clientY }
+  clearTimeout(pressTimer)
+  pressTimer = setTimeout(() => {
+    pressStart = null
+    actionsOpen.value = true
+    navigator.vibrate?.(10)
+  }, 450)
+}
+
+function onTouchMove(event: TouchEvent) {
+  if (!pressStart) return
+  const touch = event.touches[0]!
+  if (Math.hypot(touch.clientX - pressStart.x, touch.clientY - pressStart.y) > 10) cancelPress()
+}
+
+function cancelPress() {
+  clearTimeout(pressTimer)
+  pressStart = null
+}
+
+onBeforeUnmount(cancelPress)
+
+function run(action: () => void) {
+  actionsOpen.value = false
+  action()
+}
+
+const toast = useToast()
+async function copyText() {
+  actionsOpen.value = false
+  try {
+    await navigator.clipboard.writeText(props.message.content)
+    toast.add({ title: 'Copied', color: 'success' })
+  }
+  catch {
+    toast.add({ title: 'Could not copy', color: 'error' })
+  }
+}
 
 function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
   if (reply.deleted) return 'Deleted message'
@@ -35,7 +87,15 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
 </script>
 
 <template>
-  <article class="group relative px-4 flex gap-4" :class="compact ? 'py-0.5 hover:bg-elevated/40' : 'mt-4 py-0.5 hover:bg-elevated/40'">
+  <article
+    class="message-row group relative px-4 flex gap-4"
+    :class="[compact ? 'py-0.5 hover:bg-elevated/40' : 'mt-4 py-0.5 hover:bg-elevated/40', actionsOpen ? 'bg-elevated/60' : '']"
+    @touchstart.passive="onTouchStart"
+    @touchmove.passive="onTouchMove"
+    @touchend.passive="cancelPress"
+    @touchcancel.passive="cancelPress"
+    @contextmenu="(event) => { if (actionsOpen) event.preventDefault() }"
+  >
     <div class="w-10 shrink-0 flex justify-center">
       <UserAvatar
         v-if="!compact"
@@ -127,9 +187,10 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
         </button>
       </div>
     </div>
+    <!-- Hover toolbar for mouse and keyboard; touch screens use the long-press sheet. -->
     <div
-      v-if="!message.deletedAt && !message.id.startsWith('tmp:')"
-      class="absolute right-4 -top-5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex bg-elevated ring ring-default rounded-md shadow-sm z-10"
+      v-if="actionable"
+      class="absolute right-4 -top-5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 flex bg-elevated ring ring-default rounded-md shadow-sm z-10 pointer-coarse:hidden"
     >
       <UTooltip v-for="e in EMOJI" :key="e" :text="`React with ${e}`">
         <UButton size="sm" variant="ghost" color="neutral" :label="e" :aria-label="`React with ${e}`" @click="emit('react', e)" />
@@ -158,5 +219,67 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
         <UButton size="sm" variant="ghost" color="error" icon="i-ph-trash" aria-label="Delete" @click="emit('remove')" />
       </UTooltip>
     </div>
+    <UDrawer v-if="actionable" v-model:open="actionsOpen" :title="`Message from ${message.author.displayName}`" :ui="{ title: 'sr-only', header: 'hidden' }">
+      <template #body>
+        <div class="flex justify-between gap-1 pb-3">
+          <button
+            v-for="e in SHEET_EMOJI"
+            :key="e"
+            type="button"
+            class="flex size-12 items-center justify-center rounded-full bg-elevated text-2xl active:bg-accented"
+            :aria-label="`React with ${e}`"
+            @click="run(() => emit('react', e))"
+          >
+            {{ e }}
+          </button>
+        </div>
+        <div class="divide-y divide-default overflow-hidden rounded-xl bg-elevated">
+          <button type="button" class="sheet-action" @click="run(() => emit('reply'))">
+            <UIcon name="i-ph-arrow-bend-up-left" class="size-5" />Reply
+          </button>
+          <button type="button" class="sheet-action" @click="run(() => emit('thread'))">
+            <UIcon name="i-ph-chats" class="size-5" />{{ message.threadId ? 'Open thread' : 'Start thread' }}
+          </button>
+          <button v-if="canPin" type="button" class="sheet-action" @click="run(() => emit('pin'))">
+            <UIcon name="i-ph-push-pin" class="size-5" />{{ message.pin ? 'Unpin message' : 'Pin message' }}
+          </button>
+          <button v-if="message.content.trim()" type="button" class="sheet-action" @click="copyText">
+            <UIcon name="i-ph-copy" class="size-5" />Copy text
+          </button>
+          <button v-if="mine" type="button" class="sheet-action" @click="run(() => emit('edit'))">
+            <UIcon name="i-ph-pencil-simple" class="size-5" />Edit
+          </button>
+          <button v-if="mine" type="button" class="sheet-action text-error" @click="run(() => emit('remove'))">
+            <UIcon name="i-ph-trash" class="size-5" />Delete
+          </button>
+        </div>
+      </template>
+    </UDrawer>
   </article>
 </template>
+
+<style scoped>
+/* On touch screens a long press opens the action sheet; keep the system callout
+   and text selection from competing with it (the sheet offers Copy text). */
+@media (pointer: coarse) {
+  .message-row {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+}
+
+.sheet-action {
+  display: flex;
+  width: 100%;
+  min-height: 3.25rem;
+  align-items: center;
+  gap: 0.875rem;
+  padding-inline: 1rem;
+  text-align: start;
+  font-size: 0.9375rem;
+}
+
+.sheet-action:active {
+  background: var(--ui-bg-accented);
+}
+</style>
