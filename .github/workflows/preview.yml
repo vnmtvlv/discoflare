@@ -22,7 +22,10 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.event.action != 'closed' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(fromJSON(vars.DISCOFLARE_PREVIEW_TRUSTED_LOGINS || '[]'), github.event.pull_request.user.login) &&
+      contains(fromJSON(vars.DISCOFLARE_PREVIEW_TRUSTED_LOGINS || '[]'), github.actor) &&
+      contains(fromJSON(vars.DISCOFLARE_PREVIEW_TRUSTED_LOGINS || '[]'), github.triggering_actor)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: preview

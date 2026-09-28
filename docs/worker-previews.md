@@ -1,8 +1,10 @@
 # Worker Previews
 
-Every same-repository pull request targeting `main` gets one Cloudflare Worker
-Preview. The Preview follows the PR head commit and is separate from releases,
-the production deployment, and `sandbox.discoflare.com`.
+Every pull request targeting `main` gets normal CI. A pull request gets a
+Cloudflare Worker Preview only when its branch belongs to this repository and
+both its author and the actor who triggered the workflow are trusted Preview
+developers. The Preview follows the PR head commit and is separate from
+releases, the production deployment, and `sandbox.discoflare.com`.
 
 Cloudflare Workers Builds does not need a Git repository connection for this
 flow. GitHub Actions runs Wrangler directly, and the workflow posts both the
@@ -69,6 +71,22 @@ Create a GitHub Actions environment named `preview` with:
 - Secret `DISCOFLARE_PREVIEW_ADMIN_PASSWORD`: the shared Preview owner password,
   containing at least 12 characters.
 
+Create the repository variable `DISCOFLARE_PREVIEW_TRUSTED_LOGINS` as a JSON
+array containing the exact GitHub logins allowed to deploy Preview code, for
+example:
+
+```json
+["vnmtvlv"]
+```
+
+The deploy job requires the pull request author, the current workflow actor,
+and the actor who initiated a rerun to be in this list. This prevents another
+collaborator from pushing to an allowlisted developer's branch or rerunning an
+untrusted workflow to obtain Preview credentials. A missing, empty, or malformed
+variable fails closed: the deploy job does not start and receives no secrets.
+Update this variable whenever a developer gains or loses Preview trust; GitHub
+repository access alone does not grant it.
+
 Do not configure required reviewers or a wait timer unless every Preview should
 require manual approval. Repository secrets are not required for this workflow.
 
@@ -123,5 +141,7 @@ Closing or merging a pull request deletes its Worker Preview, KV namespace, and
 D1 database. The R2 bucket has a one-day expiration rule; if it still contains
 objects when the PR closes, a daily sweep retries deletion after expiration.
 
-Fork pull requests do not receive credentials or deploy a Preview. CI still
-runs for them.
+Fork pull requests and pull requests involving an untrusted author or workflow
+actor do not receive credentials or deploy a Preview. CI still runs for them.
+Cleanup remains limited to same-repository pull requests so that removing a
+developer from the trusted list cannot orphan a Preview they deployed earlier.
