@@ -104,7 +104,7 @@ const bookmarks = computed(() => (resourcesQ.data.value?.bookmarks ?? []).flatMa
       </ul>
     </LayoutNavSection>
 
-    <div class="px-2 pt-2">
+    <div v-if="!resourcesQ.isPending.value" class="px-2 pt-2">
       <LayoutNavRow :to="databasePath(null, !archived)" :active="archived">
         <template #leading><UIcon name="i-ph-archive" class="size-[18px] shrink-0 text-dimmed" /></template>
         Archived databases

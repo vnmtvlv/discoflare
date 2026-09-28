@@ -3,6 +3,8 @@ import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query
 import { onKeyStroke } from '@vueuse/core'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser, ScheduledHuddleDTO } from '~~/shared/types'
 import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
+import type { RealtimeConnection } from '../../composables/useChannelSocket'
+import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
 import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 import { hasPermission, Permission } from '~~/shared/permissions'
@@ -18,7 +20,6 @@ const { workspaceId } = useWorkspace()
 const { api } = useApi()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
 
-watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
 
 onKeyStroke(
   isSearchShortcut,
@@ -97,7 +98,7 @@ const composerPlaceholder = computed(() => {
 })
 
 const { send, retry, connection: channelConnection } = useChannelSocket(channelId)
-const { connection: workspaceConnection } = useWorkspaceSocket(workspaceId)
+const workspaceConnection = inject(workspaceConnectionKey, ref<RealtimeConnection>('connected'))
 const connection = computed(() => {
   if (channelConnection.value === 'offline' || workspaceConnection.value === 'offline') return 'offline'
   if (channelConnection.value === 'connected' && workspaceConnection.value === 'connected') return 'connected'

@@ -436,22 +436,22 @@ const boardMenu = computed(() => [[
           <UBadge v-if="showArchived" label="Archived" color="neutral" variant="subtle" size="sm" />
         </template>
         <template #actions>
-          <UInput v-model="taskSearch" icon="i-ph-magnifying-glass" placeholder="Search tasks" aria-label="Search tasks" class="w-28 sm:w-44" />
+          <UInput v-if="activeBoard" v-model="taskSearch" icon="i-ph-magnifying-glass" placeholder="Search tasks" aria-label="Search tasks" class="w-28 sm:w-44" />
           <UDropdownMenu v-if="activeBoard" :items="boardMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Board actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived" icon="i-ph-plus" :label="isMobile ? undefined : 'Task'" aria-label="New task" :disabled="!activeBoard" @click="openCreateTask" />
+          <UButton v-if="!showArchived && activeBoard" icon="i-ph-plus" :label="isMobile ? undefined : 'Task'" aria-label="New task" @click="openCreateTask" />
         </template>
       </LayoutPageHeader>
 
       <LayoutSkeleton v-if="boardsQ.isPending.value" variant="board" />
       <LayoutLoadError v-else-if="boardsQ.error.value" message="Task boards did not load." :retry="boardsQ.refetch" />
+      <LayoutEmptyState v-else-if="!activeBoard && showArchived" icon="i-ph-archive" title="Nothing archived" description="Boards you archive show up here." />
+      <LayoutEmptyState v-else-if="!activeBoard" icon="i-ph-kanban" title="No boards yet" description="A board collects the tasks for one team or project, in columns from to-do to done.">
+        <UButton icon="i-ph-plus" label="Create first board" @click="openCreateBoard" />
+      </LayoutEmptyState>
       <div v-else class="flex-1 min-h-0 overflow-auto p-4">
-        <div v-if="!activeBoard" class="h-full flex items-center justify-center">
-          <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first board" @click="openCreateBoard" />
-          <span v-else class="text-sm text-muted">Nothing archived</span>
-        </div>
-        <div v-else class="grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 min-w-max h-full items-start">
+        <div class="grid grid-flow-col auto-cols-[minmax(260px,1fr)] gap-3 min-w-max h-full items-start">
           <section
             v-for="column in columns"
             :key="column.status"
