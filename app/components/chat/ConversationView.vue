@@ -176,7 +176,15 @@ async function endHuddle() {
 watch([workspaceId, channelId], () => {
   ui.remember(workspaceId.value, channelId.value)
   huddle.view(channelId.value)
-  ui.threadId = null
+  // Changing channel closes the open thread, unless the link names a thread in
+  // the new channel (for example a thread in the navigation); then open that one.
+  const linkedThread = route.params.threadId ? String(route.params.threadId) : null
+  ui.threadId = linkedThread
+  if (linkedThread) {
+    ui.threadParentId = channelId.value
+    ui.rightPanelOpen = true
+    ui.rightPanelTab = 'threads'
+  }
 }, { immediate: true })
 
 watch(channel, (next) => {
