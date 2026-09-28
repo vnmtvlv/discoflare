@@ -266,6 +266,7 @@ async function onThread(msg: MessageDTO) {
   linkThreadToMessage(msg.id, res.channel.id)
   ui.threadId = res.channel.id
   ui.threadParentId = channelId.value
+  ui.focusThreadOnOpen = true
   await qc.invalidateQueries({ queryKey: ['threads', channelId.value] })
 }
 

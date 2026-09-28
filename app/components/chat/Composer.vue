@@ -24,6 +24,19 @@ const props = defineProps<{
 
 const emit = defineEmits<{ last: [] }>()
 
+// Focus the message field: after choosing Reply or Edit, and when a view such as
+// a new thread asks for it through `focus()`.
+const textarea = useTemplateRef<{ textareaRef?: HTMLTextAreaElement | null }>('textarea')
+function focus() {
+  void nextTick(() => {
+    const el = textarea.value?.textareaRef
+    if (!el || el.disabled) return
+    el.focus()
+    el.setSelectionRange(el.value.length, el.value.length)
+  })
+}
+defineExpose({ focus })
+
 const ui = useUiStore()
 const session = useSessionStore()
 const qc = useQueryClient()
@@ -43,6 +56,9 @@ const draft = computed({
 })
 const replyToId = computed(() => ui.composerState(props.channelId).replyToId)
 const editingId = computed(() => ui.composerState(props.channelId).editingId)
+watch([replyToId, editingId], ([reply, editing]) => {
+  if (reply || editing) focus()
+})
 
 const { open: openFiles, reset: resetFiles, onChange } = useFileDialog({
   multiple: true,
@@ -299,6 +315,7 @@ onUnmounted(() => typing.stop())
         </div>
         <UTextarea
           v-else
+          ref="textarea"
           v-model="draft"
           autoresize
           :rows="1"
