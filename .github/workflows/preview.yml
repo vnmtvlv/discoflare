@@ -79,7 +79,7 @@ jobs:
           exit "$missing"
 
       - name: Provision isolated Preview resources
-        run: pnpm preview:prepare -- "$DISCOFLARE_PREVIEW_PR"
+        run: pnpm preview:prepare "$DISCOFLARE_PREVIEW_PR"
 
       - name: Apply branch D1 migrations
         run: >-
@@ -153,7 +153,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Delete Preview and isolated resources
-        run: pnpm preview:cleanup -- "$DISCOFLARE_PREVIEW_PR"
+        run: pnpm preview:cleanup "$DISCOFLARE_PREVIEW_PR"
 
   sweep:
     name: Retry orphan cleanup
