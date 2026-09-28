@@ -27,13 +27,19 @@ require manual approval. Repository secrets are not required for this workflow.
 
 The Cloudflare token needs edit access to Workers Scripts, D1, Workers R2
 Storage, and Workers KV Storage. Scope it to the account used by
-`discoflare-sandbox`; no zone permission is needed because Previews use their
-generated `workers.dev` URLs.
+`discoflare-sandbox`. The workflow deploys to the Preview hosts already
+configured on the parent Worker; it does not create or edit DNS records.
 
 Before the first run, open `discoflare-sandbox` in the Cloudflare dashboard,
 select **Domains**, and turn on **Preview** under **Worker URL**. This is a
 one-time setting on the parent Worker. Without it Cloudflare creates the
 Preview and its deployment, but returns no usable URL.
+
+The parent Worker also has `dev.discoflare.com` configured for Preview traffic
+only, so PR `42` is available at `pr-42.dev.discoflare.com`. The matching
+Wrangler route is tracked with production disabled to keep later production
+deployments from removing the Dashboard-managed setting or routing production
+traffic to that hostname.
 
 ## Isolation
 
