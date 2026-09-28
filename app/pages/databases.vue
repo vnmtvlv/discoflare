@@ -276,7 +276,11 @@ async function saveDatabase() {
   }, editing ? 'Database renamed' : 'Database created')
   if (!ok) return
   showDatabaseForm.value = false
-  if (createdId) await navigateTo(databasePath(createdId))
+  // Open the new database once the list knows it; an unknown id falls back to the first database.
+  if (createdId) {
+    await refresh()
+    await navigateTo(databasePath(createdId))
+  }
 }
 
 async function archiveDatabase() {
@@ -579,7 +583,7 @@ function retryLoad() {
           <UDropdownMenu v-if="activeDatabase" :items="databaseMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Database actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived && activeDatabase" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" @click="addItem" />
+          <UButton v-if="!showArchived && activeDatabase" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" :loading="saving" @click="addItem" />
         </template>
       </LayoutPageHeader>
 
