@@ -797,9 +797,10 @@ function retryLoad() {
                   <span class="flex h-9 items-center justify-center">
                     <span v-if="rowEdits.edits.get(item.id)?.saving" class="size-1.5 animate-pulse rounded-full bg-primary" aria-label="Saving" />
                     <template v-else>
-                      <span :class="showArchived ? '' : 'group-hover:hidden'">{{ (page - 1) * pageSize + index + 1 }}</span>
+                      <!-- Touch screens cannot hover, so they always get the row menu. -->
+                      <span :class="showArchived ? '' : 'group-hover:hidden pointer-coarse:hidden'">{{ (page - 1) * pageSize + index + 1 }}</span>
                       <UDropdownMenu v-if="!showArchived" :items="rowMenu(item)">
-                        <UButton class="hidden group-hover:inline-flex" color="neutral" variant="ghost" size="xs" icon="i-ph-dots-three" :aria-label="`${item.title} actions`" />
+                        <UButton class="hidden group-hover:inline-flex pointer-coarse:inline-flex" color="neutral" variant="ghost" size="xs" icon="i-ph-dots-three" :aria-label="`${item.title} actions`" />
                       </UDropdownMenu>
                     </template>
                   </span>
@@ -812,7 +813,7 @@ function retryLoad() {
                 <td v-for="field in visibleFields" :key="field.id" class="df-cell border-b border-e border-default group-hover:bg-elevated/40">
                   <div class="flex h-9 items-center" :class="field.type === 'boolean' ? 'px-3' : ''">
                     <UCheckbox v-if="field.type === 'boolean'" :model-value="Boolean(item.values[field.id])" :disabled="showArchived" :aria-label="field.name" @update:model-value="updateFieldValue(item, field, Boolean($event))" />
-                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field)" variant="none" :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="h-9 w-full min-w-44" :ui="{ base: 'h-9 px-3' }" @update:model-value="updateSelectValue(item, field, $event)" />
+                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field) ?? undefined" variant="none" placeholder=" " :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="h-9 w-full min-w-44" :ui="{ base: 'h-9 px-3', trailingIcon: 'opacity-0 group-hover:opacity-100' }" @update:model-value="updateSelectValue(item, field, $event)" />
                     <UInput v-else :model-value="displayValue(item.values[field.id])" variant="none" :aria-label="field.name" :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'" :disabled="showArchived" class="w-full min-w-44" :ui="{ base: 'h-9 px-3' }" @change="updateInput(item, field, $event)" />
                   </div>
                 </td>
