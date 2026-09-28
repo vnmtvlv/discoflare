@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { validateMigrationFileNames } from '../../scripts/check-migrations.mjs'
+import { validateBootstrapRegistry, validateMigrationFileNames } from '../../scripts/check-migrations.mjs'
 
 describe('migration policy', () => {
   it('accepts one contiguous migration for every number', () => {
@@ -30,5 +30,23 @@ describe('migration policy', () => {
     expect(() => validateMigrationFileNames([
       '0000_Init.sql',
     ])).toThrow('must match NNNN_lowercase_name.sql')
+  })
+
+  it('requires the bootstrap registry to contain every migration in order', () => {
+    const migrations = validateMigrationFileNames([
+      '0000_init.sql',
+      '0001_add_channels.sql',
+    ])
+    const valid = `import initSql from '../../drizzle/migrations/0000_init.sql?raw'
+import channelsSql from '../../drizzle/migrations/0001_add_channels.sql?raw'
+
+export const INIT_SQL = d1ExecSql([
+  initSql,
+  channelsSql,
+].join('\\n--> statement-breakpoint\\n'))`
+
+    expect(() => validateBootstrapRegistry(valid, migrations)).not.toThrow()
+    expect(() => validateBootstrapRegistry(valid.replace('  channelsSql,\n', ''), migrations))
+      .toThrow('INIT_SQL must include every imported migration exactly once and in order')
   })
 })

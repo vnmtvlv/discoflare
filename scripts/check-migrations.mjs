@@ -1,10 +1,11 @@
 import { execFileSync } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { basename, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const root = resolve(import.meta.dirname, '..')
 const migrationsDirectory = join(root, 'drizzle/migrations')
+const bootstrapPath = join(root, 'server/utils/db.ts')
 const migrationPattern = /^(?<number>[0-9]{4})_(?<slug>[a-z0-9]+(?:_[a-z0-9]+)*)\.sql$/u
 
 export function validateMigrationFileNames(fileNames) {
@@ -37,6 +38,30 @@ export function validateMigrationFileNames(fileNames) {
   })
 
   return migrations
+}
+
+export function validateBootstrapRegistry(source, migrations) {
+  const imports = [...source.matchAll(
+    /^import\s+([A-Za-z_$][\w$]*)\s+from\s+'\.\.\/\.\.\/drizzle\/migrations\/([^']+\.sql)\?raw'$/gmu,
+  )].map(match => ({ identifier: match[1], fileName: match[2] }))
+  const expectedFiles = migrations.map(migration => migration.fileName)
+  const importedFiles = imports.map(migration => migration.fileName)
+
+  if (JSON.stringify(importedFiles) !== JSON.stringify(expectedFiles)) {
+    throw new Error('server/utils/db.ts migration imports must exactly match the ordered migration directory')
+  }
+
+  const registry = source.match(
+    /export const INIT_SQL = d1ExecSql\(\[\n(?<body>[\s\S]*?)\n\]\.join\('\\n--> statement-breakpoint\\n'\)\)/u,
+  )
+  if (!registry?.groups?.body) throw new Error('Could not find the INIT_SQL migration registry in server/utils/db.ts')
+
+  const identifiers = [...registry.groups.body.matchAll(/^\s*([A-Za-z_$][\w$]*),\s*$/gmu)]
+    .map(match => match[1])
+  const importedIdentifiers = imports.map(migration => migration.identifier)
+  if (JSON.stringify(identifiers) !== JSON.stringify(importedIdentifiers)) {
+    throw new Error('INIT_SQL must include every imported migration exactly once and in order')
+  }
 }
 
 function git(args) {
@@ -95,6 +120,7 @@ export async function checkMigrations({ baseRevision = '' } = {}) {
     .filter(entry => entry.isFile() && entry.name.endsWith('.sql'))
     .map(entry => entry.name)
   const migrations = validateMigrationFileNames(fileNames)
+  validateBootstrapRegistry(await readFile(bootstrapPath, 'utf8'), migrations)
 
   if (baseRevision) verifyImmutableHistory(baseRevision, migrations)
 

@@ -50,9 +50,10 @@ and migration chains that cannot be applied to a fresh local D1 database. Main
 requires branches to be current before merge, so migration PRs integrate one at
 a time even while their feature work and initial Previews run in parallel.
 
-After a migration file is added, the bootstrap schema picks it up
-automatically; agents do not maintain a second import list. A release later
-applies every migration merged since the previous release in sequence.
+After adding a migration file, add its raw import to the ordered bootstrap
+registry in `server/utils/db.ts`. The migration check verifies that this
+registry exactly matches the migration directory. A release later applies every
+migration merged since the previous release in sequence.
 
 ## GitHub environment
 
