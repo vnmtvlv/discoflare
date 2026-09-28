@@ -563,16 +563,16 @@ function retryLoad() {
           <UDropdownMenu v-if="activeDatabase" :items="databaseMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Database actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" :disabled="!activeDatabase" @click="addItem" />
+          <UButton v-if="!showArchived && activeDatabase" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" @click="addItem" />
         </template>
       </LayoutPageHeader>
 
       <div v-if="resourcesQ.isPending.value || (activeDatabaseSummary && databaseQ.isPending.value)"><LayoutSkeleton variant="table" /></div>
       <LayoutLoadError v-else-if="resourcesQ.error.value || databaseQ.error.value" message="Data did not load." :retry="retryLoad" />
-      <div v-else-if="!activeDatabase" class="grid flex-1 place-items-center p-6">
-        <UButton v-if="!showArchived" icon="i-ph-plus" label="Create first database" @click="openCreateDatabase" />
-        <span v-else class="text-sm text-muted">Nothing archived</span>
-      </div>
+      <LayoutEmptyState v-else-if="!activeDatabase && showArchived" icon="i-ph-archive" title="Nothing archived" description="Databases you archive show up here." />
+      <LayoutEmptyState v-else-if="!activeDatabase" icon="i-ph-table" title="No databases yet" description="A database holds structured records you can view as a table, board, calendar, or list.">
+        <UButton icon="i-ph-plus" label="Create first database" @click="openCreateDatabase" />
+      </LayoutEmptyState>
       <template v-else-if="activeView">
         <div class="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-default px-3 py-1.5">
           <UButton

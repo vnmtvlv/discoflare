@@ -144,7 +144,7 @@ const categoryOptions = computed(() => [
   { label: 'Uncategorized', value: null },
   ...categories.value.map(category => ({ label: category.name, value: category.id })),
 ])
-const workspaceName = computed(() => workspaceQ.data.value?.workspace.name || '…')
+const workspaceName = computed(() => workspaceQ.data.value?.workspace.name || '')
 const workspaceIconUrl = computed(() => {
   const workspace = workspaceQ.data.value?.workspace
   if (!workspace?.iconR2Key) return undefined
@@ -261,11 +261,12 @@ watch(nav.inviteOpen, (open) => {
       <button
         type="button"
         class="flex h-12 w-full shrink-0 items-center gap-1.5 px-3 shadow-[0_1px_0_var(--ui-border)] hover:bg-elevated/70"
-        :aria-label="workspaceName"
+        :aria-label="workspaceName || 'Workspace menu'"
       >
         <UAvatar v-if="workspaceIconUrl" size="sm" :src="workspaceIconUrl" :alt="workspaceName" class="rounded-md" />
         <BrandLogo v-else size="lg" :alt="workspaceName" class="rounded-md" />
-        <span class="min-w-0 flex-1 truncate text-start text-sm font-semibold text-highlighted">{{ workspaceName }}</span>
+        <span v-if="workspaceName" class="min-w-0 flex-1 truncate text-start text-sm font-semibold text-highlighted">{{ workspaceName }}</span>
+        <span v-else class="min-w-0 flex-1"><USkeleton class="h-3.5 w-24" /></span>
         <UIcon name="i-ph-caret-down" class="size-4 shrink-0 text-muted" />
       </button>
     </UDropdownMenu>

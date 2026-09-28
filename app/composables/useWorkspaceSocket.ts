@@ -3,7 +3,11 @@ import { ref } from 'vue'
 import type { WorkspaceClientMsg, WorkspaceServerMsg } from '~~/shared/types'
 import type { WorkspaceRealtimeEvent } from '~~/shared/workspace-realtime'
 import { applyWorkspaceRealtimeEvent } from '../utils/workspace-realtime'
+import type { InjectionKey, Ref } from 'vue'
 import type { RealtimeConnection } from './useChannelSocket'
+
+/** The app shell owns the one workspace connection; views read its state through this key. */
+export const workspaceConnectionKey: InjectionKey<Readonly<Ref<RealtimeConnection>>> = Symbol('workspace-connection')
 
 export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()

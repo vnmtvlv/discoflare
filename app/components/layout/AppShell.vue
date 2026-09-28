@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
+
 const ui = useUiStore()
 const props = defineProps<{
   workspaceId?: string
@@ -8,6 +10,14 @@ const { workspaceId: defaultWorkspaceId } = useWorkspace()
 
 const isMobile = useIsMobile()
 const workspaceId = computed(() => props.workspaceId || defaultWorkspaceId.value || ui.last()?.workspaceId)
+
+// Presence, unread dots, and incoming calls must keep working on every page, not
+// only while a conversation is open, so the workspace connection lives here.
+const session = useSessionStore()
+const presence = usePresenceStore()
+watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
+const { connection: workspaceConnection } = useWorkspaceSocket(() => workspaceId.value || '')
+provide(workspaceConnectionKey, workspaceConnection)
 const open = computed(() => ui.mobilePane === 'channels')
 
 watch(() => route.fullPath, () => {

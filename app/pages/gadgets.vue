@@ -365,10 +365,16 @@ function roleAccessLabel(role: RoleDTO) {
     </LayoutPageHeader>
 
     <LayoutSkeleton v-if="gadgetsQ.isPending.value" variant="document" />
-    <div v-else-if="!activeSummary" class="grid flex-1 place-items-center p-6">
-      <UButton v-if="canManage" icon="i-ph-plus" label="Create first Gadget" @click="nav.createGadgetOpen.value = true" />
-      <p v-else class="text-sm text-muted">No Apps are shared with your role.</p>
-    </div>
+    <LayoutEmptyState
+      v-else-if="!activeSummary"
+      icon="i-ph-squares-four"
+      title="No apps yet"
+      :description="canManage
+        ? 'Apps are internal tools built on your databases and shared with the roles you choose.'
+        : 'No apps are shared with your role yet.'"
+    >
+      <UButton v-if="canManage" icon="i-ph-plus" label="Create first app" @click="nav.createGadgetOpen.value = true" />
+    </LayoutEmptyState>
 
     <main v-else-if="editing" class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
       <LayoutSkeleton v-if="detailQ.isPending.value" variant="form" class="mx-auto max-w-5xl" />
