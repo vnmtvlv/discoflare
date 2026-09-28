@@ -8,7 +8,7 @@ import { getDb } from './db'
 import { writeAudit } from './messages'
 import { authorize, WorkspaceAction, type AuthorizationContext } from '../../shared/authorization'
 import { loadTaskBoards, loadTaskDetail } from './task-data'
-import { nextTaskPosition, requireBoard, requireTask, validateTaskAgent, validateTaskChannel, validateTaskDependencies, validateTaskLabels } from './task-policy'
+import { nextTaskPosition, requireBoard, requireTask, validateTaskAssignee, validateTaskChannel, validateTaskDependencies, validateTaskLabels } from './task-policy'
 
 type Schedule = (promise: Promise<unknown>) => void
 
@@ -68,7 +68,7 @@ export async function createTask(
   const db = getDb(env.DB)
   await Promise.all([
     requireBoard(env, boardId),
-    validateTaskAgent(env, input.assigneeId),
+    validateTaskAssignee(env, input.assigneeId),
     validateTaskChannel(env, input.channelId),
     validateTaskLabels(env, boardId, input.labelIds),
     validateTaskDependencies(env, null, boardId, input.dependencyIds),
@@ -85,7 +85,7 @@ export async function createTask(
     priority: input.priority,
     dueAt: input.dueAt,
     position: await nextTaskPosition(env, boardId, status),
-    assigneeId: input.assigneeId,
+    assigneeUserId: input.assigneeId,
     channelId: input.channelId,
     createdBy: actorId,
     resultSummary: null,
@@ -120,7 +120,7 @@ export async function updateTask(
   const boardId = input.boardId ?? task.boardId
   await Promise.all([
     input.boardId ? requireBoard(env, input.boardId) : Promise.resolve(),
-    validateTaskAgent(env, input.assigneeId),
+    validateTaskAssignee(env, input.assigneeId),
     validateTaskChannel(env, input.channelId),
     validateTaskLabels(env, boardId, input.labelIds),
     validateTaskDependencies(env, id, boardId, input.dependencyIds),
@@ -141,7 +141,7 @@ export async function updateTask(
     dueAt: input.dueAt === undefined ? task.dueAt : input.dueAt,
     position,
     boardId,
-    assigneeId: input.assigneeId === undefined ? task.assigneeId : input.assigneeId,
+    assigneeUserId: input.assigneeId === undefined ? task.assigneeUserId : input.assigneeId,
     channelId: input.channelId === undefined ? task.channelId : input.channelId,
     archivedAt: input.archived === undefined ? task.archivedAt : input.archived ? updatedAt : null,
     lastError: status === 'failed' ? task.lastError : null,

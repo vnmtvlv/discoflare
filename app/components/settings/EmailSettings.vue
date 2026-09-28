@@ -283,7 +283,7 @@ async function saveMailbox() {
         <UButton class="mt-3" color="error" variant="soft" size="sm" label="Delete mailbox" @click="deleteOpen = true" />
       </div>
 
-      <SettingsSaveBar :dirty="dirty" :saving="saving" :disabled="!displayName.trim()" @save="saveMailbox" @reset="resetDraft" />
+      <LayoutSaveBar :dirty="dirty" :saving="saving" :disabled="!displayName.trim()" @save="saveMailbox" @reset="resetDraft" />
     </template>
 
     <UModal v-model:open="createOpen" title="New mailbox">

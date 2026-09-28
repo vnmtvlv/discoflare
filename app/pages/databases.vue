@@ -229,13 +229,14 @@ async function refresh() {
   await Promise.all([qc.invalidateQueries({ queryKey: ['database'] }), qc.invalidateQueries({ queryKey: ['data-resources'] })])
 }
 
+/** Runs a change and refreshes in the background, so its dialog can close as soon as it is saved. */
 async function mutate(action: () => Promise<unknown>, success?: string) {
   if (saving.value) return false
   saving.value = true
   try {
     await action()
-    await refresh()
     if (success) toast.add({ title: success, color: 'success' })
+    void refresh()
     return true
   }
   catch (error) {
@@ -450,10 +451,25 @@ function dropBoard(group: string) {
   if (item && field) void updateFieldValue(item, field, group || null)
 }
 
+/** Adds a record and puts the cursor in its title, ready to type over "Untitled". */
 async function addItem() {
   const database = activeDatabase.value
-  if (!database) return
-  await mutate(() => api(`/api/databases/${database.id}/items`, { method: 'POST', body: { title: 'Untitled' } }))
+  if (!database || saving.value) return
+  saving.value = true
+  try {
+    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title: 'Untitled' } })
+    await refresh()
+    await nextTick()
+    const input = document.querySelector<HTMLInputElement>(`[data-record-title="${res.item.id}"] input`)
+    input?.focus()
+    input?.select()
+  }
+  catch (error) {
+    toast.add({ title: errorMessage(error), color: 'error' })
+  }
+  finally {
+    saving.value = false
+  }
 }
 
 async function updateTitle(item: DatabaseItemDTO, event: Event) {
@@ -605,7 +621,7 @@ function retryLoad() {
           </template>
         </UAlert>
 
-        <div v-if="!visibleItems.length && activeView.layout !== 'calendar'" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
+        <div v-if="!visibleItems.length && activeView.layout !== 'calendar' && activeView.layout !== 'table'" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
         <div v-else-if="activeView.layout === 'table'" class="min-h-0 flex-1 overflow-auto">
           <table class="min-w-max border-separate border-spacing-0 text-sm">
             <thead class="sticky top-0 z-10 bg-default">
@@ -623,10 +639,20 @@ function retryLoad() {
               </tr>
             </thead>
             <tbody>
+              <!-- An empty table keeps its header, so its columns are visible before the first record. -->
+              <tr v-if="!visibleItems.length">
+                <td :colspan="visibleFields.length + 3" class="border-b border-default px-4 py-8 text-center text-sm text-muted">
+                  <span v-if="search">No matching records</span>
+                  <template v-else>
+                    <span>No records yet.</span>
+                    <UButton v-if="!showArchived" class="ms-2" size="xs" color="neutral" variant="soft" icon="i-ph-plus" label="Add record" :loading="saving" @click="addItem" />
+                  </template>
+                </td>
+              </tr>
               <tr v-for="(item, index) in visibleItems" :key="item.id" class="group">
                 <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3 text-xs text-dimmed group-hover:bg-elevated">{{ (page - 1) * pageSize + index + 1 }}</td>
                 <td class="sticky start-12 z-[2] border-b border-e border-default bg-default p-1 group-hover:bg-elevated">
-                  <div class="flex items-center gap-1"><UInput :model-value="item.title" aria-label="Record title" :disabled="showArchived" class="min-w-56 flex-1" @change="updateTitle(item, $event)" /><UIcon v-if="rowEdits.edits.get(item.id)?.saving" name="i-ph-spinner-gap" class="size-4 animate-spin text-primary" /></div>
+                  <div class="flex items-center gap-1" :data-record-title="item.id"><UInput :model-value="item.title" aria-label="Record title" :disabled="showArchived" class="min-w-56 flex-1" @change="updateTitle(item, $event)" /><UIcon v-if="rowEdits.edits.get(item.id)?.saving" name="i-ph-spinner-gap" class="size-4 animate-spin text-primary" /></div>
                 </td>
                 <td v-for="field in visibleFields" :key="field.id" class="border-b border-e border-default p-1 group-hover:bg-elevated/50">
                   <div class="flex min-h-8 items-center gap-1">
@@ -645,7 +671,7 @@ function retryLoad() {
         <div v-else-if="activeView.layout === 'list'" class="min-h-0 flex-1 overflow-y-auto p-3">
           <div class="divide-y divide-default rounded-lg border border-default">
             <div v-for="item in visibleItems" :key="item.id" class="flex items-center gap-4 px-4 py-3 hover:bg-elevated">
-              <UInput :model-value="item.title" variant="none" aria-label="Record title" :disabled="showArchived" class="min-w-48 flex-1" :ui="{ base: 'px-0 font-medium' }" @change="updateTitle(item, $event)" />
+              <UInput :model-value="item.title" :data-record-title="item.id" variant="none" aria-label="Record title" :disabled="showArchived" class="min-w-48 flex-1" :ui="{ base: 'px-0 font-medium' }" @change="updateTitle(item, $event)" />
               <span v-for="field in visibleFields.slice(0, 3)" :key="field.id" class="hidden max-w-40 truncate text-xs text-muted sm:block">{{ displayValue(item.values[field.id]) || '—' }}</span>
               <UButton v-if="!showArchived" color="error" variant="ghost" size="xs" icon="i-ph-trash" :aria-label="`Delete ${item.title}`" @click="deleteItem(item)" />
             </div>

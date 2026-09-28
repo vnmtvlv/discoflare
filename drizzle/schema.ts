@@ -798,8 +798,13 @@ export const tasks = sqliteTable('tasks', {
   priority: text('priority', { enum: ['low', 'normal', 'high', 'urgent'] }).notNull().default('normal'),
   dueAt: text('due_at'),
   position: integer('position').notNull().default(0),
+  /** Retired in migration 0027: it references agents only. Always NULL; use `assigneeUserId`. */
   assigneeId: text('assignee_id').references(() => agents.userId, { onDelete: 'set null' }),
+  /** The member responsible for the task, human or agent. */
+  assigneeUserId: text('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
   channelId: text('channel_id').references(() => channels.id, { onDelete: 'set null' }),
+  /** Hidden channel holding the task's discussion, created on first use. */
+  discussionChannelId: text('discussion_channel_id').references(() => channels.id, { onDelete: 'set null' }),
   createdBy: text('created_by').notNull().references(() => users.id),
   resultSummary: text('result_summary'),
   resultDetails: text('result_details'),
@@ -809,6 +814,8 @@ export const tasks = sqliteTable('tasks', {
 }, table => [
   index('tasks_board_status_position_idx').on(table.boardId, table.status, table.position),
   index('tasks_assignee_id_idx').on(table.assigneeId),
+  index('tasks_assignee_user_id_idx').on(table.assigneeUserId),
+  uniqueIndex('tasks_discussion_channel_unique').on(table.discussionChannelId).where(sql`${table.discussionChannelId} is not null`),
   check('tasks_status_check', sql`${table.status} in ('backlog', 'ready', 'review', 'done', 'failed')`),
   check('tasks_priority_check', sql`${table.priority} in ('low', 'normal', 'high', 'urgent')`),
 ])

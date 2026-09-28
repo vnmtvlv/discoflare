@@ -90,8 +90,11 @@ export type TaskDTO = {
   priority: TaskPriority
   dueAt: string | null
   position: number
+  /** The responsible member, human or agent. */
   assigneeId: string | null
   channelId: string | null
+  /** Hidden channel for the task's discussion; null until someone opens it. */
+  discussionChannelId: string | null
   createdBy: string
   resultSummary: string | null
   resultDetails: string | null

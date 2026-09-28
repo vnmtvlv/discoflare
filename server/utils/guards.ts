@@ -1,6 +1,6 @@
 import { and, eq, inArray } from 'drizzle-orm'
 import type { H3Event } from 'h3'
-import { channelRoleOverrides, channels, channelMembers, emailMailboxAccess, emailMailboxes, roles, users, workspace } from '../../drizzle/schema'
+import { channelRoleOverrides, channels, channelMembers, emailMailboxAccess, emailMailboxes, roles, tasks, users, workspace } from '../../drizzle/schema'
 import { resolveChannelPermissions } from '../../shared/channel-permissions'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
@@ -110,7 +110,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
   if (memberResult.status === 'rejected') throw memberResult.reason
   const baseMember = memberResult.value
 
-  const [privateParts, mailboxes, grants] = await Promise.all([
+  const [privateParts, mailboxes, grants, discussions] = await Promise.all([
     accessRoot.visibility === 'private'
       ? db.select().from(channelMembers).where(and(eq(channelMembers.channelId, accessRoot.id), eq(channelMembers.userId, user.id))).limit(1)
       : null,
@@ -120,8 +120,13 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
       eq(emailMailboxAccess.channelId, accessRoot.id),
       eq(emailMailboxAccess.userId, user.id),
     )).limit(1),
+    db.select({ id: tasks.id }).from(tasks).where(eq(tasks.discussionChannelId, accessRoot.id)).limit(1),
   ])
   if (privateParts && !privateParts[0]) fail(404, 'not_found', 'Channel not found')
+  // A task's discussion is part of the task: only people who can work with tasks may open it.
+  if (discussions[0] && !baseMember.isOwner && !hasPermission(baseMember.perms, Permission.manageTasks)) {
+    fail(404, 'not_found', 'Channel not found')
+  }
 
   const mailbox = mailboxes[0]
   if (mailbox) {

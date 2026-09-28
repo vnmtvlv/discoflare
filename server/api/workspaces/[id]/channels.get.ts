@@ -19,8 +19,11 @@ export default defineEventHandler(async (event) => {
   const privateIds = new Set(privateAccess.map(row => row.channelId))
   const mailboxRows = await env.DB.prepare('SELECT channel_id as channelId FROM email_mailboxes').all<{ channelId: string }>()
   const mailboxIds = new Set((mailboxRows.results ?? []).map(row => row.channelId))
+  // Task discussions live inside their task, not in the channel list.
+  const discussionRows = await env.DB.prepare('SELECT discussion_channel_id as channelId FROM tasks WHERE discussion_channel_id IS NOT NULL').all<{ channelId: string }>()
+  const hiddenIds = new Set([...mailboxIds, ...(discussionRows.results ?? []).map(row => row.channelId)])
   const list = (await db.select().from(channels).orderBy(channels.position))
-    .filter((ch) => !mailboxIds.has(ch.id) && ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
+    .filter((ch) => !hiddenIds.has(ch.id) && ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
   const since = new Date(Date.now() - THREAD_ACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString()
   const [unread, threadRows] = await Promise.all([
     channelUnreadCounts(env.DB, member.user.id, list.map(channel => channel.id)),

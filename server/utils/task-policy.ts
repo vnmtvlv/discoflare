@@ -1,5 +1,5 @@
 import { and, eq, inArray, sql } from 'drizzle-orm'
-import { agents, channels, taskBoards, taskDependencies, taskLabels, taskNumbers, tasks } from '../../drizzle/schema'
+import { agents, channels, taskBoards, taskDependencies, taskLabels, taskNumbers, tasks, users } from '../../drizzle/schema'
 import type { TaskStatus } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { fail } from './cf'
@@ -24,11 +24,18 @@ export async function requireTask(env: DiscoflareEnv, taskReference: string | nu
   return row
 }
 
-export async function validateTaskAgent(env: DiscoflareEnv, assigneeId: string | null | undefined) {
+/** A task can be assigned to any active member: a person, or an agent that is not paused. */
+export async function validateTaskAssignee(env: DiscoflareEnv, assigneeId: string | null | undefined) {
   if (!assigneeId) return
-  const row = (await getDb(env.DB).select({ id: agents.userId }).from(agents)
-    .where(and(eq(agents.userId, assigneeId), eq(agents.status, 'active'))).limit(1))[0]
-  if (!row) fail(400, 'bad_request', 'Active agent not found')
+  const db = getDb(env.DB)
+  const user = (await db.select({ kind: users.kind }).from(users)
+    .where(and(eq(users.id, assigneeId), eq(users.status, 'active'))).limit(1))[0]
+  if (!user) fail(400, 'bad_request', 'Active member not found')
+  if (user.kind === 'agent') {
+    const agent = (await db.select({ id: agents.userId }).from(agents)
+      .where(and(eq(agents.userId, assigneeId), eq(agents.status, 'active'))).limit(1))[0]
+    if (!agent) fail(400, 'bad_request', 'Active agent not found')
+  }
 }
 
 export async function validateTaskChannel(env: DiscoflareEnv, channelId: string | null | undefined) {

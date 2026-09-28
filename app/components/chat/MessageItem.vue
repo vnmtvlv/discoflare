@@ -9,6 +9,8 @@ const props = defineProps<{
   names: Record<string, string>
   mine: boolean
   canPin?: boolean
+  /** Show Start/Open thread actions. */
+  canThread?: boolean
   compact?: boolean
   streaming?: boolean
 }>()
@@ -198,7 +200,7 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
       <UTooltip text="Reply">
         <UButton size="sm" variant="ghost" color="neutral" icon="i-ph-arrow-bend-up-left" aria-label="Reply" @click="emit('reply')" />
       </UTooltip>
-      <UTooltip :text="message.threadId ? 'Open thread' : 'Start thread'">
+      <UTooltip v-if="canThread" :text="message.threadId ? 'Open thread' : 'Start thread'">
         <UButton size="sm" variant="ghost" color="neutral" icon="i-ph-chats" :aria-label="message.threadId ? 'Open thread' : 'Start thread'" @click="emit('thread')" />
       </UTooltip>
       <UTooltip v-if="canPin" :text="message.pin ? 'Unpin message' : 'Pin message'">
@@ -237,7 +239,7 @@ function replySummary(reply: NonNullable<MessageDTO['replyTo']>) {
           <button type="button" class="sheet-action" @click="run(() => emit('reply'))">
             <UIcon name="i-ph-arrow-bend-up-left" class="size-5" />Reply
           </button>
-          <button type="button" class="sheet-action" @click="run(() => emit('thread'))">
+          <button v-if="canThread" type="button" class="sheet-action" @click="run(() => emit('thread'))">
             <UIcon name="i-ph-chats" class="size-5" />{{ message.threadId ? 'Open thread' : 'Start thread' }}
           </button>
           <button v-if="canPin" type="button" class="sheet-action" @click="run(() => emit('pin'))">

@@ -13,6 +13,8 @@ const props = defineProps<{
   isDm?: boolean
   canPin?: boolean
   showIntro?: boolean
+  /** Offer starting threads from messages (off where threads have no panel, such as task discussions). */
+  threads?: boolean
 }>()
 const { api } = useApi()
 const emit = defineEmits<{
@@ -333,6 +335,7 @@ function jumpToMessage(id: string) {
             :names="names"
             :mine="m.author.id === session.user?.id"
             :can-pin="canPin"
+            :can-thread="threads !== false"
             :compact="compactWith(m, messages[i - 1])"
             :streaming="streamingMessageIds.has(m.id)"
             @reply="emit('reply', m.id)"

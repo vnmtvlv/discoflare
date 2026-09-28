@@ -41,18 +41,18 @@ async function continueToCloudflare() {
 <template>
   <div>
     <h1 class="text-xl font-semibold text-highlighted">Danger Zone</h1>
-    <p class="mt-1 text-sm text-muted">Irreversible actions for this Discoflare server.</p>
+    <p class="mt-1 text-sm text-muted">Irreversible actions for this workspace.</p>
 
     <div class="mt-8 rounded-lg border border-error/60">
       <div class="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div class="min-w-0">
-          <p class="font-medium text-highlighted">Delete this server</p>
+          <p class="font-medium text-highlighted">Delete this workspace</p>
           <p class="mt-1 text-sm leading-6 text-muted">
             Permanently remove {{ workspaceName }}, its Worker, database, live files, tickets, and runtime resources from Cloudflare.
           </p>
         </div>
         <UButton
-          label="Delete server"
+          label="Delete workspace"
           trailing-icon="i-ph-trash"
           color="error"
           variant="soft"
@@ -69,7 +69,7 @@ async function continueToCloudflare() {
       class="mt-4"
       color="error"
       variant="subtle"
-      title="Could not prepare server deletion"
+      title="Could not prepare workspace deletion"
       description="Reload Workspace Settings and try again."
     />
 
@@ -84,7 +84,7 @@ async function continueToCloudflare() {
 
     <UModal
       v-model:open="confirmOpen"
-      title="Delete this server?"
+      title="Delete this workspace?"
       description="This cannot be undone. You can create an optional backup before continuing."
       :ui="{ footer: 'justify-between' }"
     >
@@ -96,7 +96,7 @@ async function continueToCloudflare() {
           description="A backup is optional, but after Cloudflare deletion the database and live file bucket cannot be recovered through Discoflare."
         />
         <p class="mt-4 text-sm leading-6 text-muted">
-          The installer will verify the Cloudflare account that owns this installation and require the server address before anything is deleted. An external backup bucket is never deleted.
+          The installer will verify the Cloudflare account that owns this installation and require the workspace address before anything is deleted. An external backup bucket is never deleted.
         </p>
       </template>
       <template #footer>
