@@ -155,7 +155,7 @@ const confirmTitle = ref('')
 const confirmAction = shallowRef<null | (() => Promise<void>)>(null)
 
 const fieldTypeOptions = DatabaseFieldTypes.map(type => ({
-  label: type.charAt(0).toUpperCase() + type.slice(1),
+  label: type === 'boolean' ? 'Checkbox' : type.charAt(0).toUpperCase() + type.slice(1),
   value: type,
 }))
 const sortOptions = computed(() => [
@@ -571,7 +571,11 @@ function updateSelectValue(item: DatabaseItemDTO, field: DatabaseFieldDTO, value
 function deleteItem(item: DatabaseItemDTO) {
   askConfirm(`Delete ${item.title}?`, async () => {
     const removed = await mutate(() => api(`/api/database-items/${item.id}`, { method: 'DELETE' }))
-    if (removed) rowEdits.discard(item)
+    if (!removed) return
+    rowEdits.discard(item)
+    qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old
+      ? { ...old, items: old.items.filter(candidate => candidate.id !== item.id), total: Math.max(0, old.total - 1) }
+      : old)
   })
 }
 
@@ -586,6 +590,34 @@ async function confirmMutation() {
   await confirmAction.value()
   showConfirm.value = false
   confirmAction.value = null
+}
+
+function fieldTypeLabel(type: DatabaseFieldType) {
+  return type === 'boolean' ? 'Checkbox' : type.charAt(0).toUpperCase() + type.slice(1)
+}
+
+/** + in the table header: name, pick a type, and it is there. */
+const newFieldOpen = ref(false)
+watch(newFieldOpen, (open) => {
+  if (!open) return
+  editingFieldId.value = null
+  fieldName.value = ''
+  fieldType.value = 'text'
+  fieldOptions.value = ''
+})
+async function createFieldQuick() {
+  const database = activeDatabase.value
+  const name = fieldName.value.trim()
+  if (!database || !name) return
+  const options = fieldOptions.value.split(',').map(option => option.trim()).filter(Boolean)
+  const ok = await mutate(() => api(`/api/databases/${database.id}/fields`, { method: 'POST', body: { name, type: fieldType.value, options } }), 'Field added')
+  if (ok) newFieldOpen.value = false
+}
+
+function rowMenu(item: DatabaseItemDTO) {
+  return [[
+    { label: 'Delete', icon: 'i-ph-trash', color: 'error' as const, onSelect: () => deleteItem(item) },
+  ]]
 }
 
 function fieldIcon(type: DatabaseFieldType) {
@@ -623,6 +655,7 @@ const databaseMenu = computed(() => [[
 ]])
 const viewMenu = computed(() => activeView.value ? [[
   { label: 'View settings', icon: 'i-ph-sliders-horizontal', onSelect: () => openEditView(activeView.value!) },
+  { label: 'Add field', icon: 'i-ph-plus', onSelect: openCreateField },
 ], [
   { label: 'Delete view', icon: 'i-ph-trash', color: 'error' as const, disabled: views.value.length <= 1, onSelect: () => deleteView(activeView.value!) },
 ]] : [])
@@ -659,28 +692,46 @@ function retryLoad() {
         <UButton icon="i-ph-plus" label="Create first database" @click="openCreateDatabase" />
       </LayoutEmptyState>
       <template v-else-if="activeView">
-        <div class="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-default px-3 py-1.5">
-          <UButton
-            v-for="view in views"
-            :key="view.id"
-            :label="view.name"
-            :icon="viewIcon(view.layout)"
-            :color="view.id === activeView.id ? 'primary' : 'neutral'"
-            :variant="view.id === activeView.id ? 'soft' : 'ghost'"
-            size="sm"
-            @click="navigateTo(databasePath(activeDatabase.id, showArchived, view.id))"
-          />
-          <UButton v-if="!showArchived" color="neutral" variant="ghost" size="sm" icon="i-ph-plus" aria-label="Create view" @click="openCreateView" />
-        </div>
-
-        <div class="flex shrink-0 flex-wrap items-center gap-2 border-b border-default px-3 py-2">
-          <UInput v-model="search" icon="i-ph-magnifying-glass" placeholder="Search this view" class="min-w-48 flex-1 sm:max-w-72" />
-          <UBadge v-if="activeView.config.filters.length" color="neutral" variant="subtle" :label="`${activeView.config.filters.length} filter`" />
-          <UBadge v-if="activeView.config.sorts.length" color="neutral" variant="subtle" :label="`${activeView.config.sorts.length} sort`" />
-          <UDropdownMenu v-if="!showArchived" :items="viewMenu">
-            <UButton color="neutral" variant="soft" icon="i-ph-sliders-horizontal" label="View" />
-          </UDropdownMenu>
-          <UButton v-if="!showArchived" color="neutral" variant="soft" icon="i-ph-plus" label="Field" @click="openCreateField" />
+        <!-- One toolbar, like Notion: views on the left, tools on the right, all the same height. -->
+        <div class="flex shrink-0 flex-wrap items-center gap-1 border-b border-default px-3 py-1.5">
+          <div class="flex min-w-0 items-center gap-0.5 overflow-x-auto">
+            <UButton
+              v-for="view in views"
+              :key="view.id"
+              :label="view.name"
+              :icon="viewIcon(view.layout)"
+              color="neutral"
+              :variant="view.id === activeView.id ? 'soft' : 'ghost'"
+              size="sm"
+              :class="view.id === activeView.id ? 'text-highlighted' : 'text-muted'"
+              @click="navigateTo(databasePath(activeDatabase.id, showArchived, view.id))"
+            />
+            <UButton v-if="!showArchived" color="neutral" variant="ghost" size="sm" icon="i-ph-plus" aria-label="Create view" @click="openCreateView" />
+          </div>
+          <div class="ms-auto flex items-center gap-1">
+            <UButton
+              v-if="activeView.config.filters.length"
+              color="primary"
+              variant="ghost"
+              size="sm"
+              icon="i-ph-funnel-simple"
+              :label="`${activeView.config.filters.length} ${activeView.config.filters.length === 1 ? 'filter' : 'filters'}`"
+              @click="openEditView(activeView)"
+            />
+            <UButton
+              v-if="activeView.config.sorts.length"
+              color="primary"
+              variant="ghost"
+              size="sm"
+              icon="i-ph-arrows-down-up"
+              :label="`${activeView.config.sorts.length} ${activeView.config.sorts.length === 1 ? 'sort' : 'sorts'}`"
+              @click="openEditView(activeView)"
+            />
+            <UInput v-model="search" size="sm" icon="i-ph-magnifying-glass" placeholder="Search" aria-label="Search this view" class="w-36 sm:w-48" />
+            <UDropdownMenu v-if="!showArchived" :items="viewMenu">
+              <UButton color="neutral" variant="ghost" size="sm" icon="i-ph-sliders-horizontal" aria-label="View options" />
+            </UDropdownMenu>
+          </div>
         </div>
 
         <UAlert v-for="item in [...rowEdits.edits.values()].filter(edit => edit.item.databaseId === activeDatabase?.id && edit.error).map(edit => edit.item)" :key="item.id" color="error" :title="`${item.title}: changes not saved`" :description="errorMessage(rowEdits.edits.get(item.id)?.error)" class="mx-3 my-2">
@@ -692,19 +743,48 @@ function retryLoad() {
 
         <div v-if="!visibleItems.length && activeView.layout !== 'calendar' && activeView.layout !== 'table'" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
         <div v-else-if="activeView.layout === 'table'" class="min-h-0 flex-1 overflow-auto">
+          <!-- Notion-like grid: borderless cells, row actions on hover, a New record row, and + to add a field. -->
           <table class="min-w-max border-separate border-spacing-0 text-sm">
             <thead class="sticky top-0 z-10 bg-default">
               <tr>
-                <th class="sticky start-0 z-20 w-12 border-b border-e border-default bg-muted px-3 py-2 text-start text-xs font-medium text-muted">#</th>
-                <th class="sticky start-12 z-20 min-w-64 border-b border-e border-default bg-muted px-2 py-1.5 text-start"><span class="flex items-center gap-1.5 text-xs font-medium text-muted"><UIcon name="i-ph-text-t" class="size-4" />Title</span></th>
-                <th v-for="field in visibleFields" :key="field.id" class="min-w-48 border-b border-e border-default bg-muted px-2 py-1.5 text-start">
-                  <div class="flex items-center gap-1">
-                    <UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" />
-                    <span class="min-w-0 flex-1 truncate text-xs font-medium text-muted">{{ field.name }}</span>
-                    <UDropdownMenu v-if="!showArchived" :items="fieldMenu(field)"><UButton color="neutral" variant="ghost" size="xs" icon="i-ph-dots-three" :aria-label="`${field.name} actions`" /></UDropdownMenu>
-                  </div>
+                <th class="sticky start-0 z-20 w-12 border-b border-e border-default bg-default px-3 py-2 text-start text-xs font-medium text-dimmed">#</th>
+                <th class="sticky start-12 z-20 min-w-64 border-b border-e border-default bg-default px-3 py-2 text-start"><span class="flex items-center gap-1.5 text-xs font-medium text-muted"><UIcon name="i-ph-text-t" class="size-4" />Title</span></th>
+                <th v-for="field in visibleFields" :key="field.id" class="min-w-48 border-b border-e border-default bg-default p-0 text-start">
+                  <UDropdownMenu v-if="!showArchived" :items="fieldMenu(field)">
+                    <button type="button" class="flex h-9 w-full items-center gap-1.5 px-3 text-xs font-medium text-muted hover:bg-elevated/60 hover:text-default">
+                      <UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" />
+                      <span class="min-w-0 flex-1 truncate text-start">{{ field.name }}</span>
+                    </button>
+                  </UDropdownMenu>
+                  <span v-else class="flex h-9 items-center gap-1.5 px-3 text-xs font-medium text-muted"><UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" />{{ field.name }}</span>
                 </th>
-                <th class="sticky end-0 z-20 w-12 border-b border-default bg-muted" />
+                <th class="w-10 border-b border-default bg-default px-1 text-start">
+                  <UPopover v-if="!showArchived" v-model:open="newFieldOpen" :content="{ align: 'end' }">
+                    <UButton color="neutral" variant="ghost" size="xs" icon="i-ph-plus" aria-label="Add field" />
+                    <template #content>
+                      <form class="w-64 space-y-2 p-2" @submit.prevent="createFieldQuick">
+                        <UInput v-model="fieldName" size="sm" placeholder="Field name" aria-label="Field name" autofocus class="w-full" />
+                        <div class="grid gap-0.5" role="radiogroup" aria-label="Field type">
+                          <button
+                            v-for="type in DatabaseFieldTypes"
+                            :key="type"
+                            type="button"
+                            role="radio"
+                            :aria-checked="fieldType === type"
+                            class="flex items-center gap-2 rounded-md px-2 py-1.5 text-start text-sm"
+                            :class="fieldType === type ? 'bg-accented text-highlighted' : 'text-default hover:bg-elevated'"
+                            @click="fieldType = type"
+                          >
+                            <UIcon :name="fieldIcon(type)" class="size-4 text-muted" />
+                            {{ fieldTypeLabel(type) }}
+                          </button>
+                        </div>
+                        <UInput v-if="fieldType === 'select'" v-model="fieldOptions" size="sm" placeholder="Options, separated by commas" aria-label="Options" class="w-full" />
+                        <UButton type="submit" block size="sm" label="Add field" :loading="saving" :disabled="!fieldName.trim()" />
+                      </form>
+                    </template>
+                  </UPopover>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -712,34 +792,47 @@ function retryLoad() {
                 <td :colspan="visibleFields.length + 3" class="border-b border-default px-4 py-6 text-center text-sm text-muted">No matching records</td>
               </tr>
               <tr v-for="(item, index) in visibleItems" :key="item.id" class="group">
-                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3 text-xs text-dimmed group-hover:bg-elevated">{{ (page - 1) * pageSize + index + 1 }}</td>
-                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default p-1 group-hover:bg-elevated">
-                  <div class="flex items-center gap-1" :data-record-title="item.id"><UInput :model-value="item.title" aria-label="Record title" :disabled="showArchived" class="min-w-56 flex-1" @change="updateTitle(item, $event)" /><UIcon v-if="rowEdits.edits.get(item.id)?.saving" name="i-ph-spinner-gap" class="size-4 animate-spin text-primary" /></div>
+                <td class="sticky start-0 z-[2] w-12 border-b border-e border-default bg-default px-1 text-center text-xs text-dimmed group-hover:bg-elevated/40">
+                  <!-- The row number doubles as the row handle, like Notion; a dot means a change is saving. -->
+                  <span class="flex h-9 items-center justify-center">
+                    <span v-if="rowEdits.edits.get(item.id)?.saving" class="size-1.5 animate-pulse rounded-full bg-primary" aria-label="Saving" />
+                    <template v-else>
+                      <span :class="showArchived ? '' : 'group-hover:hidden'">{{ (page - 1) * pageSize + index + 1 }}</span>
+                      <UDropdownMenu v-if="!showArchived" :items="rowMenu(item)">
+                        <UButton class="hidden group-hover:inline-flex" color="neutral" variant="ghost" size="xs" icon="i-ph-dots-three" :aria-label="`${item.title} actions`" />
+                      </UDropdownMenu>
+                    </template>
+                  </span>
                 </td>
-                <td v-for="field in visibleFields" :key="field.id" class="border-b border-e border-default p-1 group-hover:bg-elevated/50">
-                  <div class="flex min-h-8 items-center gap-1">
-                    <UCheckbox v-if="field.type === 'boolean'" :model-value="Boolean(item.values[field.id])" :disabled="showArchived" :aria-label="field.name" @update:model-value="updateFieldValue(item, field, Boolean($event))" />
-                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field)" :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="w-full min-w-44" @update:model-value="updateSelectValue(item, field, $event)" />
-                    <UInput v-else :model-value="displayValue(item.values[field.id])" :aria-label="field.name" :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'" :disabled="showArchived" class="w-full min-w-44" @change="updateInput(item, field, $event)" />
-                    <UIcon v-if="rowEdits.edits.get(item.id)?.saving" name="i-ph-spinner-gap" class="size-4 animate-spin text-primary" />
+                <td class="df-cell sticky start-12 z-[2] border-b border-e border-default bg-default group-hover:bg-elevated/40">
+                  <div :data-record-title="item.id">
+                    <UInput :model-value="item.title" variant="none" aria-label="Record title" :disabled="showArchived" class="w-full min-w-60" :ui="{ base: 'h-9 px-3 font-medium text-highlighted' }" @change="updateTitle(item, $event)" />
                   </div>
                 </td>
-                <td class="sticky end-0 border-b border-default bg-default px-1 group-hover:bg-elevated"><UButton v-if="!showArchived" color="error" variant="ghost" size="xs" icon="i-ph-trash" :aria-label="`Delete ${item.title}`" :disabled="rowEdits.edits.get(item.id)?.saving" @click="deleteItem(item)" /></td>
+                <td v-for="field in visibleFields" :key="field.id" class="df-cell border-b border-e border-default group-hover:bg-elevated/40">
+                  <div class="flex h-9 items-center" :class="field.type === 'boolean' ? 'px-3' : ''">
+                    <UCheckbox v-if="field.type === 'boolean'" :model-value="Boolean(item.values[field.id])" :disabled="showArchived" :aria-label="field.name" @update:model-value="updateFieldValue(item, field, Boolean($event))" />
+                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field)" variant="none" :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="h-9 w-full min-w-44" :ui="{ base: 'h-9 px-3' }" @update:model-value="updateSelectValue(item, field, $event)" />
+                    <UInput v-else :model-value="displayValue(item.values[field.id])" variant="none" :aria-label="field.name" :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'" :disabled="showArchived" class="w-full min-w-44" :ui="{ base: 'h-9 px-3' }" @change="updateInput(item, field, $event)" />
+                  </div>
+                </td>
+                <td class="border-b border-default" />
               </tr>
               <tr v-for="record in pendingRecords" :key="`pending-${record.key}`" class="opacity-60">
-                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3"><UIcon name="i-ph-spinner-gap" class="size-3.5 animate-spin text-muted" /></td>
-                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default px-3 py-2 text-sm">{{ record.title }}</td>
+                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default"><span class="flex h-9 items-center justify-center"><span class="size-1.5 animate-pulse rounded-full bg-primary" /></span></td>
+                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default px-3 font-medium">{{ record.title }}</td>
                 <td :colspan="visibleFields.length + 1" class="border-b border-default" />
               </tr>
               <tr v-if="!showArchived && !search">
-                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3 text-dimmed"><UIcon name="i-ph-plus" class="size-3.5" /></td>
-                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default p-1" data-new-record>
+                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default text-dimmed"><span class="flex h-9 items-center justify-center"><UIcon name="i-ph-plus" class="size-3.5" /></span></td>
+                <td class="df-cell sticky start-12 z-[2] border-b border-e border-default bg-default" data-new-record>
                   <UInput
                     v-model="newRecordTitle"
                     variant="none"
                     :placeholder="visibleItems.length ? 'New record' : 'Type a title to add the first record'"
                     aria-label="New record title"
-                    class="min-w-56 w-full"
+                    class="w-full min-w-60"
+                    :ui="{ base: 'h-9 px-3' }"
                     @keydown.enter.prevent="submitNewRecord"
                     @blur="submitNewRecord"
                   />
@@ -828,53 +921,58 @@ function retryLoad() {
             <p v-else class="text-xs text-muted">This database has no custom fields.</p>
           </fieldset>
 
-          <fieldset class="space-y-2">
-            <legend class="text-sm font-medium">Filters</legend>
-            <div class="flex justify-end">
+          <!-- One row per rule, like Notion: field · condition · value · remove, all the same size. -->
+          <section class="space-y-2" role="group" aria-label="Filters">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-sm font-medium">Filters</h3>
               <UButton color="neutral" variant="ghost" size="xs" icon="i-ph-plus" label="Add filter" :disabled="viewFilters.length >= 8" @click="addViewFilter" />
             </div>
-            <div v-for="(filter, index) in viewFilters" :key="index" class="space-y-2 rounded-md border border-default p-2">
-              <div class="flex gap-2">
-                <USelect v-model="filter.fieldId" :items="sortOptions" class="min-w-0 flex-1" @update:model-value="normalizeEditableFilter(filter)" />
-                <UButton color="neutral" variant="ghost" icon="i-ph-x" aria-label="Remove filter" @click="viewFilters.splice(index, 1)" />
-              </div>
-              <USelect v-model="filter.operator" :items="filterOperatorOptions(filter)" class="w-full" @update:model-value="normalizeEditableFilter(filter)" />
+            <div v-for="(filter, index) in viewFilters" :key="index" class="flex flex-wrap items-center gap-1.5 sm:flex-nowrap">
+              <USelect v-model="filter.fieldId" size="sm" :items="sortOptions" aria-label="Filter field" class="min-w-0 flex-1" @update:model-value="normalizeEditableFilter(filter)" />
+              <USelect v-model="filter.operator" size="sm" :items="filterOperatorOptions(filter)" aria-label="Condition" class="w-36 shrink-0" @update:model-value="normalizeEditableFilter(filter)" />
               <USelect
                 v-if="filterNeedsValue(filter) && filterField(filter)?.type === 'boolean'"
                 v-model="filter.value"
+                size="sm"
                 :items="[{ label: 'Yes', value: 'true' }, { label: 'No', value: 'false' }]"
-                class="w-full"
+                aria-label="Value"
+                class="min-w-0 flex-1"
               />
               <USelect
                 v-else-if="filterUsesSelectChoice(filter)"
                 v-model="filter.value"
+                size="sm"
                 :items="filterField(filter)?.options.map(option => ({ label: option, value: option })) ?? []"
-                placeholder="Choose a value"
-                class="w-full"
+                placeholder="Value"
+                aria-label="Value"
+                class="min-w-0 flex-1"
               />
               <UInput
                 v-else-if="filterNeedsValue(filter)"
                 v-model="filter.value"
+                size="sm"
                 :type="filterField(filter)?.type === 'number' ? 'number' : filterField(filter)?.type === 'date' ? 'date' : 'text'"
                 placeholder="Value"
-                class="w-full"
+                aria-label="Value"
+                class="min-w-0 flex-1"
               />
+              <UButton color="neutral" variant="ghost" size="sm" square icon="i-ph-x" aria-label="Remove filter" @click="viewFilters.splice(index, 1)" />
             </div>
             <p v-if="!viewFilters.length" class="text-xs text-muted">No filters</p>
-          </fieldset>
+          </section>
 
-          <fieldset class="space-y-2">
-            <legend class="text-sm font-medium">Sorts</legend>
-            <div class="flex justify-end">
+          <section class="space-y-2" role="group" aria-label="Sorts">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-sm font-medium">Sorts</h3>
               <UButton color="neutral" variant="ghost" size="xs" icon="i-ph-plus" label="Add sort" :disabled="viewSorts.length >= 3" @click="addViewSort" />
             </div>
-            <div v-for="(sort, index) in viewSorts" :key="index" class="flex gap-2">
-              <USelect v-model="sort.fieldId" :items="sortOptions" class="min-w-0 flex-1" />
-              <USelect v-model="sort.direction" :items="[{ label: 'Ascending', value: 'asc' }, { label: 'Descending', value: 'desc' }]" class="w-36" />
-              <UButton color="neutral" variant="ghost" icon="i-ph-x" aria-label="Remove sort" @click="viewSorts.splice(index, 1)" />
+            <div v-for="(sort, index) in viewSorts" :key="index" class="flex items-center gap-1.5">
+              <USelect v-model="sort.fieldId" size="sm" :items="sortOptions" aria-label="Sort field" class="min-w-0 flex-1" />
+              <USelect v-model="sort.direction" size="sm" :items="[{ label: 'Ascending', value: 'asc' }, { label: 'Descending', value: 'desc' }]" aria-label="Direction" class="w-36 shrink-0" />
+              <UButton color="neutral" variant="ghost" size="sm" square icon="i-ph-x" aria-label="Remove sort" @click="viewSorts.splice(index, 1)" />
             </div>
             <p v-if="!viewSorts.length" class="text-xs text-muted">No sorting</p>
-          </fieldset>
+          </section>
         </div>
       </template>
       <template #footer>
@@ -915,3 +1013,11 @@ function retryLoad() {
     </UModal>
   </div>
 </template>
+
+<style scoped>
+/* Borderless cells show where you are editing with an outline, like Notion. */
+.df-cell:focus-within {
+  background: var(--ui-bg-elevated);
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--ui-primary) 65%, transparent);
+}
+</style>
