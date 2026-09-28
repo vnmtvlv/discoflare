@@ -1,4 +1,4 @@
-import { DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseValue, type DatabaseViewConfig, type DatabaseViewFilter, type DatabaseViewFilterOperator, type DatabaseViewLayout } from '../../shared/database'
+import { DatabaseColumnWidth, DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseValue, type DatabaseViewConfig, type DatabaseViewFilter, type DatabaseViewFilterOperator, type DatabaseViewLayout } from '../../shared/database'
 import type { DatabasePageDTO, DatabaseViewDTO } from '../../shared/types'
 import type { DiscoflareEnv } from '../../workers/env'
 import { fail } from './cf'
@@ -109,7 +109,16 @@ export function normalizeDatabaseViewConfig(
   if (strict && layout === 'board' && !groupFieldId) fail(400, 'bad_request', 'Board views require a Select field')
   if (strict && layout === 'calendar' && !dateFieldId) fail(400, 'bad_request', 'Calendar views require a Date field')
 
-  return { visibleFieldIds, filters, sorts, groupFieldId, dateFieldId }
+  // Widths are presentation only: keep known columns, clamp to the allowed range, drop the rest.
+  const columnWidths: Record<string, number> = {}
+  if (raw.columnWidths && typeof raw.columnWidths === 'object') {
+    for (const [key, width] of Object.entries(raw.columnWidths as Record<string, unknown>)) {
+      if ((key !== 'title' && !validFieldIds.has(key)) || typeof width !== 'number' || !Number.isFinite(width)) continue
+      columnWidths[key] = Math.round(Math.min(DatabaseColumnWidth.max, Math.max(DatabaseColumnWidth.min, width)))
+    }
+  }
+
+  return { visibleFieldIds, filters, sorts, groupFieldId, dateFieldId, columnWidths }
 }
 
 export function parseDatabaseView(row: ViewRow, fields: StoredDatabaseField[]): DatabaseViewDTO {

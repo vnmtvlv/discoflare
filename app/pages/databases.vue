@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import { refDebounced } from '@vueuse/core'
-import { DatabaseFieldTypes, DatabaseSlotCounts, DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseFieldType, type DatabaseValue, type DatabaseViewFilter, type DatabaseViewFilterOperator, type DatabaseViewLayout, type DatabaseViewSort } from '~~/shared/database'
+import { DatabaseColumnWidth, DatabaseFieldTypes, DatabaseSlotCounts, DatabaseViewFilterOperators, DatabaseViewLayouts, defaultDatabaseViewConfig, type DatabaseFieldType, type DatabaseValue, type DatabaseViewFilter, type DatabaseViewFilterOperator, type DatabaseViewLayout, type DatabaseViewSort } from '~~/shared/database'
 import { databasePath } from '~~/shared/paths'
 import type { DataResourcesDTO, DatabaseDTO, DatabaseFieldDTO, DatabaseItemDTO, DatabasePageDTO, DatabaseViewDTO } from '~~/shared/types'
 
@@ -81,9 +81,72 @@ const visibleFields = computed(() => {
   const visible = activeView.value?.config.visibleFieldIds
   return visible === null || visible === undefined ? fields : fields.filter(field => visible.includes(field.id))
 })
+/**
+ * Column widths belong to the view, like Notion. Dragging updates them locally;
+ * the view saves once the drag settles, and polls do not undo a width mid-drag.
+ */
+const columnWidths = ref<Record<string, number>>({})
+let widthsDirty = false
+let widthTimer: ReturnType<typeof setTimeout> | undefined
+watch(() => activeView.value?.config.columnWidths, (widths) => {
+  if (!widthsDirty) columnWidths.value = { ...widths }
+}, { immediate: true })
+watch(() => activeView.value?.id, () => {
+  clearTimeout(widthTimer)
+  widthsDirty = false
+  columnWidths.value = { ...activeView.value?.config.columnWidths }
+})
+function columnWidth(key: string) {
+  return columnWidths.value[key] ?? (key === 'title' ? DatabaseColumnWidth.title : DatabaseColumnWidth.field)
+}
+function setColumnWidth(key: string, width: number) {
+  widthsDirty = true
+  columnWidths.value = { ...columnWidths.value, [key]: Math.round(width) }
+}
+const tableWidth = computed(() => 48 + 40 + columnWidth('title') + visibleFields.value.reduce((sum, field) => sum + columnWidth(field.id), 0))
+
+function saveColumnWidths() {
+  clearTimeout(widthTimer)
+  widthTimer = setTimeout(() => void persistColumnWidths(), 400)
+}
+
+async function persistColumnWidths(retry = true) {
+  const view = activeView.value
+  if (!view) return
+  try {
+    const { view: saved } = await api<{ view: DatabaseViewDTO }>(`/api/database-views/${view.id}`, {
+      method: 'PATCH',
+      body: { config: { ...view.config, columnWidths: { ...columnWidths.value } }, version: view.version },
+    })
+    qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old
+      ? { ...old, view: old.view.id === saved.id ? saved : old.view, views: old.views.map(candidate => candidate.id === saved.id ? saved : candidate) }
+      : old)
+    widthsDirty = false
+  }
+  catch (error) {
+    // The view changed elsewhere, for example a filter; widths apply on top of it.
+    if (retry && isConflict(error)) {
+      await databaseQ.refetch()
+      return persistColumnWidths(false)
+    }
+    widthsDirty = false
+    toast.add({ title: errorMessage(error), color: 'error' })
+  }
+}
+
 const saving = ref(false)
+/**
+ * Records created in this view stay in it until you leave, even when they do not
+ * match its filters, like Notion. Otherwise a new record would vanish on the next poll.
+ */
+const createdHere = ref(new Map<string, DatabaseItemDTO>())
+watch(() => [activeDatabaseSummary.value?.id, selectedViewId.value, showArchived.value], () => {
+  createdHere.value = new Map()
+})
+
 /** Replaces one record in the loaded page without reloading the database. */
 function putItem(item: DatabaseItemDTO) {
+  if (createdHere.value.has(item.id)) createdHere.value = new Map(createdHere.value).set(item.id, item)
   qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old
     ? { ...old, items: old.items.map(candidate => candidate.id === item.id ? item : candidate) }
     : old)
@@ -162,7 +225,11 @@ const sortOptions = computed(() => [
   { label: 'Title', value: 'title' },
   ...(activeDatabase.value?.fields ?? []).map(field => ({ label: field.name, value: field.id })),
 ])
-const visibleItems = computed(() => activeDatabase.value?.items.map(rowEdits.display) ?? [])
+const loadedItemIds = computed(() => new Set(activeDatabase.value?.items.map(item => item.id) ?? []))
+/** Records created here that the view's filters leave out; they show until you leave. */
+const outsideView = computed(() => [...createdHere.value.values()].filter(item => !loadedItemIds.value.has(item.id)))
+const visibleItems = computed(() => [...activeDatabase.value?.items ?? [], ...outsideView.value].map(rowEdits.display))
+const outsideViewIds = computed(() => new Set(outsideView.value.map(item => item.id)))
 const selectFields = computed(() => activeDatabase.value?.fields.filter(field => field.type === 'select') ?? [])
 const dateFields = computed(() => activeDatabase.value?.fields.filter(field => field.type === 'date') ?? [])
 const layoutOptions = DatabaseViewLayouts.map(layout => ({ label: layout.charAt(0).toUpperCase() + layout.slice(1), value: layout }))
@@ -436,6 +503,7 @@ async function saveView() {
   }))
   config.groupFieldId = viewLayout.value === 'board' ? viewGroupFieldId.value || null : null
   config.dateFieldId = viewLayout.value === 'calendar' ? viewDateFieldId.value || null : null
+  config.columnWidths = { ...current?.config.columnWidths }
   let createdId: string | null = null
   const ok = await mutate(async () => {
     if (current) {
@@ -496,6 +564,22 @@ function focusNewRecord() {
   })
 }
 
+/**
+ * Values that make a new record match the view's filters where one value clearly
+ * does, like Notion: "Status is Done" starts the record as Done. Title filters and
+ * ranges are left alone; those records still stay visible until you leave the view.
+ */
+function filterDefaults(): Record<string, DatabaseValue> {
+  const values: Record<string, DatabaseValue> = {}
+  const fields = new Map(activeDatabase.value?.fields.map(field => [field.id, field]) ?? [])
+  for (const filter of activeView.value?.config.filters ?? []) {
+    const field = fields.get(filter.fieldId)
+    if (!field || filter.value === undefined || filter.value === null || filter.fieldId in values) continue
+    if (filter.operator === 'equals' || (filter.operator === 'contains' && field.type === 'text')) values[field.id] = filter.value
+  }
+  return values
+}
+
 async function createRecord(title: string, key = ++pendingKey) {
   const database = activeDatabase.value
   if (!database) {
@@ -504,7 +588,8 @@ async function createRecord(title: string, key = ++pendingKey) {
   }
   if (!pendingRecords.value.some(record => record.key === key)) pendingRecords.value = [...pendingRecords.value, { key, title }]
   try {
-    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title } })
+    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title, values: filterDefaults() } })
+    createdHere.value = new Map(createdHere.value).set(res.item.id, res.item)
     qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old && !old.items.some(item => item.id === res.item.id)
       ? { ...old, items: [...old.items, res.item], total: old.total + 1 }
       : old)
@@ -573,6 +658,11 @@ function deleteItem(item: DatabaseItemDTO) {
     const removed = await mutate(() => api(`/api/database-items/${item.id}`, { method: 'DELETE' }))
     if (!removed) return
     rowEdits.discard(item)
+    if (createdHere.value.has(item.id)) {
+      const next = new Map(createdHere.value)
+      next.delete(item.id)
+      createdHere.value = next
+    }
     qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old
       ? { ...old, items: old.items.filter(candidate => candidate.id !== item.id), total: Math.max(0, old.total - 1) }
       : old)
@@ -744,19 +834,23 @@ function retryLoad() {
         <div v-if="!visibleItems.length && activeView.layout !== 'calendar' && activeView.layout !== 'table'" class="grid min-h-0 flex-1 place-items-center p-6 text-sm text-muted">{{ search ? 'No matching records' : 'No records in this view' }}</div>
         <div v-else-if="activeView.layout === 'table'" class="min-h-0 flex-1 overflow-auto">
           <!-- Notion-like grid: borderless cells, row actions on hover, a New record row, and + to add a field. -->
-          <table class="min-w-max border-separate border-spacing-0 text-sm">
+          <table class="table-fixed border-separate border-spacing-0 text-sm" :style="{ width: `${tableWidth}px` }">
             <thead class="sticky top-0 z-10 bg-default">
               <tr>
                 <th class="sticky start-0 z-20 w-12 border-b border-e border-default bg-default px-3 py-2 text-start text-xs font-medium text-dimmed">#</th>
-                <th class="sticky start-12 z-20 min-w-64 border-b border-e border-default bg-default px-3 py-2 text-start"><span class="flex items-center gap-1.5 text-xs font-medium text-muted"><UIcon name="i-ph-text-t" class="size-4" />Title</span></th>
-                <th v-for="field in visibleFields" :key="field.id" class="min-w-48 border-b border-e border-default bg-default p-0 text-start">
+                <th class="sticky start-12 z-20 border-b border-e border-default bg-default px-3 py-2 text-start" :style="{ width: `${columnWidth('title')}px` }">
+                  <span class="flex items-center gap-1.5 text-xs font-medium text-muted"><UIcon name="i-ph-text-t" class="size-4" />Title</span>
+                  <LayoutResizeHandle :model-value="columnWidth('title')" :min="DatabaseColumnWidth.min" :max="DatabaseColumnWidth.max" label="Resize Title column" @update:model-value="setColumnWidth('title', $event)" @end="saveColumnWidths" />
+                </th>
+                <th v-for="field in visibleFields" :key="field.id" class="relative border-b border-e border-default bg-default p-0 text-start" :style="{ width: `${columnWidth(field.id)}px` }">
                   <UDropdownMenu v-if="!showArchived" :items="fieldMenu(field)">
                     <button type="button" class="flex h-9 w-full items-center gap-1.5 px-3 text-xs font-medium text-muted hover:bg-elevated/60 hover:text-default">
                       <UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" />
                       <span class="min-w-0 flex-1 truncate text-start">{{ field.name }}</span>
                     </button>
                   </UDropdownMenu>
-                  <span v-else class="flex h-9 items-center gap-1.5 px-3 text-xs font-medium text-muted"><UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" />{{ field.name }}</span>
+                  <span v-else class="flex h-9 items-center gap-1.5 px-3 text-xs font-medium text-muted"><UIcon :name="fieldIcon(field.type)" class="size-4 shrink-0 text-dimmed" /><span class="truncate">{{ field.name }}</span></span>
+                  <LayoutResizeHandle :model-value="columnWidth(field.id)" :min="DatabaseColumnWidth.min" :max="DatabaseColumnWidth.max" :label="`Resize ${field.name} column`" @update:model-value="setColumnWidth(field.id, $event)" @end="saveColumnWidths" />
                 </th>
                 <th class="w-10 border-b border-default bg-default px-1 text-start">
                   <UPopover v-if="!showArchived" v-model:open="newFieldOpen" :content="{ align: 'end' }">
@@ -807,21 +901,27 @@ function retryLoad() {
                 </td>
                 <td class="df-cell sticky start-12 z-[2] border-b border-e border-default bg-default group-hover:bg-elevated/40">
                   <div :data-record-title="item.id">
-                    <UInput :model-value="item.title" variant="none" aria-label="Record title" :disabled="showArchived" class="w-full min-w-60" :ui="{ base: 'h-9 px-3 font-medium text-highlighted' }" @change="updateTitle(item, $event)" />
+                    <UInput :model-value="item.title" variant="none" aria-label="Record title" :disabled="showArchived" class="w-full" :ui="{ base: 'h-9 px-3 font-medium text-highlighted', trailing: 'pe-2' }" @change="updateTitle(item, $event)">
+                      <template v-if="outsideViewIds.has(item.id)" #trailing>
+                        <UTooltip text="Doesn't match this view's filters. It hides when you leave the view.">
+                          <UIcon name="i-ph-eye-slash" class="size-4 text-dimmed" aria-label="Outside this view's filters" />
+                        </UTooltip>
+                      </template>
+                    </UInput>
                   </div>
                 </td>
                 <td v-for="field in visibleFields" :key="field.id" class="df-cell border-b border-e border-default group-hover:bg-elevated/40">
                   <div class="flex h-9 items-center" :class="field.type === 'boolean' ? 'px-3' : ''">
                     <UCheckbox v-if="field.type === 'boolean'" :model-value="Boolean(item.values[field.id])" :disabled="showArchived" :aria-label="field.name" @update:model-value="updateFieldValue(item, field, Boolean($event))" />
-                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field) ?? undefined" variant="none" placeholder=" " :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="h-9 w-full min-w-44" :ui="{ base: 'h-9 px-3', trailingIcon: 'opacity-0 group-hover:opacity-100' }" @update:model-value="updateSelectValue(item, field, $event)" />
-                    <UInput v-else :model-value="displayValue(item.values[field.id])" variant="none" :aria-label="field.name" :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'" :disabled="showArchived" class="w-full min-w-44" :ui="{ base: 'h-9 px-3' }" @change="updateInput(item, field, $event)" />
+                    <USelect v-else-if="field.type === 'select'" :model-value="selectValue(item, field) ?? undefined" variant="none" placeholder=" " :aria-label="field.name" :items="[{ label: 'None', value: null }, ...field.options.map(option => ({ label: option, value: option }))]" :disabled="showArchived" class="h-9 w-full min-w-0" :ui="{ base: 'h-9 px-3', trailingIcon: 'opacity-0 group-hover:opacity-100' }" @update:model-value="updateSelectValue(item, field, $event)" />
+                    <UInput v-else :model-value="displayValue(item.values[field.id])" variant="none" :aria-label="field.name" :type="field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text'" :disabled="showArchived" class="w-full min-w-0" :ui="{ base: 'h-9 px-3' }" @change="updateInput(item, field, $event)" />
                   </div>
                 </td>
                 <td class="border-b border-default" />
               </tr>
               <tr v-for="record in pendingRecords" :key="`pending-${record.key}`" class="opacity-60">
                 <td class="sticky start-0 z-[2] border-b border-e border-default bg-default"><span class="flex h-9 items-center justify-center"><span class="size-1.5 animate-pulse rounded-full bg-primary" /></span></td>
-                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default px-3 font-medium">{{ record.title }}</td>
+                <td class="sticky start-12 z-[2] truncate border-b border-e border-default bg-default px-3 font-medium">{{ record.title }}</td>
                 <td :colspan="visibleFields.length + 1" class="border-b border-default" />
               </tr>
               <tr v-if="!showArchived && !search">
@@ -832,7 +932,7 @@ function retryLoad() {
                     variant="none"
                     :placeholder="visibleItems.length ? 'New record' : 'Type a title to add the first record'"
                     aria-label="New record title"
-                    class="w-full min-w-60"
+                    class="w-full"
                     :ui="{ base: 'h-9 px-3' }"
                     @keydown.enter.prevent="submitNewRecord"
                     @blur="submitNewRecord"

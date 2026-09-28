@@ -74,6 +74,11 @@ describe('database views', () => {
     expect(() => normalizeDatabaseViewConfig(defaultDatabaseViewConfig(), fields, 'board', true)).toThrow()
     expect(normalizeDatabaseViewConfig(defaultDatabaseViewConfig(), fields, 'table', true).visibleFieldIds).toBeNull()
     expect(normalizeDatabaseViewConfig({ ...defaultDatabaseViewConfig(), visibleFieldIds: [] }, fields, 'table', true).visibleFieldIds).toEqual([])
+    // Column widths keep known columns only, clamped to the allowed range.
+    expect(normalizeDatabaseViewConfig({ ...defaultDatabaseViewConfig(), columnWidths: { title: 20, status: 300.4, gone: 200, bad: 'wide' } }, fields, 'table', true).columnWidths)
+      .toEqual({ title: 80, status: 300 })
+    expect(normalizeDatabaseViewConfig({ ...defaultDatabaseViewConfig(), columnWidths: { status: 5000 } }, fields, 'table').columnWidths).toEqual({ status: 640 })
+    expect(normalizeDatabaseViewConfig({ visibleFieldIds: null }, fields, 'table').columnWidths).toEqual({})
     const board = { ...defaultDatabaseViewConfig(), groupFieldId: 'status' }
     expect(normalizeDatabaseViewConfig(board, fields, 'board', true).groupFieldId).toBe('status')
     expect(() => normalizeDatabaseViewConfig({ ...board, filters: [{ fieldId: 'status', operator: 'equals', value: 'Missing' }] }, fields, 'board', true)).toThrow()
