@@ -21,12 +21,12 @@ const activeId = computed(() => String(route.query.gadget || '') || gadgets.valu
   <LayoutNavSection
     label="Apps"
     collapse-key="gadgets:apps"
-    :create-label="gadgetsQ.data.value?.canManage ? 'Create Gadget' : undefined"
+    :create-label="gadgetsQ.data.value?.canManage ? 'Create app' : undefined"
     @create="nav.createGadgetOpen.value = true"
   >
     <LayoutSkeleton v-if="gadgetsQ.isPending.value" variant="nav" :rows="3" />
     <LayoutLoadError v-else-if="gadgetsQ.error.value" inline message="Apps did not load." :retry="gadgetsQ.refetch" />
-    <p v-else-if="!gadgets.length" class="px-2 py-2 text-sm text-muted">No Gadgets yet.</p>
+    <p v-else-if="!gadgets.length" class="px-2 py-2 text-sm text-muted">No apps yet.</p>
     <ul v-else>
       <li v-for="gadget in gadgets" :key="gadget.id">
         <LayoutNavRow :to="gadgetPath(gadget.id)" :active="gadget.id === activeId">

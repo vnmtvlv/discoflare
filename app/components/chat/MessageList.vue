@@ -154,8 +154,26 @@ function onScroll() {
   markReadIfVisible()
 }
 
-async function remove(id: string) {
-  await api(`/api/messages/${id}`, { method: 'DELETE' })
+// Deleting cannot be undone, so it always asks first.
+const removeId = ref<string | null>(null)
+const removing = ref(false)
+function remove(id: string) {
+  removeId.value = id
+}
+async function confirmRemove() {
+  const id = removeId.value
+  if (!id) return
+  removing.value = true
+  try {
+    await api(`/api/messages/${id}`, { method: 'DELETE' })
+    removeId.value = null
+  }
+  catch (error) {
+    toast.add({ title: errorMessage(error), color: 'error' })
+  }
+  finally {
+    removing.value = false
+  }
 }
 
 async function react(id: string, emoji: string) {
@@ -378,6 +396,15 @@ function jumpToMessage(id: string) {
             />
           </div>
         </div>
+      </template>
+    </UModal>
+    <UModal :open="Boolean(removeId)" title="Delete this message?" @update:open="(value: boolean) => { if (!value) removeId = null }">
+      <template #body>
+        <p class="text-sm text-muted">It is removed for everyone in this conversation. This cannot be undone.</p>
+      </template>
+      <template #footer>
+        <UButton color="neutral" variant="ghost" label="Cancel" @click="removeId = null" />
+        <UButton color="error" label="Delete" :loading="removing" @click="confirmRemove" />
       </template>
     </UModal>
   </div>

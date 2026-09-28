@@ -49,7 +49,7 @@ const activeBoardId = computed(() => String(route.query.board || '') || boards.v
       </ul>
     </LayoutNavSection>
 
-    <div class="mt-3 px-2">
+    <div v-if="!boardsQ.isPending.value" class="mt-3 px-2">
       <LayoutNavRow :to="boardPath(null, !archived)" :active="archived">
         <template #leading>
           <UIcon name="i-ph-archive" class="size-[18px] shrink-0 text-dimmed" />

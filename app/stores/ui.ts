@@ -18,6 +18,26 @@ export function isLastChannel(value: unknown): value is LastChannel {
   )
 }
 
+/**
+ * A null default makes VueUse store values with String(), which saved
+ * "[object Object]" and lost the last channel. Store JSON explicitly, and read
+ * anything unparseable (including that old value) as nothing remembered.
+ */
+export const lastChannelSerializer = {
+  read(raw: string): LastChannel | null {
+    try {
+      const value: unknown = JSON.parse(raw)
+      return isLastChannel(value) ? value : null
+    }
+    catch {
+      return null
+    }
+  },
+  write(value: LastChannel | null): string {
+    return JSON.stringify(value)
+  },
+}
+
 export const useUiStore = defineStore('ui', () => {
   type ComposerState = {
     draft: string
@@ -46,7 +66,7 @@ export const useUiStore = defineStore('ui', () => {
     ? useLocalStorage<Record<string, boolean>>('df:nav-collapsed', {})
     : ref<Record<string, boolean>>({})
   const lastChannel = import.meta.client
-    ? useLocalStorage<LastChannel | null>('df:last', null)
+    ? useLocalStorage<LastChannel | null>('df:last', null, { serializer: lastChannelSerializer })
     : ref<LastChannel | null>(null)
 
   function isCollapsed(key: string) {

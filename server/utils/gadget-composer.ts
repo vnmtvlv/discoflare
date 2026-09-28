@@ -31,7 +31,7 @@ export async function composeGadgetSpec(env: DiscoflareEnv, prompt: string): Pro
     })))
     .filter(candidate => candidate !== null)
 
-  if (!candidates.length) fail(409, 'no_gadget_sources', 'Create a Database View before generating a Gadget')
+  if (!candidates.length) fail(409, 'no_gadget_sources', 'Create a Database View before generating an App')
   if (!env.AI) fail(503, 'jev_unavailable', 'Jev is unavailable in this environment')
 
   const questions: Record<string, unknown> = {}
@@ -73,7 +73,7 @@ export async function composeGadgetSpec(env: DiscoflareEnv, prompt: string): Pro
     })
   }
   catch {
-    fail(503, 'jev_unavailable', 'Jev could not compose this Gadget')
+    fail(503, 'jev_unavailable', 'Jev could not compose this App')
   }
 
   const selected: Array<{

@@ -34,7 +34,7 @@ Five apps bring conversations, work, email, knowledge, and internal tools into o
 - **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Humans and Agents can read and create tracked work.
 - **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
 - **Data** — Keep structured information and knowledge together. Shape each Database through shared table, list, board, and calendar Views with typed filters and sorting; bookmark the Views, Documents, and Canvases important to you; and edit records without exposing their physical D1 storage.
-- **Apps** — Build versioned Gadgets from trusted interface elements and bind one internal tool to multiple Database Views. Generate a read-only draft with Jev or configure it directly, publish it to selected Roles, and allow only the explicit Fields and record operations declared by each Binding.
+- **Apps** — Build versioned Apps from trusted interface elements and bind one internal tool to multiple Database Views. Generate a read-only draft with Jev or configure it directly, publish it to selected Roles, and allow only the explicit Fields and record operations declared by each Binding.
 
 ### AI agents
 
@@ -57,7 +57,7 @@ One Nuxt Worker serves the app and API and receives Cloudflare-routed email. Eac
 | Layer | Cloudflare services | Responsibility |
 | --- | --- | --- |
 | App and API | Workers | Serve the frontend, handle API requests, and receive routed email. |
-| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data and Gadget definitions, Agents, boards, and Tasks. R2 stores attachments and raw email. |
+| Persistent data | D1, R2 | D1 stores workspace records, chat, mail, Data and App definitions, Agents, boards, and Tasks. R2 stores attachments and raw email. |
 | Live coordination | Durable Objects, KV | Durable Objects coordinate channels, presence, notifications, rate limits, and isolated Think memory per Agent conversation. KV holds short-lived WebSocket tickets. |
 | Agents | Workers AI, Browser Run | Agents reply in chat, read or create Tasks, and can read public URLs. They do not receive repositories or Linux computers. |
 | Voice and video | RealtimeKit | Carry optional Live session media. |

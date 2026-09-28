@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/vue-query'
 import type { ChannelDTO, ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
 import { hasPermission, Permission } from '~~/shared/permissions'
+import { channelPath } from '~~/shared/paths'
 
 const props = defineProps<{
   workspaceId: string
@@ -27,9 +28,14 @@ const presence = usePresenceStore()
 const agentBusy = computed(() => Boolean(threadId.value && presence.agentTurnsIn(threadId.value).length))
 const canApproveAgent = computed(() => hasPermission(effectivePermissions.value, Permission.manageWorkspace))
 
+// The router's live route: the page-level route misses thread-only URL changes.
+const liveRoute = useRouter().currentRoute
 function close() {
+  const parentId = ui.threadParentId
   ui.threadId = null
   ui.threadParentId = null
+  // A thread opened by URL returns to its channel's URL.
+  if (liveRoute.value.params.threadId && parentId) void navigateTo(channelPath(parentId), { replace: true })
 }
 
 function onReply(id: string) {
@@ -62,12 +68,13 @@ defineShortcuts({
       side="start"
       label="Resize thread panel"
     />
-    <header class="flex h-12 shrink-0 min-w-0 items-center gap-2 border-b border-default bg-elevated px-3">
-      <span class="truncate text-sm font-semibold">{{ threadTitle }}</span>
-      <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
-      <UTooltip text="Back to threads">
-        <UButton class="ml-auto size-11 shrink-0 md:size-8" size="sm" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back to threads" @click="close" />
+    <header class="flex h-12 shrink-0 min-w-0 items-center gap-2 border-b border-default bg-elevated px-2">
+      <UTooltip text="Back">
+        <UButton class="size-10 shrink-0 justify-center md:size-8" size="sm" color="neutral" variant="ghost" icon="i-ph-arrow-left" aria-label="Back" @click="close" />
       </UTooltip>
+      <USkeleton v-if="threadQ.isPending.value" class="h-3.5 w-32" />
+      <span v-else class="min-w-0 truncate text-sm font-semibold">{{ threadTitle }}</span>
+      <UBadge label="Thread" color="neutral" variant="subtle" size="sm" class="shrink-0" />
     </header>
     <ChatMessageList
       :channel-id="threadId"

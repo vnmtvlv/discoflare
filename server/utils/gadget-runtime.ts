@@ -14,14 +14,14 @@ import { writeAudit } from './messages'
 async function requireRuntimeAccess(env: DiscoflareEnv, actor: Membership, gadgetId: string): Promise<GadgetRow> {
   if (!canUseGadgets(actor)) fail(403, 'forbidden', 'Missing permission')
   const gadget = await requireGadget(env, gadgetId)
-  if (!gadget.publishedVersion) fail(404, 'not_found', 'Gadget not found')
+  if (!gadget.publishedVersion) fail(404, 'not_found', 'App not found')
   if (!canManageGadgets(actor)) {
     const access = await env.DB.prepare(
       `SELECT 1 FROM gadget_versions versions
        JOIN gadget_version_role_access access ON access.gadget_version_id = versions.id
        WHERE versions.gadget_id = ? AND versions.version = ? AND access.role_id = ?`,
     ).bind(gadgetId, gadget.publishedVersion, actor.roleId).first()
-    if (!access) fail(404, 'not_found', 'Gadget not found')
+    if (!access) fail(404, 'not_found', 'App not found')
   }
   return gadget
 }
@@ -32,10 +32,10 @@ async function loadPublishedGadget(env: DiscoflareEnv, gadget: GadgetRow): Promi
   const row = await env.DB.prepare(
     'SELECT name, description, spec_json as specJson FROM gadget_versions WHERE gadget_id = ? AND version = ?',
   ).bind(gadget.id, gadget.publishedVersion).first<{ name: string, description: string, specJson: string }>()
-  if (!row) fail(409, 'gadget_version_missing', 'The published Gadget Version is missing')
+  if (!row) fail(409, 'gadget_version_missing', 'The published App Version is missing')
   let value: unknown
   try { value = JSON.parse(row.specJson) }
-  catch { fail(409, 'gadget_version_invalid', 'The published Gadget Version is invalid') }
+  catch { fail(409, 'gadget_version_invalid', 'The published App Version is invalid') }
   return { name: row.name, description: row.description, spec: await validateGadgetSpec(env, value, { publish: true }) }
 }
 
@@ -101,7 +101,7 @@ async function createRecord(
   const values: Array<string | number | null> = [id, binding.source.databaseId, title, position?.value ?? 1024, 1, actor.user.id, now, now]
   for (const [fieldId, value] of Object.entries(input.values ?? {})) {
     const field = fieldMap.get(fieldId)
-    if (!field) fail(400, 'gadget_field_denied', 'The Gadget cannot write one of the supplied Fields')
+    if (!field) fail(400, 'gadget_field_denied', 'The App cannot write one of the supplied Fields')
     columns.push(field.slot)
     values.push(databaseSqlValue(field, value))
   }
@@ -127,9 +127,9 @@ async function updateRecord(
 ): Promise<DatabaseItemDTO> {
   if (!input.recordId || !input.version) fail(400, 'bad_request', 'Updating a Record requires its id and version')
   const current = await requireDatabaseItem(env, input.recordId)
-  if (current.databaseId !== binding.source.databaseId) fail(400, 'gadget_source_denied', 'The Record does not belong to this Gadget Binding')
+  if (current.databaseId !== binding.source.databaseId) fail(400, 'gadget_source_denied', 'The Record does not belong to this App Binding')
   if (!await databaseItemMatchesView(env, current.databaseId, binding.source.viewId, input.recordId)) {
-    fail(400, 'gadget_source_denied', 'The Record does not belong to this Gadget Binding')
+    fail(400, 'gadget_source_denied', 'The Record does not belong to this App Binding')
   }
   await requireDatabase(env, current.databaseId, true)
   if (current.version !== input.version) fail(409, 'stale_record', 'This Record changed elsewhere. Reload and try again.')
@@ -146,7 +146,7 @@ async function updateRecord(
   }
   for (const [fieldId, value] of Object.entries(input.values ?? {})) {
     const field = fieldMap.get(fieldId)
-    if (!field) fail(400, 'gadget_field_denied', 'The Gadget cannot write one of the supplied Fields')
+    if (!field) fail(400, 'gadget_field_denied', 'The App cannot write one of the supplied Fields')
     assignments.push(`${field.slot} = ?`)
     values.push(databaseSqlValue(field, value))
   }
@@ -173,7 +173,7 @@ export async function invokeGadget(env: DiscoflareEnv, actor: Membership, gadget
   const gadget = await requireRuntimeAccess(env, actor, gadgetId)
   const { spec } = await loadPublishedGadget(env, gadget)
   const binding = spec.bindings.find(candidate => candidate.id === input.bindingId)
-  if (!binding || !binding.operations.includes(input.operation)) fail(403, 'gadget_operation_denied', 'This Gadget does not allow that operation')
+  if (!binding || !binding.operations.includes(input.operation)) fail(403, 'gadget_operation_denied', 'This App does not allow that operation')
   if (input.operation === 'create') return createRecord(env, actor, gadgetId, binding, input)
   return updateRecord(env, actor, gadgetId, binding, input)
 }

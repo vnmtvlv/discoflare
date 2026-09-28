@@ -3,6 +3,8 @@ import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query
 import { onKeyStroke } from '@vueuse/core'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser, ScheduledHuddleDTO } from '~~/shared/types'
 import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
+import type { RealtimeConnection } from '../../composables/useChannelSocket'
+import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
 import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 import { hasPermission, Permission } from '~~/shared/permissions'
@@ -18,7 +20,6 @@ const { workspaceId } = useWorkspace()
 const { api } = useApi()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
 
-watch(() => session.user?.id, id => presence.setSelf(id ?? null), { immediate: true })
 
 onKeyStroke(
   isSearchShortcut,
@@ -97,7 +98,7 @@ const composerPlaceholder = computed(() => {
 })
 
 const { send, retry, connection: channelConnection } = useChannelSocket(channelId)
-const { connection: workspaceConnection } = useWorkspaceSocket(workspaceId)
+const workspaceConnection = inject(workspaceConnectionKey, ref<RealtimeConnection>('connected'))
 const connection = computed(() => {
   if (channelConnection.value === 'offline' || workspaceConnection.value === 'offline') return 'offline'
   if (channelConnection.value === 'connected' && workspaceConnection.value === 'connected') return 'connected'
@@ -175,7 +176,20 @@ async function endHuddle() {
 watch([workspaceId, channelId], () => {
   ui.remember(workspaceId.value, channelId.value)
   huddle.view(channelId.value)
-  ui.threadId = null
+}, { immediate: true })
+
+// The thread URL is a child of this page's route, and the page-level route does
+// not update when only the child changes, so follow the router's live route.
+// A thread in the URL opens it; no thread closes it, and so does changing channel.
+const liveRoute = useRouter().currentRoute
+const linkedThread = computed(() => liveRoute.value.params.threadId ? String(liveRoute.value.params.threadId) : null)
+watch([channelId, linkedThread], ([channel, thread]) => {
+  ui.threadId = thread
+  if (thread) {
+    ui.threadParentId = channel
+    ui.rightPanelOpen = true
+    ui.rightPanelTab = 'threads'
+  }
 }, { immediate: true })
 
 watch(channel, (next) => {
@@ -191,9 +205,8 @@ watch([() => huddle.pendingJoin, channelId], ([pending]) => {
 
 watch(() => oneQ.data.value?.channel, (ch) => {
   if (!ch) return
-  const threadId = route.params.threadId ? String(route.params.threadId) : undefined
-  const want = channelPath(ch, threadId)
-  if (route.path !== want) void navigateTo(want, { replace: true })
+  const want = channelPath(ch, linkedThread.value ?? undefined)
+  if (liveRoute.value.path !== want) void navigateTo(want, { replace: true })
 })
 
 const typingLine = computed(() => {

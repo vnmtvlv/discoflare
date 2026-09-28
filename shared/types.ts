@@ -545,6 +545,18 @@ export type ChannelDTO = {
   lastMessageAt?: string | null
 }
 
+/** A recently active thread shown under its channel in the navigation. */
+export type SidebarThreadDTO = {
+  id: string
+  parentId: string
+  title: string
+  lastMessageAt: string
+  /** The member has opened this thread, so new replies count as unread for them. */
+  opened: boolean
+  unread: boolean
+  unreadCount: number
+}
+
 export type RoleDTO = {
   id: string
   workspaceId: string

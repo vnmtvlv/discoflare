@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { isLastChannel, useUiStore } from '../../app/stores/ui'
+import { isLastChannel, lastChannelSerializer, useUiStore } from '../../app/stores/ui'
 import { isSearchShortcut } from '../../shared/shortcuts'
 
 describe('keyboard shortcuts', () => {
@@ -16,6 +16,17 @@ describe('last channel persistence', () => {
     expect(isLastChannel({ workspaceId: 'main', channelId: 'undefined' })).toBe(false)
     expect(isLastChannel({ workspaceId: 'undefined', channelId: 'channel-1' })).toBe(false)
     expect(isLastChannel({ workspaceId: 'main', channelId: 'channel-1' })).toBe(true)
+  })
+
+  it('round-trips through storage as JSON', () => {
+    const last = { workspaceId: 'main', channelId: 'channel-1' }
+    expect(lastChannelSerializer.read(lastChannelSerializer.write(last))).toEqual(last)
+  })
+
+  it('reads the old String() value and other junk as nothing remembered', () => {
+    expect(lastChannelSerializer.read('[object Object]')).toBeNull()
+    expect(lastChannelSerializer.read('null')).toBeNull()
+    expect(lastChannelSerializer.read('{"workspaceId":"main","channelId":"undefined"}')).toBeNull()
   })
 })
 

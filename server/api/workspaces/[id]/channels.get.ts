@@ -1,10 +1,14 @@
 import { eq } from 'drizzle-orm'
 import { channelCategories, channelMembers, channels } from '../../../../drizzle/schema'
-import { channelUnreadCounts } from '../../../../workers/unread'
+import { channelUnreadCounts, recentThreads } from '../../../../workers/unread'
 import { requireMember } from '../../../utils/guards'
 import { cf } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
-import type { HuddleState } from '../../../../shared/types'
+import type { HuddleState, SidebarThreadDTO } from '../../../../shared/types'
+
+/** Threads stay in the navigation while active; older ones remain one tap away in the channel's Threads panel. */
+const THREAD_ACTIVE_DAYS = 7
+const THREADS_PER_CHANNEL = 5
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id')!
@@ -17,7 +21,22 @@ export default defineEventHandler(async (event) => {
   const mailboxIds = new Set((mailboxRows.results ?? []).map(row => row.channelId))
   const list = (await db.select().from(channels).orderBy(channels.position))
     .filter((ch) => !mailboxIds.has(ch.id) && ch.type !== 'dm' && ch.type !== 'thread' && (ch.visibility === 'workspace' || privateIds.has(ch.id)))
-  const unread = await channelUnreadCounts(env.DB, member.user.id, list.map(channel => channel.id))
+  const since = new Date(Date.now() - THREAD_ACTIVE_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const [unread, threadRows] = await Promise.all([
+    channelUnreadCounts(env.DB, member.user.id, list.map(channel => channel.id)),
+    recentThreads(env.DB, member.user.id, since),
+  ])
+  const visibleIds = new Set(list.map(channel => channel.id))
+  const threadsByParent = new Map<string, SidebarThreadDTO[]>()
+  for (const row of threadRows) {
+    if (!visibleIds.has(row.parentId)) continue
+    const group = threadsByParent.get(row.parentId) ?? []
+    group.push({ ...row, unread: row.unreadCount > 0 })
+    threadsByParent.set(row.parentId, group)
+  }
+  const threads = [...threadsByParent.values()].flatMap(group => group
+    .sort((a, b) => Number(b.unread) - Number(a.unread) || b.lastMessageAt.localeCompare(a.lastMessageAt))
+    .slice(0, THREADS_PER_CHANNEL))
   const activeHuddles = new Map<string, HuddleState>()
   await Promise.all(list.filter(channel => channel.huddleMeetingId).map(async (channel) => {
     const stub = asRpc<{ getHuddle: () => Promise<HuddleState> }>(env.CHANNEL_DO.getByName(`channel:${channel.id}`))
@@ -51,5 +70,6 @@ export default defineEventHandler(async (event) => {
         createdAt: ch.createdAt,
       }
     }),
+    threads,
   }
 })

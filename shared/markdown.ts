@@ -1,4 +1,6 @@
 const DANGEROUS_PROTO = /^(javascript|data|vbscript):/i
+/** `- item`, `* item`, or `1. item` / `1) item`; group 1 is the number for ordered items. */
+const LIST_ITEM = /^\s{0,3}(?:[-*]|(\d{1,9})[.)])\s+(.*)$/
 
 export function escapeHtml(input: string): string {
   return input
@@ -67,6 +69,21 @@ export function renderMarkdown(src: string, names?: Record<string, string>): str
         i += 1
       }
       html.push(`<blockquote>${quote.map((q) => inline(q)).join('<br>')}</blockquote>`)
+      continue
+    }
+    const list = line.match(LIST_ITEM)
+    if (list) {
+      const ordered = Boolean(list[1])
+      const start = ordered ? Number(list[1]) : 1
+      const items: string[] = []
+      while (i < lines.length) {
+        const item = (lines[i] ?? '').match(LIST_ITEM)
+        if (!item || Boolean(item[1]) !== ordered) break
+        items.push(`<li>${inline(item[2] ?? '')}</li>`)
+        i += 1
+      }
+      const tag = ordered ? 'ol' : 'ul'
+      html.push(`<${tag}${ordered && start !== 1 ? ` start="${start}"` : ''}>${items.join('')}</${tag}>`)
       continue
     }
     if (line.trim() === '') {

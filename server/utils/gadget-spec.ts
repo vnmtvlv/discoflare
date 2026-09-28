@@ -38,15 +38,15 @@ export function parseGadgetSpec(value: unknown): GadgetSpec {
   if (!parsed.success) fail(400, 'invalid_gadget_spec', parsed.error.issues[0]?.message ?? 'Invalid Gadget spec')
   const spec = parsed.data
   if (!unique(spec.bindings.map(binding => binding.id)) || !unique(spec.sections.map(section => section.id))) {
-    fail(400, 'invalid_gadget_spec', 'Gadget Binding and Section ids must be unique')
+    fail(400, 'invalid_gadget_spec', 'App Binding and Section ids must be unique')
   }
   for (const binding of spec.bindings) {
-    if (!unique(binding.fieldIds) || !unique(binding.operations)) fail(400, 'invalid_gadget_spec', 'Gadget Binding fields and operations must be unique')
-    if (!binding.operations.includes('read')) fail(400, 'invalid_gadget_spec', 'Every Gadget Binding must allow read access')
+    if (!unique(binding.fieldIds) || !unique(binding.operations)) fail(400, 'invalid_gadget_spec', 'App Binding fields and operations must be unique')
+    if (!binding.operations.includes('read')) fail(400, 'invalid_gadget_spec', 'Every App Binding must allow read access')
   }
   const bindingIds = new Set(spec.bindings.map(binding => binding.id))
   if (spec.sections.some(section => !bindingIds.has(section.bindingId))) {
-    fail(400, 'invalid_gadget_spec', 'Every Gadget Section must reference a Binding')
+    fail(400, 'invalid_gadget_spec', 'Every App Section must reference a Binding')
   }
   return spec
 }
@@ -59,12 +59,12 @@ export async function validateGadgetSpec(
 ): Promise<GadgetSpec> {
   const spec = parseGadgetSpec(value)
   if (options.publish && (!spec.bindings.length || !spec.sections.length)) {
-    fail(400, 'invalid_gadget_spec', 'Add at least one source before publishing this Gadget')
+    fail(400, 'invalid_gadget_spec', 'Add at least one source before publishing this App')
   }
   if (options.publish) {
     const used = new Set(spec.sections.map(section => section.bindingId))
     if (spec.bindings.some(binding => !used.has(binding.id))) {
-      fail(400, 'invalid_gadget_spec', 'Published Gadgets cannot keep unused Bindings')
+      fail(400, 'invalid_gadget_spec', 'Published Apps cannot keep unused Bindings')
     }
   }
   for (const binding of spec.bindings) {
