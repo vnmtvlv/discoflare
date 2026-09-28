@@ -90,6 +90,8 @@ jobs:
         run: pnpm build
 
       - name: Deploy Worker Preview
+        env:
+          WRANGLER_OUTPUT_FILE_PATH: .preview/deployment.ndjson
         run: >-
           pnpm exec wrangler preview
           --name "pr-${DISCOFLARE_PREVIEW_PR}"
@@ -98,11 +100,11 @@ jobs:
           --config .wrangler.preview.generated.jsonc
           --secrets-file .preview/secrets.json
           --ignore-base-config
-          --json > .preview/deployment.json
+          --json
 
       - id: preview
         name: Read Preview URLs
-        run: node scripts/preview-report.mjs outputs .preview/deployment.json
+        run: node scripts/preview-report.mjs outputs .preview/deployment.ndjson
 
       - name: Verify Preview health and bootstrap
         env:
@@ -116,7 +118,7 @@ jobs:
       - name: Update pull request Preview link
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/preview-report.mjs comment .preview/deployment.json
+        run: node scripts/preview-report.mjs comment .preview/deployment.ndjson
 
   cleanup:
     name: Delete closed PR Preview

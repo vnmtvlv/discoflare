@@ -3,6 +3,24 @@ import { pathToFileURL } from 'node:url'
 
 const marker = '<!-- discoflare-worker-preview -->'
 
+export function wranglerPreviewOutput(raw) {
+  const entries = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line)]
+      }
+      catch {
+        return []
+      }
+    })
+  const preview = entries.reverse().find(entry => entry?.type === 'preview')
+  if (!preview) throw new Error('Wrangler output did not contain a Preview result')
+  return preview
+}
+
 export function previewDeployment(output) {
   const previewUrl = output.preview_urls?.[0] || output.preview?.urls?.[0]
   const deploymentUrl = output.deployment_urls?.[0] || output.deployment?.urls?.[0]
@@ -73,8 +91,8 @@ async function upsertComment(deployment) {
 
 async function main() {
   const [command, file] = process.argv.slice(2)
-  if (!file) throw new Error('Usage: preview-report.mjs <outputs|comment> <deployment.json>')
-  const deployment = previewDeployment(JSON.parse(await readFile(file, 'utf8')))
+  if (!file) throw new Error('Usage: preview-report.mjs <outputs|comment> <wrangler-output.ndjson>')
+  const deployment = previewDeployment(wranglerPreviewOutput(await readFile(file, 'utf8')))
   if (command === 'outputs') return writeOutputs(deployment)
   if (command === 'comment') return upsertComment(deployment)
   throw new Error('Usage: preview-report.mjs <outputs|comment> <deployment.json>')

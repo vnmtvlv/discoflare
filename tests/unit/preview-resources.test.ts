@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildPreviewConfigs, previewResourceNames } from '../../scripts/preview-resources.mjs'
-import { previewComment, previewDeployment } from '../../scripts/preview-report.mjs'
+import { previewComment, previewDeployment, wranglerPreviewOutput } from '../../scripts/preview-report.mjs'
 
 const production = {
   $schema: 'node_modules/wrangler/config-schema.json',
@@ -37,12 +37,14 @@ describe('Worker Preview resources', () => {
   })
 
   it('extracts stable and immutable URLs from Wrangler JSON', () => {
-    const deployment = previewDeployment({
+    const output = {
+      type: 'preview',
       preview_name: 'pr-42',
       preview_urls: ['https://pr-42.example.workers.dev'],
       deployment_id: 'deployment-1',
       deployment_urls: ['https://deployment-1.example.workers.dev'],
-    })
+    }
+    const deployment = previewDeployment(output)
     expect(deployment).toEqual({
       previewName: 'pr-42',
       previewUrl: 'https://pr-42.example.workers.dev',
@@ -50,6 +52,7 @@ describe('Worker Preview resources', () => {
       deploymentId: 'deployment-1',
     })
     expect(previewComment(deployment, 'abc123')).toContain('Exact deployment: https://deployment-1.example.workers.dev')
+    expect(wranglerPreviewOutput(`${JSON.stringify({ type: 'wrangler-session' })}\n${JSON.stringify(output)}\n`)).toEqual(output)
   })
 
   it('binds Preview-safe resources without inheriting production data or origins', () => {
