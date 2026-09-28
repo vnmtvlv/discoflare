@@ -31,8 +31,8 @@ native client. Remote push delivery is not part of these client packages.
 
 ## Requirements
 
-- Node.js 24.20 or newer
-- pnpm 10
+- The Node.js version in the repository `.node-version` file
+- The pnpm version in the root `package.json#packageManager` field
 - macOS with Xcode 26 or newer
 - Rust 1.88 or newer for macOS desktop builds
 - Chrome 114 or newer for the extension side panel

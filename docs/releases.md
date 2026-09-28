@@ -24,8 +24,10 @@ fix/a-bug              ─┘
 ## Pull request checks
 
 `.github/workflows/ci.yml` runs on every PR targeting `main` and on pushes to
-`main`. It installs the lockfile dependencies with Node.js 24 and pnpm 10.30.3,
-then runs four independent checks: `lint`, `typecheck`, `test`, and `build`.
+`main`. It reads Node.js from `.node-version`, pnpm from
+`package.json#packageManager`, and installs the lockfile dependencies before
+running five independent checks: `lint`, `typecheck`, `test`, `build`, and
+`migrations`.
 Failed checks do not cancel the other checks; a newer update to the same PR or
 branch cancels its superseded run.
 

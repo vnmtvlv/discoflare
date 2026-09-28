@@ -145,6 +145,17 @@ Manual deployments show Cloudflare cleanup guidance because Discoflare cannot pr
 
 ## Local development
 
+The repository keeps each version boundary explicit:
+
+- `.node-version` pins the Node.js version used by local tools and GitHub Actions;
+- `package.json#packageManager` pins pnpm for local tools and GitHub Actions;
+- the `wrangler` dev dependency and lockfile pin the Cloudflare CLI; and
+- `compatibility_date` in the Wrangler configs selects Cloudflare Workers runtime behavior.
+
+The Workers compatibility date is not a Node.js or Wrangler version. The
+application version is also independent and changes only in a release PR.
+Use a version manager that reads `.node-version` before installing dependencies.
+
 ### First run
 
 ```bash

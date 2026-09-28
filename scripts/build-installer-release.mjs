@@ -88,8 +88,8 @@ const manifest = {
   schemaVersion: 1,
   version,
   releasedAt: new Date().toISOString(),
-  compatibilityDate: '2026-09-02',
-  compatibilityFlags: ['nodejs_compat'],
+  compatibilityDate: '2026-09-28',
+  compatibilityFlags: [],
   capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'managed-domain-lifecycle-v1', 'managed-realtimekit-v1'],
   worker: {
     url: `${releaseBaseUrl}/${workerName}`,

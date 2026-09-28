@@ -20,7 +20,7 @@ const rawSqlPlugin = {
 }
 
 export default defineNuxtConfig({
-  compatibilityDate: '2026-09-02',
+  compatibilityDate: '2026-09-28',
   ssr: !bundledClient && !remoteFrontend,
   devtools: { enabled: false },
   css: ['~/assets/css/main.css'],
