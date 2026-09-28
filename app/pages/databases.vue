@@ -496,11 +496,13 @@ function focusNewRecord() {
   })
 }
 
-async function createRecord(title: string) {
+async function createRecord(title: string, key = ++pendingKey) {
   const database = activeDatabase.value
-  if (!database) return
-  const key = ++pendingKey
-  pendingRecords.value = [...pendingRecords.value, { key, title }]
+  if (!database) {
+    pendingRecords.value = pendingRecords.value.filter(record => record.key !== key)
+    return
+  }
+  if (!pendingRecords.value.some(record => record.key === key)) pendingRecords.value = [...pendingRecords.value, { key, title }]
   try {
     const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title } })
     qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old && !old.items.some(item => item.id === res.item.id)
@@ -517,11 +519,17 @@ async function createRecord(title: string) {
   }
 }
 
+// Records typed in quick succession are created one after another, so they keep
+// the order they were typed in; each still shows at once as a pending row.
+let createQueue: Promise<void> = Promise.resolve()
+
 function submitNewRecord() {
   const title = newRecordTitle.value.trim()
   if (!title) return
   newRecordTitle.value = ''
-  void createRecord(title)
+  const key = ++pendingKey
+  pendingRecords.value = [...pendingRecords.value, { key, title }]
+  createQueue = createQueue.then(() => createRecord(title, key))
 }
 
 /** + Record: in a table, go to the New record row; elsewhere add an "Untitled" record. */
