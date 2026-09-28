@@ -80,7 +80,7 @@ async function writeOutputs(deployment) {
 
 async function upsertComment(deployment) {
   const { owner, repo, prNumber } = githubCoordinates()
-  const body = previewComment(deployment, process.env.GITHUB_SHA || 'unknown')
+  const body = previewComment(deployment, process.env.DISCOFLARE_PREVIEW_SHA || process.env.GITHUB_SHA || 'unknown')
   const comments = await github(`/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100`)
   const existing = comments.find(comment => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker))
   if (existing) {

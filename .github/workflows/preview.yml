@@ -33,6 +33,7 @@ jobs:
       DISCOFLARE_PREVIEW_ADMIN_EMAIL: ${{ secrets.DISCOFLARE_PREVIEW_ADMIN_EMAIL }}
       DISCOFLARE_PREVIEW_ADMIN_PASSWORD: ${{ secrets.DISCOFLARE_PREVIEW_ADMIN_PASSWORD }}
       DISCOFLARE_PREVIEW_PR: ${{ github.event.pull_request.number }}
+      DISCOFLARE_PREVIEW_SHA: ${{ github.event.pull_request.head.sha }}
     steps:
       - name: Check out pull request
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -95,8 +96,8 @@ jobs:
         run: >-
           pnpm exec wrangler preview
           --name "pr-${DISCOFLARE_PREVIEW_PR}"
-          --tag "${GITHUB_SHA}"
-          --message "PR #${DISCOFLARE_PREVIEW_PR} ${GITHUB_SHA}"
+          --tag "${DISCOFLARE_PREVIEW_SHA}"
+          --message "PR #${DISCOFLARE_PREVIEW_PR} ${DISCOFLARE_PREVIEW_SHA}"
           --config .wrangler.preview.generated.jsonc
           --secrets-file .preview/secrets.json
           --ignore-base-config
