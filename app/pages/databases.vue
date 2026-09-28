@@ -55,8 +55,9 @@ const calendarRange = computed(() => {
   to.setDate(from.getDate() + 41)
   return { from: localDateKey(from), to: localDateKey(to) }
 })
+const databaseKey = computed(() => ['database', activeDatabaseSummary.value?.id, selectedViewId.value, debouncedSearch.value, page.value, calendarRange.value.from, calendarRange.value.to] as const)
 const databaseQ = useQuery({
-  queryKey: computed(() => ['database', activeDatabaseSummary.value?.id, selectedViewId.value, debouncedSearch.value, page.value, calendarRange.value.from, calendarRange.value.to]),
+  queryKey: databaseKey,
   queryFn: () => api<DatabasePageDTO>(`/api/databases/${activeDatabaseSummary.value!.id}`, {
     query: {
       view: selectedViewId.value || undefined,
@@ -81,12 +82,35 @@ const visibleFields = computed(() => {
   return visible === null || visible === undefined ? fields : fields.filter(field => visible.includes(field.id))
 })
 const saving = ref(false)
+/** Replaces one record in the loaded page without reloading the database. */
+function putItem(item: DatabaseItemDTO) {
+  qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old
+    ? { ...old, items: old.items.map(candidate => candidate.id === item.id ? item : candidate) }
+    : old)
+}
+
+function isConflict(error: unknown) {
+  return (error as { statusCode?: number, status?: number })?.statusCode === 409
+    || (error as { status?: number })?.status === 409
+}
+
 const rowEdits = useDatabaseEdits(
   async (id, patch) => {
-    const result = await api<{ item: DatabaseItemDTO }>(`/api/database-items/${id}`, { method: 'PATCH', body: patch })
-    return result.item
+    const send = (version: number) => api<{ item: DatabaseItemDTO }>(`/api/database-items/${id}`, { method: 'PATCH', body: { ...patch, version } })
+    try {
+      return (await send(patch.version)).item
+    }
+    catch (error) {
+      // Someone else saved this record first. Edits are per field, so apply this
+      // change on top of the latest version once instead of stranding it.
+      if (!isConflict(error)) throw error
+      const latest = (await databaseQ.refetch()).data?.items.find(candidate => candidate.id === id)
+      if (!latest) throw error
+      return (await send(latest.version)).item
+    }
   },
-  () => { void refresh() },
+  // The saved record comes back with the response; the 10-second poll covers other changes.
+  item => putItem(item),
 )
 onBeforeRouteUpdate(() => rowEdits.flush())
 onBeforeRouteLeave(() => rowEdits.flush())
@@ -455,25 +479,58 @@ function dropBoard(group: string) {
   if (item && field) void updateFieldValue(item, field, group || null)
 }
 
-/** Adds a record and puts the cursor in its title, ready to type over "Untitled". */
-async function addItem() {
-  const database = activeDatabase.value
-  if (!database || saving.value) return
-  saving.value = true
-  try {
-    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title: 'Untitled' } })
-    await refresh()
-    await nextTick()
-    const input = document.querySelector<HTMLInputElement>(`[data-record-title="${res.item.id}"] input`)
+/**
+ * The table ends in a "New record" row, like Notion: type a title and press
+ * Enter to create the record with it. The row shows immediately while it saves,
+ * and the field stays focused for the next one.
+ */
+const newRecordTitle = ref('')
+const pendingRecords = ref<Array<{ key: number, title: string }>>([])
+let pendingKey = 0
+
+function focusNewRecord() {
+  void nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-new-record] input')
+    input?.scrollIntoView({ block: 'nearest' })
     input?.focus()
-    input?.select()
+  })
+}
+
+async function createRecord(title: string) {
+  const database = activeDatabase.value
+  if (!database) return
+  const key = ++pendingKey
+  pendingRecords.value = [...pendingRecords.value, { key, title }]
+  try {
+    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title } })
+    qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old && !old.items.some(item => item.id === res.item.id)
+      ? { ...old, items: [...old.items, res.item], total: old.total + 1 }
+      : old)
+    void qc.invalidateQueries({ queryKey: ['data-resources'] })
   }
   catch (error) {
     toast.add({ title: errorMessage(error), color: 'error' })
+    if (!newRecordTitle.value) newRecordTitle.value = title
   }
   finally {
-    saving.value = false
+    pendingRecords.value = pendingRecords.value.filter(record => record.key !== key)
   }
+}
+
+function submitNewRecord() {
+  const title = newRecordTitle.value.trim()
+  if (!title) return
+  newRecordTitle.value = ''
+  void createRecord(title)
+}
+
+/** + Record: in a table, go to the New record row; elsewhere add an "Untitled" record. */
+async function addItem() {
+  if (activeView.value?.layout === 'table') {
+    focusNewRecord()
+    return
+  }
+  await createRecord('Untitled')
 }
 
 async function updateTitle(item: DatabaseItemDTO, event: Event) {
@@ -583,7 +640,7 @@ function retryLoad() {
           <UDropdownMenu v-if="activeDatabase" :items="databaseMenu">
             <UButton color="neutral" variant="ghost" icon="i-ph-dots-three" aria-label="Database actions" />
           </UDropdownMenu>
-          <UButton v-if="!showArchived && activeDatabase" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" :loading="saving" @click="addItem" />
+          <UButton v-if="!showArchived && activeDatabase" icon="i-ph-plus" :label="isMobile ? undefined : 'Record'" aria-label="New record" @click="addItem" />
         </template>
       </LayoutPageHeader>
 
@@ -643,15 +700,8 @@ function retryLoad() {
               </tr>
             </thead>
             <tbody>
-              <!-- An empty table keeps its header, so its columns are visible before the first record. -->
-              <tr v-if="!visibleItems.length">
-                <td :colspan="visibleFields.length + 3" class="border-b border-default px-4 py-8 text-center text-sm text-muted">
-                  <span v-if="search">No matching records</span>
-                  <template v-else>
-                    <span>No records yet.</span>
-                    <UButton v-if="!showArchived" class="ms-2" size="xs" color="neutral" variant="soft" icon="i-ph-plus" label="Add record" :loading="saving" @click="addItem" />
-                  </template>
-                </td>
+              <tr v-if="!visibleItems.length && search">
+                <td :colspan="visibleFields.length + 3" class="border-b border-default px-4 py-6 text-center text-sm text-muted">No matching records</td>
               </tr>
               <tr v-for="(item, index) in visibleItems" :key="item.id" class="group">
                 <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3 text-xs text-dimmed group-hover:bg-elevated">{{ (page - 1) * pageSize + index + 1 }}</td>
@@ -667,6 +717,26 @@ function retryLoad() {
                   </div>
                 </td>
                 <td class="sticky end-0 border-b border-default bg-default px-1 group-hover:bg-elevated"><UButton v-if="!showArchived" color="error" variant="ghost" size="xs" icon="i-ph-trash" :aria-label="`Delete ${item.title}`" :disabled="rowEdits.edits.get(item.id)?.saving" @click="deleteItem(item)" /></td>
+              </tr>
+              <tr v-for="record in pendingRecords" :key="`pending-${record.key}`" class="opacity-60">
+                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3"><UIcon name="i-ph-spinner-gap" class="size-3.5 animate-spin text-muted" /></td>
+                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default px-3 py-2 text-sm">{{ record.title }}</td>
+                <td :colspan="visibleFields.length + 1" class="border-b border-default" />
+              </tr>
+              <tr v-if="!showArchived && !search">
+                <td class="sticky start-0 z-[2] border-b border-e border-default bg-default px-3 text-dimmed"><UIcon name="i-ph-plus" class="size-3.5" /></td>
+                <td class="sticky start-12 z-[2] border-b border-e border-default bg-default p-1" data-new-record>
+                  <UInput
+                    v-model="newRecordTitle"
+                    variant="none"
+                    :placeholder="visibleItems.length ? 'New record' : 'Type a title to add the first record'"
+                    aria-label="New record title"
+                    class="min-w-56 w-full"
+                    @keydown.enter.prevent="submitNewRecord"
+                    @blur="submitNewRecord"
+                  />
+                </td>
+                <td :colspan="visibleFields.length + 1" class="border-b border-default" />
               </tr>
             </tbody>
           </table>

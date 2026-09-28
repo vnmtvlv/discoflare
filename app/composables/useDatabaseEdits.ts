@@ -5,7 +5,7 @@ import type { DatabaseItemDTO } from '~~/shared/types'
 type Patch = { title?: string; values?: Record<string, DatabaseValue> }
 type Edit = { item: DatabaseItemDTO; patch: Patch; saving: boolean; error: unknown }
 
-export function useDatabaseEdits(persist: (id: string, patch: Patch & { version: number }) => Promise<DatabaseItemDTO>, onSaved: () => void) {
+export function useDatabaseEdits(persist: (id: string, patch: Patch & { version: number }) => Promise<DatabaseItemDTO>, onSaved: (item: DatabaseItemDTO) => void) {
   const edits = reactive(new Map<string, Edit>())
   const pending = new Map<string, Promise<void>>()
 
@@ -24,7 +24,7 @@ export function useDatabaseEdits(persist: (id: string, patch: Patch & { version:
           edit.item = saved
           if (edit.patch.title === sent.title) delete edit.patch.title
           edit.patch.values = Object.fromEntries(Object.entries(edit.patch.values ?? {}).filter(([key, value]) => sent.values[key] !== value))
-          onSaved()
+          onSaved(saved)
         }
       }
       catch (error) { edit.error = error }
