@@ -41,9 +41,11 @@ merges, block force pushes and deletion, and keep required approvals at zero
 while the maintainer is the only reviewer.
 
 CI builds the Worker without deploying or applying remote migrations. Browser
-checks and release artifact verification remain separate release gates. PRs do
-not currently create Cloudflare Worker Previews; that workflow will be designed
-and tested separately from the release path.
+checks and release artifact verification remain separate release gates. A
+separate workflow deploys same-repository pull requests as isolated Cloudflare
+Worker Previews; it does not publish a release or change the production Worker.
+See [Worker Previews](./worker-previews.md) for configuration, isolation, and
+cleanup details.
 
 ## Preparing a release
 
