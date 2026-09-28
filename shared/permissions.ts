@@ -43,8 +43,8 @@ export const PermissionGrants = [
   { key: 'kick', flag: Permission.kick, label: 'Remove members', description: 'Remove members from the workspace.' },
   { key: 'manageTasks', flag: Permission.manageTasks, label: 'Manage tasks', description: 'Create, edit, assign, archive, and remove task boards and tasks.' },
   { key: 'manageDatabases', flag: Permission.manageDatabases, label: 'Manage data', description: 'Create databases, documents, canvases, fields, and records.' },
-  { key: 'useGadgets', flag: Permission.useGadgets, label: 'Use gadgets', description: 'Open published internal tools shared with this role.' },
-  { key: 'manageGadgets', flag: Permission.manageGadgets, label: 'Manage gadgets', description: 'Create, configure, publish, and share internal tools.' },
+  { key: 'useGadgets', flag: Permission.useGadgets, label: 'Use apps', description: 'Open published internal tools shared with this role.' },
+  { key: 'manageGadgets', flag: Permission.manageGadgets, label: 'Manage apps', description: 'Create, configure, publish, and share internal tools.' },
 ] as const
 
 export type PermissionGrantKey = (typeof PermissionGrants)[number]['key']

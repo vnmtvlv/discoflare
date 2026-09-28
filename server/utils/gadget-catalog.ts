@@ -33,7 +33,7 @@ function selectGadgetSql(where = ''): string {
 
 export async function requireGadget(env: DiscoflareEnv, id: string): Promise<GadgetRow> {
   const row = await env.DB.prepare(selectGadgetSql('WHERE id = ?')).bind(id).first<GadgetRow>()
-  if (!row) fail(404, 'not_found', 'Gadget not found')
+  if (!row) fail(404, 'not_found', 'App not found')
   return row
 }
 
@@ -64,7 +64,7 @@ export async function getGadgetDetail(env: DiscoflareEnv, actor: Membership, id:
   const access = await env.DB.prepare('SELECT role_id as roleId FROM gadget_draft_role_access WHERE gadget_id = ? ORDER BY role_id').bind(id).all<{ roleId: string }>()
   let draftSpec: GadgetSpec
   try { draftSpec = parseGadgetSpec(JSON.parse(row.draftSpecJson)) }
-  catch { fail(409, 'gadget_draft_invalid', 'The Gadget draft is invalid') }
+  catch { fail(409, 'gadget_draft_invalid', 'The App draft is invalid') }
   return { ...summary(row), draftSpec, roleIds: (access.results ?? []).map(item => item.roleId) }
 }
 
@@ -88,11 +88,11 @@ export async function createGadget(
   actor: Membership,
   input: { name: string; description?: string; spec?: GadgetSpec; roleIds?: string[] },
 ): Promise<GadgetDetailDTO> {
-  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Gadgets also requires Manage data')
+  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Apps also requires Manage data')
   const spec = await validateGadgetSpec(env, input.spec ?? emptyGadgetSpec())
   const roleIds = await validateRoleIds(env, input.roleIds ?? [])
   const duplicate = await env.DB.prepare('SELECT id FROM gadgets WHERE lower(name) = lower(?) LIMIT 1').bind(input.name).first()
-  if (duplicate) fail(409, 'duplicate_name', 'A Gadget with this name already exists')
+  if (duplicate) fail(409, 'duplicate_name', 'An App with this name already exists')
   const position = await env.DB.prepare('SELECT COALESCE(MAX(position), 0) + 1024 as value FROM gadgets').first<{ value: number }>()
   const id = newId()
   const now = nowIso()
@@ -111,11 +111,11 @@ export async function updateGadget(
   id: string,
   input: { revision: number; name?: string; description?: string; spec?: GadgetSpec; roleIds?: string[] },
 ): Promise<GadgetDetailDTO> {
-  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Gadgets also requires Manage data')
+  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Apps also requires Manage data')
   const current = await requireGadget(env, id)
-  if (current.draftRevision !== input.revision) fail(409, 'stale_gadget', 'This Gadget changed elsewhere. Reload and try again.')
+  if (current.draftRevision !== input.revision) fail(409, 'stale_gadget', 'This App changed elsewhere. Reload and try again.')
   if (input.name && await env.DB.prepare('SELECT id FROM gadgets WHERE id <> ? AND lower(name) = lower(?) LIMIT 1').bind(id, input.name).first()) {
-    fail(409, 'duplicate_name', 'A Gadget with this name already exists')
+    fail(409, 'duplicate_name', 'An App with this name already exists')
   }
   const spec = input.spec ? await validateGadgetSpec(env, input.spec) : parseGadgetSpec(JSON.parse(current.draftSpecJson))
   const roleIds = input.roleIds ? await validateRoleIds(env, input.roleIds) : null
@@ -123,16 +123,16 @@ export async function updateGadget(
     `UPDATE gadgets SET name = ?, description = ?, draft_spec_json = ?, draft_revision = draft_revision + 1, updated_at = ?
      WHERE id = ? AND draft_revision = ?`,
   ).bind(input.name ?? current.name, input.description ?? current.description, JSON.stringify(spec), nowIso(), id, input.revision).run()
-  if (!updated.meta.changes) fail(409, 'stale_gadget', 'This Gadget changed elsewhere. Reload and try again.')
+  if (!updated.meta.changes) fail(409, 'stale_gadget', 'This App changed elsewhere. Reload and try again.')
   if (roleIds) await replaceRoleAccess(env, id, roleIds)
   await writeAudit(env, { workspaceId: actor.workspaceId, actorId: actor.user.id, action: 'gadget.update', targetType: 'gadget', targetId: id, meta: { fields: Object.keys(input).filter(key => key !== 'revision') }, authorization: actor.authorization })
   return getGadgetDetail(env, actor, id)
 }
 
 export async function publishGadget(env: DiscoflareEnv, actor: Membership, id: string, revision: number): Promise<GadgetDetailDTO> {
-  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Gadgets also requires Manage data')
+  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Apps also requires Manage data')
   const current = await requireGadget(env, id)
-  if (current.draftRevision !== revision) fail(409, 'stale_gadget', 'This Gadget changed elsewhere. Reload and try again.')
+  if (current.draftRevision !== revision) fail(409, 'stale_gadget', 'This App changed elsewhere. Reload and try again.')
   const spec = await validateGadgetSpec(env, JSON.parse(current.draftSpecJson), { publish: true })
   const version = (current.publishedVersion ?? 0) + 1
   const versionId = newId()
@@ -152,7 +152,7 @@ export async function publishGadget(env: DiscoflareEnv, actor: Membership, id: s
     env.DB.prepare('UPDATE gadgets SET published_version = ?, updated_at = ? WHERE id = ? AND draft_revision = ?')
       .bind(version, now, id, revision),
   ])
-  if (!results[0]?.meta.changes) fail(409, 'stale_gadget', 'This Gadget changed elsewhere. Reload and try again.')
+  if (!results[0]?.meta.changes) fail(409, 'stale_gadget', 'This App changed elsewhere. Reload and try again.')
   await writeAudit(env, { workspaceId: actor.workspaceId, actorId: actor.user.id, action: 'gadget.publish', targetType: 'gadget', targetId: id, meta: { version }, authorization: actor.authorization })
   return getGadgetDetail(env, actor, id)
 }

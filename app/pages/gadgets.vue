@@ -82,7 +82,7 @@ async function createGadget(event: FormSubmitEvent<CreateSchema>) {
     await qc.invalidateQueries({ queryKey: ['gadgets', workspaceId.value] })
     qc.setQueryData(['gadget-detail', result.gadget.id], { gadget: result.gadget })
     await navigateTo(gadgetPath(result.gadget.id, true))
-    toast.add({ title: event.data.prompt ? 'Draft generated' : 'Gadget created', color: 'success' })
+    toast.add({ title: event.data.prompt ? 'Draft generated' : 'App created', color: 'success' })
   }
   catch (error) {
     toast.add({ title: errorMessage(error), color: 'error' })
@@ -366,7 +366,7 @@ function roleAccessLabel(role: RoleDTO) {
 
     <LayoutSkeleton v-if="gadgetsQ.isPending.value" variant="document" />
     <div v-else-if="!activeSummary" class="grid flex-1 place-items-center p-6">
-      <UButton v-if="canManage" icon="i-ph-plus" label="Create first Gadget" @click="nav.createGadgetOpen.value = true" />
+      <UButton v-if="canManage" icon="i-ph-plus" label="Create first app" @click="nav.createGadgetOpen.value = true" />
       <p v-else class="text-sm text-muted">No Apps are shared with your role.</p>
     </div>
 
@@ -447,7 +447,7 @@ function roleAccessLabel(role: RoleDTO) {
 
     <main v-else class="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
       <LayoutSkeleton v-if="runtimeQ.isPending.value" variant="table" class="mx-auto max-w-7xl" />
-      <div v-else-if="runtimeQ.error.value" class="mx-auto max-w-7xl"><UAlert color="error" title="Could not open this Gadget" :description="errorMessage(runtimeQ.error.value)" /></div>
+      <div v-else-if="runtimeQ.error.value" class="mx-auto max-w-7xl"><UAlert color="error" title="Could not open this app" :description="errorMessage(runtimeQ.error.value)" /></div>
       <div v-else-if="runtimeQ.data.value" class="mx-auto max-w-7xl">
         <p v-if="runtimeQ.data.value.gadget.description" class="mb-6 text-sm text-muted">{{ runtimeQ.data.value.gadget.description }}</p>
         <div class="grid gap-5 xl:grid-cols-2">
@@ -525,7 +525,7 @@ function roleAccessLabel(role: RoleDTO) {
       </div>
     </main>
 
-    <UModal v-model:open="nav.createGadgetOpen.value" title="Create Gadget">
+    <UModal v-model:open="nav.createGadgetOpen.value" title="Create app">
       <template #body>
         <UForm id="create-gadget" :schema="createSchema" :state="createState" class="space-y-4" @submit="createGadget">
           <UFormField name="name" label="Name" required><UInput v-model="createState.name" autofocus class="w-full" /></UFormField>

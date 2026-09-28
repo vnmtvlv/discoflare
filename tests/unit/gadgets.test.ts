@@ -107,8 +107,8 @@ describe('Gadgets', () => {
   it('accepts multiple explicit Database View Bindings and rejects ambient capabilities', async () => {
     const sqlite = fixture()
     await expect(validateGadgetSpec({ DB: d1(sqlite) } as never, spec, { publish: true })).resolves.toEqual(spec)
-    expect(() => parseGadgetSpec({ ...spec, bindings: [{ ...spec.bindings[0], operations: ['create'] }] })).toThrow('Every Gadget Binding must allow read access')
-    expect(() => parseGadgetSpec({ ...spec, sections: [{ ...spec.sections[0], bindingId: 'missing' }] })).toThrow('Every Gadget Section must reference a Binding')
+    expect(() => parseGadgetSpec({ ...spec, bindings: [{ ...spec.bindings[0], operations: ['create'] }] })).toThrow('Every App Binding must allow read access')
+    expect(() => parseGadgetSpec({ ...spec, sections: [{ ...spec.sections[0], bindingId: 'missing' }] })).toThrow('Every App Section must reference a Binding')
     sqlite.exec("DELETE FROM database_fields WHERE id = 'company-tier'")
     await expect(validateGadgetSpec({ DB: d1(sqlite) } as never, spec, { publish: true })).rejects.toThrow('missing or hidden Field')
     sqlite.close()
@@ -208,11 +208,11 @@ describe('Gadgets', () => {
       version: 1,
     })
     expect((await listGadgets(env, reviewer)).gadgets).toEqual([])
-    await expect(openGadget(env, reviewer, created.id)).rejects.toThrow('Gadget not found')
+    await expect(openGadget(env, reviewer, created.id)).rejects.toThrow('App not found')
 
     await publishGadget(env, manager, created.id, draft.draftRevision)
     expect((await listGadgets(env, member)).gadgets).toEqual([])
-    await expect(openGadget(env, member, created.id)).rejects.toThrow('Gadget not found')
+    await expect(openGadget(env, member, created.id)).rejects.toThrow('App not found')
     expect((await listGadgets(env, reviewer)).gadgets[0]).toMatchObject({
       name: 'Private draft name',
       description: 'Private draft description',
@@ -252,7 +252,7 @@ describe('Gadgets', () => {
 
     await expect(invokeGadget(env, member, created.id, {
       bindingId: 'open-leads', operation: 'update', recordId: 'lead-won', version: 1, title: 'Not allowed',
-    })).rejects.toThrow('does not belong to this Gadget Binding')
+    })).rejects.toThrow('does not belong to this App Binding')
     expect(sqlite.prepare("SELECT title FROM database_items WHERE id = 'lead-won'").get()).toEqual({ title: 'Closed deal' })
     sqlite.close()
   })

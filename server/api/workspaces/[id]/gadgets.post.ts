@@ -17,7 +17,7 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event): Promise<{ gadget: GadgetDetailDTO }> => {
   const workspaceId = getRouterParam(event, 'id')!
   const actor = await requireMember(event, workspaceId)
-  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Gadgets also requires Manage data')
+  if (!canManageGadgets(actor)) fail(403, 'forbidden', 'Managing Apps also requires Manage data')
   const body = parseBody(bodySchema, await readBody(event))
   const env = cf(event).env
   const spec = body.prompt ? await composeGadgetSpec(env, body.prompt) : body.spec as GadgetSpec | undefined
