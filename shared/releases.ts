@@ -33,7 +33,11 @@ export type InstallationDomainSettingsDTO = {
   managed: boolean
   zones: Array<{ id: string, name: string, status: string }>
   appDomain: null | { hostname: string, zoneId: string, zoneName: string }
-  emailDomains: Array<{ id: string, domain: string, zoneId: string, zoneName: string }>
+  /**
+   * `sendingEnabled` is false for a domain that receives mail but cannot send it;
+   * connecting it again repairs it. Older Control Planes leave it out.
+   */
+  emailDomains: Array<{ id: string, domain: string, zoneId: string, zoneName: string, sendingEnabled?: boolean }>
 }
 
 type Semver = readonly [major: number, minor: number, patch: number]

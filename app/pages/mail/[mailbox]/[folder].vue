@@ -147,9 +147,9 @@ function pendingMessage(threadId: string, content: string, key: string): MailMes
   }
 }
 
-function deliveryFailed(message: MailMessageDTO) {
+function deliveryFailed(message: MailMessageDTO, kind: 'reply' | 'email' = 'reply') {
   toast.add({
-    title: 'Your reply was saved but not delivered',
+    title: `Your ${kind} was saved but not delivered`,
     description: message.email?.deliveryError || 'You can retry it from the conversation.',
     color: 'error',
   })
@@ -191,7 +191,7 @@ async function retry(message: MailMessageDTO) {
   try {
     const result = await api<{ message: MailMessageDTO }>(`/api/mail/threads/${threadId}/retry`, { method: 'POST', body: { messageId: message.id } })
     qc.setQueryData<MailThreadDetail>(['mail-thread', threadId], detail => withMessage(detail, result.message))
-    if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message)
+    if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message, 'email')
   }
   catch (error) {
     qc.setQueryData<MailThreadDetail>(['mail-thread', threadId], detail => withMessage(detail, message))
@@ -240,7 +240,7 @@ async function compose() {
     composeBody.value = ''
     qc.setQueryData<MailThreadDetail>(['mail-thread', result.threadId], { thread: result.thread, messages: [result.message] })
     qc.setQueryData<MailThreadPages>(['mail-threads', mailboxId, 'inbox'], data => withThreadFirst(data, result.thread))
-    if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message)
+    if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message, 'email')
     await navigateTo(mailPath(mailboxId, 'inbox', result.threadId))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }

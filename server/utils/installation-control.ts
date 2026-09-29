@@ -65,7 +65,7 @@ export async function disconnectManagedAppDomain(env: DiscoflareEnv) {
 }
 
 export async function connectManagedEmailDomain(env: DiscoflareEnv, input: { zoneId: string, domain: string }) {
-  return controlRequest<{ id: string, domain: string, zoneId: string, zoneName: string }>(env, 'POST', 'email-domains', input)
+  return controlRequest<{ id: string, domain: string, zoneId: string, zoneName: string, sendingEnabled?: boolean }>(env, 'POST', 'email-domains', input)
 }
 
 export async function disconnectManagedEmailDomain(env: DiscoflareEnv, emailDomainId: string) {
