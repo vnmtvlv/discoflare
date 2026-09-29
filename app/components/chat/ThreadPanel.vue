@@ -31,17 +31,6 @@ const presence = usePresenceStore()
 const agentBusy = computed(() => Boolean(threadId.value && presence.agentTurnsIn(threadId.value).length))
 const canApproveAgent = computed(() => hasPermission(effectivePermissions.value, Permission.manageWorkspace))
 
-// A new thread is for writing into, so its composer takes focus. Opening an
-// existing thread focuses it on wide screens only; on phones that would raise
-// the keyboard over the thread someone came to read.
-const focusKey = ref(0)
-const isMobile = useIsMobile()
-watch(threadId, (id) => {
-  if (!id) return
-  if (ui.focusThreadOnOpen || !isMobile.value) focusKey.value += 1
-  ui.focusThreadOnOpen = false
-}, { immediate: true })
-
 // The router's live route: the page-level route misses thread-only URL changes.
 const liveRoute = useRouter().currentRoute
 function close() {
@@ -113,7 +102,6 @@ defineShortcuts({
     />
     <ChatComposer
       :channel-id="threadId"
-      :focus-key="focusKey"
       :workspace-id="props.workspaceId"
       :members="props.members"
       :send="send as (msg: ClientMsg) => void"

@@ -57,8 +57,6 @@ export const useUiStore = defineStore('ui', () => {
   const huddleSetupOpen = ref(false)
   const threadId = ref<string | null>(null)
   const threadParentId = ref<string | null>(null)
-  /** Set when a new thread is started; the thread panel focuses its composer once and clears it. */
-  const focusThreadOnOpen = ref(false)
   const pendingThreadTitle = ref('')
   const dmFrozen = ref(false)
   const searchQuery = ref('')
@@ -149,7 +147,6 @@ export const useUiStore = defineStore('ui', () => {
     huddleSetupOpen,
     threadId,
     threadParentId,
-    focusThreadOnOpen,
     pendingThreadTitle,
     dmFrozen,
     searchQuery,

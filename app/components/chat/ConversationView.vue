@@ -281,7 +281,6 @@ async function onThread(msg: MessageDTO) {
   const pendingId = `${PENDING_THREAD_PREFIX}${msg.id}`
   ui.pendingThreadTitle = threadTitle(msg.content, msg.attachments.map(item => item.filename))
   ui.threadId = pendingId
-  ui.focusThreadOnOpen = true
   let res: { channel: { id: string }, created?: boolean }
   try {
     res = await api(`/api/channels/${channelId.value}/threads`, {

@@ -24,7 +24,6 @@ const dmsQ = useQuery({
 
 const q = ref('')
 const picker = ref(false)
-const nav = useNavActions()
 const picked = ref<string[]>([])
 const searchQ = useQuery({
   queryKey: computed(() => ['dm-search', props.workspaceId, q.value]),
@@ -144,7 +143,7 @@ function searchName(member: DmSearchMember) {
       </li>
     </ul>
 
-    <UModal v-model:open="picker" title="New Message" description="Find someone in this workspace, or pick two or more for a group.">
+    <UModal v-model:open="picker" title="New Message" description="Find someone in this server, or pick two or more for a group.">
       <template #body>
         <UInput
           v-model="q"
@@ -157,13 +156,7 @@ function searchName(member: DmSearchMember) {
           :aria-expanded="Boolean(searchQ.data.value?.members.length)"
           autofocus
         />
-        <LayoutSkeleton v-if="searchQ.isPending.value" variant="rows" :rows="3" class="mt-2 -mx-2" />
-        <div v-else-if="!searchQ.data.value?.members.length" class="mt-3 rounded-lg border border-dashed border-default px-4 py-6 text-center">
-          <p class="text-sm font-medium text-highlighted">{{ q.trim() ? `No one matches "${q.trim()}"` : 'No one else is here yet' }}</p>
-          <p v-if="!q.trim()" class="mt-1 text-sm text-muted">Invite people to this workspace to message them.</p>
-          <UButton v-if="!q.trim()" class="mt-3" size="sm" color="neutral" variant="soft" icon="i-ph-user-plus" label="Invite people" @click="picker = false; nav.inviteOpen.value = true" />
-        </div>
-        <ul v-else id="dm-search-results" class="mt-3 max-h-64 overflow-y-auto space-y-0.5" role="listbox">
+        <ul id="dm-search-results" class="mt-3 max-h-64 overflow-y-auto space-y-0.5" role="listbox">
           <li v-for="m in searchQ.data.value?.members ?? []" :key="m.id" class="flex items-center gap-2">
             <UCheckbox
               :model-value="picked.includes(m.id)"

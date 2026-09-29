@@ -25,8 +25,6 @@ const props = defineProps<{
   agentBusy?: boolean
   /** The conversation's main composer: focuses on open and when typing anywhere. */
   primary?: boolean
-  /** Changing this value focuses the message field (for example when a new thread opens). */
-  focusKey?: number
 }>()
 
 const MAX_LENGTH = 2000
@@ -40,7 +38,6 @@ const { api } = useApi()
 const files = ref<File[]>([])
 const emojiOpen = ref(false)
 const field = ref<{ textareaRef?: HTMLTextAreaElement } | null>(null)
-const root = ref<HTMLFormElement | null>(null)
 const agentMode = ref<'queue' | 'steer'>('queue')
 const agentModes = [
   { label: 'Queue', value: 'queue' },
@@ -72,38 +69,14 @@ const replyTarget = computed(() => {
 })
 
 function textarea() {
-  return field.value?.textareaRef ?? root.value?.querySelector('textarea') ?? null
-}
-
-// A focus request made while the field is disabled (permissions still loading)
-// is held until the field can take it.
-let focusPending = false
-
-function applyFocus(toEnd = false) {
-  if (!focusPending) return
-  const el = textarea()
-  if (!el || el.disabled || props.disabled) return
-  focusPending = false
-  el.focus()
-  if (toEnd) el.setSelectionRange(el.value.length, el.value.length)
+  return field.value?.textareaRef ?? null
 }
 
 function focus() {
-  focusPending = true
-  applyFocus()
-  if (focusPending) void nextTick(() => applyFocus())
+  const el = textarea()
+  if (!el || props.disabled) return
+  el.focus()
 }
-
-watch(() => props.disabled, () => {
-  void nextTick(() => applyFocus())
-})
-
-watch(() => props.focusKey, (key) => {
-  if (!key) return
-  focusPending = true
-  applyFocus(true)
-  if (focusPending) void nextTick(() => applyFocus(true))
-}, { immediate: true, flush: 'post' })
 
 /* ------------------------------------------------------------------ files */
 
@@ -472,7 +445,7 @@ defineExpose({ addFiles, focus })
 </script>
 
 <template>
-  <form ref="root" class="relative px-4 pb-6 pt-2" @submit.prevent="submit">
+  <form class="relative px-4 pb-6 pt-2" @submit.prevent="submit">
     <div
       v-if="suggestions.length"
       class="absolute inset-x-4 bottom-full z-30 mb-1 overflow-hidden rounded-lg bg-default shadow-xl ring ring-default"
