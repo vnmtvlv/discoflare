@@ -2,6 +2,7 @@
 import { useQuery, useQueryClient } from '@tanstack/vue-query'
 import type {
   ChannelDTO,
+  MemberDTO,
   TaskAgentDTO,
   TaskBoardDTO,
   TaskDetailDTO,
@@ -48,6 +49,11 @@ const confirmTitle = ref('')
 const agentsQ = useQuery({
   queryKey: computed(() => ['agents', workspaceId.value]),
   queryFn: () => api<{ agents: TaskAgentDTO[] }>(`/api/workspaces/${workspaceId.value}/task-agents`),
+  enabled: computed(() => Boolean(workspaceId.value)),
+})
+const membersQ = useQuery({
+  queryKey: computed(() => ['members', workspaceId.value]),
+  queryFn: () => api<{ members: MemberDTO[] }>(`/api/workspaces/${workspaceId.value}/members`),
   enabled: computed(() => Boolean(workspaceId.value)),
 })
 const boardsQ = useQuery({
@@ -119,10 +125,21 @@ const priorityOptions: Array<{ label: string; value: TaskPriority }> = [
 ]
 const labelColors = ['neutral', 'primary', 'info', 'success', 'warning', 'error'] as const
 const labelColorOptions = [...labelColors]
-const agentOptions = computed(() => [
-  { label: 'Unassigned', value: null },
-  ...agents.value.filter(agent => agent.status === 'active').map(agent => ({ label: agent.displayName, value: agent.id })),
-])
+const members = computed(() => membersQ.data.value?.members ?? [])
+// Anyone active can own a task: people first, then agents that are not paused.
+const assigneeOptions = computed(() => {
+  const people = members.value
+    .filter(member => member.user.kind !== 'agent')
+    .map(member => ({ label: member.nickname || member.user.displayName, value: member.user.id as string | null, icon: 'i-ph-user' }))
+  const activeAgents = agents.value
+    .filter(agent => agent.status === 'active')
+    .map(agent => ({ label: agent.displayName, value: agent.id as string | null, icon: 'i-ph-robot' }))
+  return [
+    { label: 'Unassigned', value: null as string | null },
+    ...(people.length ? [{ type: 'label' as const, label: 'People' }, ...people] : []),
+    ...(activeAgents.length ? [{ type: 'label' as const, label: 'Agents' }, ...activeAgents] : []),
+  ]
+})
 const channelOptions = computed(() => [
   { label: 'No report channel', value: null },
   ...channels.value.map(channel => ({ label: `# ${channel.name}`, value: channel.id })),
@@ -150,9 +167,9 @@ const labelName = ref('')
 const labelColor = ref<(typeof labelColors)[number]>('neutral')
 const editingLabelId = ref<string | null>(null)
 const checklistTitle = ref('')
-const uploadFile = shallowRef<File | null>(null)
+const fileInput = useTemplateRef<HTMLInputElement>('fileInput')
 
-watch(selectedTask, (task) => {
+function fillEditTask(task: TaskDetailDTO | null) {
   if (!task) return
   Object.assign(editTask, {
     title: task.title,
@@ -166,7 +183,31 @@ watch(selectedTask, (task) => {
     boardId: task.boardId,
     status: task.status,
   })
-}, { immediate: true })
+}
+watch(selectedTask, fillEditTask, { immediate: true })
+
+function sameIds(a: string[], b: string[]) {
+  return a.length === b.length && a.every(id => b.includes(id))
+}
+
+/** Field edits wait for the save bar; checklist, files, and discussion save as they happen. */
+const taskDirty = computed(() => {
+  const task = selectedTask.value
+  if (!task || task.archivedAt) return false
+  return editTask.title !== task.title
+    || editTask.description !== task.description
+    || editTask.priority !== task.priority
+    || editTask.dueAt !== toDateInput(task.dueAt)
+    || editTask.assigneeId !== task.assigneeId
+    || editTask.channelId !== task.channelId
+    || editTask.boardId !== task.boardId
+    || editTask.status !== task.status
+    || !sameIds(editTask.labelIds, task.labels.map(label => label.id))
+    || !sameIds(editTask.dependencyIds, task.dependencyIds)
+})
+const dependencyChoices = computed(() => allBoards.value
+  .find(board => board.id === editTask.boardId)?.tasks
+  .filter(task => task.id !== selectedTask.value?.id && !task.archivedAt) ?? [])
 
 function tasksFor(status: TaskStatus) {
   return activeTasks.value.filter(task => task.status === status)
@@ -176,8 +217,12 @@ function taskLabel(task: Pick<TaskDTO, 'number' | 'title'>) {
   return `#${task.number} ${task.title}`
 }
 
-function agentName(id: string | null) {
-  return agents.value.find(agent => agent.id === id)?.displayName ?? 'Unassigned'
+function assignee(id: string | null) {
+  if (!id) return null
+  const member = members.value.find(item => item.user.id === id)
+  if (member) return { name: member.nickname || member.user.displayName, user: member.user }
+  const agent = agents.value.find(item => item.id === id)
+  return agent ? { name: agent.displayName, user: null } : null
 }
 
 function priorityColor(priority: TaskPriority) {
@@ -210,12 +255,16 @@ async function refresh(taskId: string | null = selectedTaskId.value) {
   if (taskId) await qc.invalidateQueries({ queryKey: ['task', taskId] })
 }
 
+/**
+ * Runs a change, then refreshes lists in the background: the dialog that made
+ * the change can close as soon as the server confirms it.
+ */
 async function mutate(action: () => Promise<unknown>, success?: string) {
   saving.value = true
   try {
     await action()
     if (success) toast.add({ title: success, color: 'success' })
-    await refresh()
+    void refresh()
     return true
   }
   catch (error) {
@@ -245,7 +294,11 @@ async function saveBoard() {
   const editing = editingBoardId.value
   const action = editing
     ? async () => { await api(`/api/boards/${editing}`, { method: 'PATCH', body: { name: boardName.value } }) }
-    : async () => { await api(`/api/workspaces/${workspaceId.value}/boards`, { method: 'POST', body: { name: boardName.value } }) }
+    : async () => {
+        const res = await api<{ board: TaskBoardDTO }>(`/api/workspaces/${workspaceId.value}/boards`, { method: 'POST', body: { name: boardName.value } })
+        qc.setQueriesData<{ boards: TaskBoardDTO[] }>({ queryKey: ['boards', workspaceId.value, false] }, old => old ? { boards: [...old.boards, res.board] } : old)
+        selectedBoardId.value = res.board.id
+      }
   const ok = await mutate(action, editing ? 'Board renamed' : 'Board created')
   if (ok) showBoardForm.value = false
 }
@@ -298,10 +351,17 @@ function openCreateTask() {
 
 async function createTask() {
   if (!activeBoard.value || !newTask.title.trim()) return
-  const ok = await mutate(() => api(`/api/boards/${activeBoard.value!.id}/tasks`, {
-    method: 'POST',
-    body: { ...newTask, dueAt: toIso(newTask.dueAt) },
-  }), 'Task created')
+  const boardId = activeBoard.value.id
+  const ok = await mutate(async () => {
+    const res = await api<{ task: TaskDetailDTO }>(`/api/boards/${boardId}/tasks`, {
+      method: 'POST',
+      body: { ...newTask, dueAt: toIso(newTask.dueAt) },
+    })
+    const { checklist: _checklist, attachments: _attachments, ...task } = res.task
+    qc.setQueriesData<{ boards: TaskBoardDTO[] }>({ queryKey: ['boards', workspaceId.value, false] }, old => old
+      ? { boards: old.boards.map(board => board.id === boardId ? { ...board, tasks: [...board.tasks, task] } : board) }
+      : old)
+  }, 'Task created')
   if (ok) showTaskForm.value = false
 }
 
@@ -312,10 +372,15 @@ function openTask(task: TaskDTO) {
 async function saveTask() {
   const task = selectedTask.value
   if (!task) return
-  await mutate(() => api(`/api/tasks/${task.id}`, {
-    method: 'PATCH',
-    body: { ...editTask, dueAt: toIso(editTask.dueAt) },
-  }), 'Task saved')
+  const key = selectedTaskId.value
+  await mutate(async () => {
+    const res = await api<{ task: TaskDetailDTO }>(`/api/tasks/${task.id}`, {
+      method: 'PATCH',
+      body: { ...editTask, dueAt: toIso(editTask.dueAt) },
+    })
+    // The saved task comes back with the response, so the save bar clears at once.
+    qc.setQueryData(['task', key], { task: res.task })
+  }, 'Task saved')
 }
 
 function changeEditBoard(value: string | number | undefined) {
@@ -403,14 +468,16 @@ async function deleteChecklistItem(id: string) {
   await mutate(() => api(`/api/task-checklist/${id}`, { method: 'DELETE' }))
 }
 
-async function uploadAttachment() {
+/** Picking a file attaches it right away. */
+async function uploadAttachment(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
   const task = selectedTask.value
-  const file = uploadFile.value
+  input.value = ''
   if (!task || !file) return
   const form = new FormData()
   form.append('file', file)
-  const ok = await mutate(() => api(`/api/tasks/${task.id}/attachments`, { method: 'POST', body: form }), 'File attached')
-  if (ok) uploadFile.value = null
+  await mutate(() => api(`/api/tasks/${task.id}/attachments`, { method: 'POST', body: form }), 'File attached')
 }
 
 async function deleteAttachment(id: string) {
@@ -485,7 +552,12 @@ const boardMenu = computed(() => [[
                   <UBadge v-for="label in task.labels" :key="label.id" :color="label.color as 'neutral'" variant="subtle" size="xs">{{ label.name }}</UBadge>
                 </div>
                 <div class="flex items-center gap-2 text-[11px] text-muted">
-                  <span class="flex min-w-0 items-center gap-1"><UIcon name="i-ph-robot" class="size-3.5" /><span class="truncate">{{ agentName(task.assigneeId) }}</span></span>
+                  <span v-if="assignee(task.assigneeId)" class="flex min-w-0 items-center gap-1.5">
+                    <UserAvatar v-if="assignee(task.assigneeId)?.user" :user="assignee(task.assigneeId)!.user!" size="3xs" />
+                    <UIcon v-else name="i-ph-robot" class="size-3.5" />
+                    <span class="truncate">{{ assignee(task.assigneeId)?.name }}</span>
+                  </span>
+                  <span v-else class="text-dimmed">Unassigned</span>
                   <span v-if="task.checklistTotal" class="ml-auto">{{ task.checklistCompleted }}/{{ task.checklistTotal }}</span>
                   <UIcon v-if="task.attachmentCount" name="i-ph-paperclip" class="size-3.5" />
                 </div>
@@ -521,9 +593,9 @@ const boardMenu = computed(() => [[
     <UModal v-model:open="showTaskForm" title="Create task" :ui="{ content: 'sm:max-w-2xl' }">
       <template #body>
         <div class="grid gap-4 sm:grid-cols-2">
-          <UFormField label="Title" class="sm:col-span-2"><UInput v-model="newTask.title" autofocus class="w-full" /></UFormField>
+          <UFormField label="Title" class="sm:col-span-2"><UInput v-model="newTask.title" autofocus class="w-full" @keyup.enter="createTask" /></UFormField>
           <UFormField label="Description" class="sm:col-span-2"><UTextarea v-model="newTask.description" :rows="5" class="w-full" /></UFormField>
-          <UFormField label="Agent"><USelect v-model="newTask.assigneeId" :items="agentOptions" class="w-full" /></UFormField>
+          <UFormField label="Assignee"><USelect v-model="newTask.assigneeId" :items="assigneeOptions" class="w-full" /></UFormField>
           <UFormField label="Report channel"><USelect v-model="newTask.channelId" :items="channelOptions" class="w-full" /></UFormField>
           <UFormField label="Priority"><USelect v-model="newTask.priority" :items="priorityOptions" class="w-full" /></UFormField>
           <UFormField label="Due"><UInput v-model="newTask.dueAt" type="datetime-local" class="w-full" /></UFormField>
@@ -570,20 +642,20 @@ const boardMenu = computed(() => [[
       <template #body>
         <LayoutSkeleton v-if="taskQ.isPending.value" variant="form" />
         <LayoutLoadError v-else-if="taskQ.error.value" message="This task did not load." :retry="taskQ.refetch" />
-        <div v-else-if="selectedTask" class="space-y-6">
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField label="Title" class="sm:col-span-2"><UInput v-model="editTask.title" class="w-full" /></UFormField>
-            <UFormField label="Description" class="sm:col-span-2"><UTextarea v-model="editTask.description" :rows="6" class="w-full" /></UFormField>
-            <UFormField label="Board"><USelect :model-value="editTask.boardId" :items="boardOptions" class="w-full" @update:model-value="changeEditBoard" /></UFormField>
+        <div v-else-if="selectedTask" class="space-y-8">
+          <section class="grid gap-4 sm:grid-cols-2">
+            <UFormField label="Title" class="sm:col-span-2"><UInput v-model="editTask.title" class="w-full" :disabled="Boolean(selectedTask.archivedAt)" /></UFormField>
+            <UFormField label="Description" class="sm:col-span-2"><UTextarea v-model="editTask.description" :rows="5" autoresize class="w-full" :disabled="Boolean(selectedTask.archivedAt)" /></UFormField>
             <UFormField label="Status"><USelect v-model="editTask.status" :items="manualStatusOptions" class="w-full" /></UFormField>
-            <UFormField label="Agent"><USelect v-model="editTask.assigneeId" :items="agentOptions" class="w-full" /></UFormField>
-            <UFormField label="Report channel"><USelect v-model="editTask.channelId" :items="channelOptions" class="w-full" /></UFormField>
+            <UFormField label="Assignee"><USelect v-model="editTask.assigneeId" :items="assigneeOptions" class="w-full" /></UFormField>
             <UFormField label="Priority"><USelect v-model="editTask.priority" :items="priorityOptions" class="w-full" /></UFormField>
             <UFormField label="Due"><UInput v-model="editTask.dueAt" type="datetime-local" class="w-full" /></UFormField>
-          </div>
+            <UFormField label="Board"><USelect :model-value="editTask.boardId" :items="boardOptions" class="w-full" @update:model-value="changeEditBoard" /></UFormField>
+            <UFormField label="Report channel" help="Where updates about this task are posted."><USelect v-model="editTask.channelId" :items="channelOptions" class="w-full" /></UFormField>
+          </section>
 
-          <div v-if="allBoards.find(board => board.id === editTask.boardId)?.labels.length">
-            <div class="text-sm font-medium mb-2">Labels</div>
+          <section v-if="allBoards.find(board => board.id === editTask.boardId)?.labels.length">
+            <div class="mb-2 text-sm font-medium">Labels</div>
             <div class="flex flex-wrap gap-3">
               <UCheckbox
                 v-for="label in allBoards.find(board => board.id === editTask.boardId)?.labels ?? []"
@@ -593,64 +665,70 @@ const boardMenu = computed(() => [[
                 @update:model-value="value => toggleId(editTask.labelIds, label.id, Boolean(value))"
               />
             </div>
-          </div>
+          </section>
 
-          <div>
-            <div class="text-sm font-medium mb-2">Dependencies</div>
-            <div class="max-h-36 overflow-y-auto space-y-1">
+          <section v-if="dependencyChoices.length">
+            <div class="mb-1 text-sm font-medium">Depends on</div>
+            <p class="mb-2 text-xs text-muted">Tasks on this board that must be finished first.</p>
+            <div class="max-h-36 space-y-1 overflow-y-auto">
               <UCheckbox
-                v-for="task in allBoards.find(board => board.id === editTask.boardId)?.tasks.filter(task => task.id !== selectedTask?.id && !task.archivedAt) ?? []"
+                v-for="task in dependencyChoices"
                 :key="task.id"
                 :model-value="editTask.dependencyIds.includes(task.id)"
                 :label="taskLabel(task)"
                 @update:model-value="value => toggleId(editTask.dependencyIds, task.id, Boolean(value))"
               />
             </div>
-          </div>
+          </section>
 
-          <div class="flex gap-2">
-            <UButton v-if="!selectedTask.archivedAt" label="Save" :loading="saving" @click="saveTask" />
-            <UButton class="ml-auto" color="neutral" variant="ghost" :label="selectedTask.archivedAt ? 'Restore' : 'Archive'" @click="archiveTask" />
-            <UButton color="error" variant="ghost" label="Delete" @click="deleteTask" />
-          </div>
-
-          <div>
-            <div class="text-sm font-medium mb-2">Checklist</div>
+          <section>
+            <div class="mb-2 text-sm font-medium">Checklist</div>
             <div class="space-y-2">
               <div v-for="item in selectedTask.checklist" :key="item.id" class="flex items-center gap-2">
                 <UCheckbox :model-value="item.completed" :label="item.title" @update:model-value="value => updateChecklistItem(item.id, Boolean(value))" />
-                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-x" aria-label="Delete checklist item" @click="deleteChecklistItem(item.id)" />
+                <UButton class="ml-auto" color="neutral" variant="ghost" size="xs" icon="i-ph-x" aria-label="Remove checklist item" @click="deleteChecklistItem(item.id)" />
               </div>
-              <div class="flex gap-2">
-                <UInput v-model="checklistTitle" placeholder="Add item" class="flex-1" @keyup.enter="addChecklistItem" />
-                <UButton icon="i-ph-plus" aria-label="Add checklist item" :disabled="!checklistTitle.trim()" @click="addChecklistItem" />
-              </div>
+              <UInput v-model="checklistTitle" placeholder="Add an item and press Enter" class="w-full" @keyup.enter="addChecklistItem" />
             </div>
-          </div>
+          </section>
 
-          <div>
-            <div class="text-sm font-medium mb-2">Attachments</div>
-            <div class="space-y-2">
+          <section>
+            <div class="mb-2 flex items-center justify-between gap-2">
+              <span class="text-sm font-medium">Files</span>
+              <UButton size="xs" color="neutral" variant="soft" icon="i-ph-paperclip" label="Attach file" :loading="saving" @click="fileInput?.click()" />
+              <input ref="fileInput" type="file" class="hidden" @change="uploadAttachment">
+            </div>
+            <p v-if="!selectedTask.attachments.length" class="text-sm text-muted">No files yet.</p>
+            <div v-else class="space-y-1">
               <div v-for="attachment in selectedTask.attachments" :key="attachment.id" class="flex items-center gap-2 text-sm">
-                <UIcon name="i-ph-paperclip" class="size-4" />
+                <UIcon name="i-ph-paperclip" class="size-4 shrink-0 text-muted" />
                 <ULink :to="attachment.url" target="_blank" class="truncate">{{ attachment.filename }}</ULink>
-                <UButton class="ml-auto" color="error" variant="ghost" size="xs" icon="i-ph-trash" aria-label="Delete attachment" @click="deleteAttachment(attachment.id)" />
-              </div>
-              <div class="flex items-center gap-2">
-                <UFileUpload v-model="uploadFile" variant="button" label="Choose file" />
-                <UButton v-if="uploadFile" label="Upload" :loading="saving" @click="uploadAttachment" />
+                <UButton class="ml-auto" color="neutral" variant="ghost" size="xs" icon="i-ph-trash" aria-label="Delete file" @click="deleteAttachment(attachment.id)" />
               </div>
             </div>
-          </div>
+          </section>
 
-          <div v-if="selectedTask.resultSummary || selectedTask.resultDetails">
-            <div class="text-sm font-medium mb-2">Result</div>
-            <div class="rounded-lg border border-default p-3 space-y-2 text-sm">
+          <section v-if="selectedTask.resultSummary || selectedTask.resultDetails">
+            <div class="mb-2 text-sm font-medium">Result</div>
+            <div class="space-y-2 rounded-lg border border-default p-3 text-sm">
               <div v-if="selectedTask.resultSummary">{{ selectedTask.resultSummary }}</div>
-              <pre v-if="selectedTask.resultDetails" class="whitespace-pre-wrap text-xs text-muted font-sans">{{ selectedTask.resultDetails }}</pre>
+              <pre v-if="selectedTask.resultDetails" class="whitespace-pre-wrap font-sans text-xs text-muted">{{ selectedTask.resultDetails }}</pre>
             </div>
+          </section>
+
+          <TasksDiscussion
+            :task-id="selectedTask.id"
+            :channel-id="selectedTask.discussionChannelId"
+            :workspace-id="workspaceId"
+            :members="members"
+          />
+
+          <div class="flex items-center gap-2 border-t border-default pt-4">
+            <UButton color="neutral" variant="ghost" size="sm" :icon="selectedTask.archivedAt ? 'i-ph-arrow-counter-clockwise' : 'i-ph-archive'" :label="selectedTask.archivedAt ? 'Restore task' : 'Archive task'" @click="archiveTask" />
+            <UButton color="error" variant="ghost" size="sm" icon="i-ph-trash" label="Delete task" @click="deleteTask" />
           </div>
 
+          <LayoutSaveBar :dirty="taskDirty" :saving="saving" :disabled="!editTask.title.trim()" @save="saveTask" @reset="fillEditTask(selectedTask)" />
         </div>
       </template>
     </USlideover>

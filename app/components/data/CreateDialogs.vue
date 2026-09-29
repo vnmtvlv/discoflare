@@ -24,8 +24,9 @@ async function createDatabase() {
   saving.value = true
   try {
     const result = await api<{ database: DatabaseDTO }>(`/api/workspaces/${workspaceId.value}/databases`, { method: 'POST', body: { name } })
-    await Promise.all([qc.invalidateQueries({ queryKey: ['databases'] }), qc.invalidateQueries({ queryKey: ['data-resources'] })])
+    // Close as soon as it exists; open it once the list includes it.
     nav.createDatabaseOpen.value = false
+    await Promise.all([qc.invalidateQueries({ queryKey: ['databases'] }), qc.invalidateQueries({ queryKey: ['data-resources'] })])
     await navigateTo(databasePath(result.database.id))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
@@ -38,8 +39,8 @@ async function createDocument() {
   saving.value = true
   try {
     const result = await api<{ document: DocumentDTO }>(`/api/workspaces/${workspaceId.value}/documents`, { method: 'POST', body: { title } })
-    await qc.invalidateQueries({ queryKey: ['data-resources'] })
     nav.createDocumentOpen.value = false
+    await qc.invalidateQueries({ queryKey: ['data-resources'] })
     await navigateTo(documentPath(result.document.id))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
@@ -52,8 +53,8 @@ async function createCanvas() {
   saving.value = true
   try {
     const result = await api<{ canvas: CanvasDTO }>(`/api/workspaces/${workspaceId.value}/canvases`, { method: 'POST', body: { title } })
-    await qc.invalidateQueries({ queryKey: ['data-resources'] })
     nav.createCanvasOpen.value = false
+    await qc.invalidateQueries({ queryKey: ['data-resources'] })
     await navigateTo(canvasPath(result.canvas.id))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }

@@ -368,7 +368,7 @@ watch(addMemberId, async (userId) => {
         </ul>
       </div>
 
-      <SettingsSaveBar :dirty="dirty" :saving="saving" :disabled="!roleName.trim()" @save="saveRole" @reset="resetDraft" />
+      <LayoutSaveBar :dirty="dirty" :saving="saving" :disabled="!roleName.trim()" @save="saveRole" @reset="resetDraft" />
     </template>
 
     <UModal v-model:open="deleteOpen" title="Delete this role?">

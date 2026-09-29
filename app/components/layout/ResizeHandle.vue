@@ -6,6 +6,8 @@ const props = withDefaults(defineProps<{
   label: string
 }>(), { side: 'end' })
 const width = defineModel<number>({ required: true })
+/** Fires once a drag or keyboard resize settles, for callers that save the width. */
+const emit = defineEmits<{ end: [width: number] }>()
 
 let stopDragging: (() => void) | null = null
 
@@ -32,6 +34,7 @@ function startDragging(event: PointerEvent) {
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
     stopDragging = null
+    emit('end', width.value)
   }
   stopDragging = stop
   window.addEventListener('pointermove', move)
@@ -44,6 +47,7 @@ function resizeWithKeyboard(event: KeyboardEvent) {
   event.preventDefault()
   const physicalDelta = event.key === 'ArrowRight' ? 12 : -12
   width.value = clamp(width.value + physicalDelta * (props.side === 'end' ? 1 : -1))
+  emit('end', width.value)
 }
 
 onUnmounted(() => stopDragging?.())

@@ -38,7 +38,12 @@ export type DatabaseViewConfig = {
   sorts: DatabaseViewSort[]
   groupFieldId: string | null
   dateFieldId: string | null
+  /** Table column widths in pixels, keyed by field id or `title`; missing columns use the default width. */
+  columnWidths: Record<string, number>
 }
+
+/** Bounds for a table column width set by dragging its border. */
+export const DatabaseColumnWidth = { min: 80, max: 640, title: 256, field: 192 } as const
 
 export function defaultDatabaseViewConfig(): DatabaseViewConfig {
   return {
@@ -47,6 +52,7 @@ export function defaultDatabaseViewConfig(): DatabaseViewConfig {
     sorts: [{ fieldId: 'title', direction: 'asc' }],
     groupFieldId: null,
     dateFieldId: null,
+    columnWidths: {},
   }
 }
 

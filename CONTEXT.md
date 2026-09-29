@@ -74,8 +74,16 @@ An ordered, archivable collection of Tasks and Labels shared by the workspace an
 _Avoid_: Agent-local todo list, queue as product language
 
 **Task**:
-A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, optional assigned Agent, optional report Channel, and durable result. Humans and Agents may read and create Tasks; assignment does not start execution.
+A unit of workspace work with an ordered status, priority, due date, Labels, dependencies, checklist, Attachments, an optional Assignee, an optional report Channel, a Task Discussion, and a durable result. Humans and Agents may read and create Tasks; assignment does not start execution.
 _Avoid_: Workflow, prompt, autonomous job
+
+**Assignee**:
+The one active Member responsible for a Task, either a human or an Agent that is not paused.
+_Avoid_: Owner (a workspace Role), agent-only assignment
+
+**Task Discussion**:
+The conversation that belongs to one Task. It is an ordinary text Channel created the first time someone opens the Task, so messages, reactions, replies, files, and realtime work as in chat. It stays out of the channel navigation and is readable only by Members who can manage Tasks.
+_Avoid_: Task comments as a separate system, a visible channel per task
 
 **Database**:
 A human-managed collection of structured Records in the workspace. A Database has an ordered custom schema made from typed Fields and is stored as logical product data inside the installation D1.

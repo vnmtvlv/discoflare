@@ -112,7 +112,7 @@ const installationNav = computed(() => isOwner.value
         'backup', 'download', 'export', 'restore', 'd1', 'r2',
         'updates', 'release', 'version', 'upgrade', 'github',
         'telemetry', 'anonymous', 'heartbeat', 'privacy', 'stats',
-        'danger', 'delete server', 'remove', 'destroy', 'uninstall',
+        'danger', 'delete workspace', 'delete server', 'remove', 'destroy', 'uninstall',
       ],
     }]
   : [])

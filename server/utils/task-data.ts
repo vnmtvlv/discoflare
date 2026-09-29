@@ -22,7 +22,8 @@ export async function loadTaskBoards(env: DiscoflareEnv, includeArchived = false
     ).all<BoardRow>(),
     env.DB.prepare(
       `SELECT t.id, n.number, t.board_id as boardId, t.title, t.description, t.status, t.priority, t.due_at as dueAt, t.position,
-       t.assignee_id as assigneeId, t.channel_id as channelId, t.created_by as createdBy,
+       t.assignee_user_id as assigneeId, t.channel_id as channelId,
+       t.discussion_channel_id as discussionChannelId, t.created_by as createdBy,
        t.result_summary as resultSummary, t.result_details as resultDetails, t.last_error as lastError,
        t.archived_at as archivedAt, t.created_at as createdAt, t.updated_at as updatedAt
        FROM tasks t JOIN task_numbers n ON n.task_id = t.id ${taskArchivedClause} ORDER BY t.position, t.created_at`,
