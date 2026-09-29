@@ -18,6 +18,12 @@ const state = computed(() => huddle.stateFor(props.channelId))
 const joinedHere = computed(() => huddle.connection === 'live' && huddle.currentChannelId === props.channelId)
 const names = computed(() => Object.fromEntries(props.members.map(member => [member.user.id, member.nickname || member.user.displayName])))
 const users = computed(() => Object.fromEntries(props.members.map(member => [member.user.id, member.user])))
+const { serverUrl } = useApi()
+function avatarOf(id: string) {
+  const user = users.value[id]
+  const src = user ? userAvatarSrc(user) : undefined
+  return src?.startsWith('/api/') ? serverUrl(src) : src
+}
 </script>
 
 <template>
@@ -32,7 +38,7 @@ const users = computed(() => Object.fromEntries(props.members.map(member => [mem
         <UAvatar
           v-for="id in state.participantIds"
           :key="id"
-          :src="users[id] ? userAvatarSrc(users[id]!) : undefined"
+          :src="avatarOf(id)"
           :text="(names[id] || '?').slice(0, 1).toUpperCase()"
           :alt="names[id]"
         />
