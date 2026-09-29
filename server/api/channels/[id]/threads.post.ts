@@ -21,16 +21,20 @@ export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
   const db = getDb(env.DB)
-  const msg = (await db.select().from(messages).where(and(eq(messages.id, body.messageId), eq(messages.channelId, parentId))).limit(1))[0]
+  // Independent lookups run together; each D1 round trip is noticeable here.
+  const [msgRows, existingRows, attachmentRows] = await Promise.all([
+    db.select().from(messages).where(and(eq(messages.id, body.messageId), eq(messages.channelId, parentId))).limit(1),
+    db.select().from(channels).where(eq(channels.parentMessageId, body.messageId)).limit(1),
+    db.select({ filename: attachments.filename }).from(attachments).where(eq(attachments.messageId, body.messageId)),
+  ])
+  const msg = msgRows[0]
   if (!msg) fail(404, 'not_found', 'Message not found')
-  const existing = (await db.select().from(channels).where(eq(channels.parentMessageId, body.messageId)).limit(1))[0]
-  const attachmentRows = await db.select({ filename: attachments.filename }).from(attachments).where(eq(attachments.messageId, body.messageId))
+  const existing = existingRows[0]
   const title = body.name?.trim() || threadTitle(msg.content, attachmentRows.map(row => row.filename))
-  if (existing) return { channel: { ...existing, title } }
-  const id = newId()
+  if (existing) return { channel: { ...existing, title }, created: false }
   const created = nowIso()
-  await db.insert(channels).values({
-    id,
+  const row = (await db.insert(channels).values({
+    id: newId(),
     name: title,
     topic: '',
     type: 'thread',
@@ -41,7 +45,6 @@ export default defineEventHandler(async (event) => {
     parentMessageId: body.messageId,
     createdAt: created,
     updatedAt: created,
-  })
-  const row = (await db.select().from(channels).where(eq(channels.id, id)).limit(1))[0]
-  return { channel: { ...row, title } }
+  }).returning())[0]!
+  return { channel: { ...row, title }, created: true }
 })

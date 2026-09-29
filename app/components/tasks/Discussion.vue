@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQueryClient } from '@tanstack/vue-query'
-import type { ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
+import type { ClientMsg, MemberDTO } from '~~/shared/types'
 
 /**
  * A task's conversation. It is an ordinary channel kept out of the navigation,
@@ -44,10 +44,6 @@ const { send, retry } = useChannelSocket(computed(() => channelId.value || ''))
 function onReply(id: string) {
   if (channelId.value) ui.startReply(channelId.value, id)
 }
-
-function onEdit(message: MessageDTO) {
-  if (channelId.value) ui.startEditing(channelId.value, message.id, message.content)
-}
 </script>
 
 <template>
@@ -62,9 +58,8 @@ function onEdit(message: MessageDTO) {
           :members="members"
           channel-name="this task"
           :show-intro="false"
-          :threads="false"
+          :allow-threads="false"
           @reply="onReply"
-          @edit="onEdit"
           @read="(messageId) => send({ t: 'read', messageId } as ClientMsg)"
           @retry="retry"
         />

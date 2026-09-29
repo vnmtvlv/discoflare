@@ -7,12 +7,11 @@ describe('composer submission', () => {
       draft: '',
       files: ['design.png'],
       replyToId: 'message-1',
-      editingId: null,
     }
     const source = {
       read: () => state,
       clear: () => {
-        state = { draft: '', files: [], replyToId: null, editingId: null }
+        state = { draft: '', files: [], replyToId: null }
       },
     }
 
@@ -20,7 +19,6 @@ describe('composer submission', () => {
       draft: '',
       files: ['design.png'],
       replyToId: 'message-1',
-      editingId: null,
     })
     expect(claimComposerSubmission(source)).toBeNull()
   })

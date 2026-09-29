@@ -91,6 +91,33 @@ html, body, #__nuxt {
   padding-left: 8px;
   color: var(--ui-text-muted);
 }
+.md h1, .md h2, .md h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--ui-text-highlighted);
+}
+.md h1 { font-size: 1.5rem; }
+.md h2 { font-size: 1.25rem; }
+.md h3 { font-size: 1rem; }
+.md .subtext { font-size: 0.8125rem; color: var(--ui-text-muted); }
+.md s { color: var(--ui-text-muted); }
+.md .spoiler {
+  border-radius: 4px;
+  padding: 0 2px;
+  background: var(--ui-bg-accented);
+  color: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.md .spoiler * { visibility: hidden; }
+.md .spoiler:hover { background: color-mix(in oklab, var(--ui-bg-accented) 80%, var(--ui-text)); }
+.md .spoiler.revealed {
+  background: color-mix(in oklab, var(--ui-bg-accented) 60%, transparent);
+  color: inherit;
+  cursor: text;
+}
+.md .spoiler.revealed * { visibility: visible; }
 .md pre {
   background: var(--ui-bg);
   border: 1px solid var(--ui-border);
