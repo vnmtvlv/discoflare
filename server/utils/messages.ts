@@ -33,17 +33,28 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
   const authorIds = [...new Set(rows.map((r) => r.authorId))]
   const replyIds = rows.map((r) => r.replyToId).filter((x): x is string => Boolean(x))
 
-  const pinRows = await db.select().from(messagePins).where(inArray(messagePins.messageId, ids))
-  const publicUserIds = [...new Set([...authorIds, ...pinRows.map(pin => pin.pinnedBy)])]
-  const authorRows = await db.select().from(users).where(inArray(users.id, publicUserIds))
+  // Every lookup depends only on the page's ids, so they share one round trip.
+  const [pinRows, authorRows, mentionRows, attRows, replyRows, reactionRows, threadRows] = await Promise.all([
+    db.select().from(messagePins).where(inArray(messagePins.messageId, ids)),
+    db.select().from(users).where(inArray(users.id, authorIds)),
+    db.select().from(messageMentions).where(inArray(messageMentions.messageId, ids)),
+    db.select().from(attachments).where(inArray(attachments.messageId, [...new Set([...ids, ...replyIds])])),
+    replyIds.length ? db.select().from(messages).where(inArray(messages.id, replyIds)) : Promise.resolve([]),
+    db.select().from(messageReactions).where(inArray(messageReactions.messageId, ids)),
+    db.select({ id: channels.id, parentMessageId: channels.parentMessageId }).from(channels).where(inArray(channels.parentMessageId, ids)),
+  ])
   const authors = new Map(authorRows.map((u) => [u.id, toPublicUser(u)]))
+  // Whoever pinned a message is usually one of its authors; look up the rest.
+  const missingPinners = [...new Set(pinRows.map(pin => pin.pinnedBy))].filter(id => !authors.has(id))
+  if (missingPinners.length) {
+    for (const u of await db.select().from(users).where(inArray(users.id, missingPinners))) authors.set(u.id, toPublicUser(u))
+  }
   const pins = new Map<string, MessagePinDTO>()
   for (const pin of pinRows) {
     const pinnedBy = authors.get(pin.pinnedBy)
     if (pinnedBy) pins.set(pin.messageId, { pinnedBy, pinnedAt: pin.pinnedAt })
   }
 
-  const mentionRows = await db.select().from(messageMentions).where(inArray(messageMentions.messageId, ids))
   const mentions = new Map<string, string[]>()
   for (const m of mentionRows) {
     const list = mentions.get(m.messageId) ?? []
@@ -51,8 +62,6 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
     mentions.set(m.messageId, list)
   }
 
-  const attachmentMessageIds = [...new Set([...ids, ...replyIds])]
-  const attRows = await db.select().from(attachments).where(inArray(attachments.messageId, attachmentMessageIds))
   const atts = new Map<string, AttachmentDTO[]>()
   for (const a of attRows) {
     if (!a.messageId) continue
@@ -62,20 +71,16 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
   }
 
   const replies = new Map<string, NonNullable<MessageDTO['replyTo']>>()
-  if (replyIds.length) {
-    const replyRows = await db.select().from(messages).where(inArray(messages.id, replyIds))
-    for (const r of replyRows) {
-      replies.set(r.id, {
-        id: r.id,
-        authorId: r.authorId,
-        content: (r.deletedAt ? '' : r.content).slice(0, 180),
-        attachmentCount: atts.get(r.id)?.length ?? 0,
-        deleted: Boolean(r.deletedAt),
-      })
-    }
+  for (const r of replyRows) {
+    replies.set(r.id, {
+      id: r.id,
+      authorId: r.authorId,
+      content: (r.deletedAt ? '' : r.content).slice(0, 180),
+      attachmentCount: atts.get(r.id)?.length ?? 0,
+      deleted: Boolean(r.deletedAt),
+    })
   }
 
-  const reactionRows = await db.select().from(messageReactions).where(inArray(messageReactions.messageId, ids))
   const reactionMap = new Map<string, ReactionDTO[]>()
   for (const r of reactionRows) {
     const list = reactionMap.get(r.messageId) ?? []
@@ -90,7 +95,6 @@ export async function hydrateMessages(env: DiscoflareEnv, rows: Array<typeof mes
     reactionMap.set(r.messageId, list)
   }
 
-  const threadRows = await db.select({ id: channels.id, parentMessageId: channels.parentMessageId }).from(channels).where(inArray(channels.parentMessageId, ids))
   const threads = new Map<string, string>()
   for (const t of threadRows) {
     if (t.parentMessageId) threads.set(t.parentMessageId, t.id)

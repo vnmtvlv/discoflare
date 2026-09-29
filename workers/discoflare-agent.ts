@@ -16,13 +16,15 @@ import { z } from 'zod'
 import { newId, nowIso } from '../shared/ids'
 import { agentBrowserConfigured, type DiscoflareEnv } from './env'
 import { captureBrowserScreenshot, listBrowserLinks, readBrowserMarkdown } from './agent-browser'
-import { sendWorkspaceEmail, workspaceEmailAvailable } from './mail-transport'
+import { workspaceEmailAvailable } from './mail-transport'
+import { signalMailChanged } from './mail-events'
+import { deliverOutboundEmail, replyRecipients, replyThreading } from '../server/utils/mail-outbound'
 import { ensureAgentReplyTarget } from './agent-replies'
 import type { AgentReactionEmoji } from './agent-reactions'
 import { deleteAgentTurn, fanoutAgentTurns, patchAgentTurn, putAgentTurn } from './agent-turns'
 import { agentUserMessage, type AgentTurnMetadata } from './agent-message'
 import { agentModelSupportsVision, attachMessageImages } from './agent-vision'
-import { mailPermissionAllows } from '../shared/mail'
+import { mailPermissionAllows, mergeMailAddresses } from '../shared/mail'
 import type { MailboxPermission } from '../shared/types'
 import { WorkspaceAction, type AuthorizationContext } from '../shared/authorization'
 import { loadAuthorizationContext } from '../server/utils/authorization'
@@ -680,56 +682,44 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     }
   }
 
+  /** Delivers an Agent's outbound email and reports the result the same way people see it. */
+  private async deliverAgentMail(mailboxId: string, threadId: string, messageId: string) {
+    await deliverOutboundEmail(this.env, messageId)
+    await signalMailChanged(this.env, mailboxId, threadId).catch(() => {})
+    const outcome = await this.env.DB.prepare(
+      'SELECT delivery_status as deliveryStatus, delivery_error as deliveryError FROM email_messages WHERE message_id = ?',
+    ).bind(messageId).first<{ deliveryStatus: string; deliveryError: string | null }>()
+    if (outcome?.deliveryStatus === 'failed') throw new Error(outcome.deliveryError || 'Email delivery failed')
+    return outcome?.deliveryStatus ?? 'pending'
+  }
+
   private async sendMailReply(threadId: string, content: string) {
     const access = await this.mailThreadAccess(threadId, 'send')
     if (!workspaceEmailAvailable(this.env)) throw new Error('Workspace email sending is not bound')
-    const recipients = [...new Set(this.stringArray(access.participantsJson).filter(value => value.toLowerCase() !== access.mailboxAddress))]
+    const [recipients, threading] = await Promise.all([
+      replyRecipients(this.env, threadId, access.mailboxAddress),
+      replyThreading(this.env, threadId),
+    ])
     if (!recipients.length) throw new Error('This conversation has no external recipient')
-    const previous = await this.env.DB.prepare(
-      `SELECT rfc_message_id as rfcMessageId, references_json as referencesJson
-       FROM email_messages WHERE thread_channel_id = ? ORDER BY created_at DESC LIMIT 1`,
-    ).bind(threadId).first<{ rfcMessageId: string | null; referencesJson: string }>()
-    const references = [...new Set([
-      ...this.stringArray(previous?.referencesJson || '[]'),
-      ...(previous?.rfcMessageId ? [previous.rfcMessageId] : []),
-    ])]
     const posted = await this.postMessage(threadId, content)
     const created = nowIso()
     await this.env.DB.batch([
       this.env.DB.prepare(
         `INSERT INTO email_messages
-         (message_id, thread_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
+         (message_id, thread_channel_id, mailbox_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
           rfc_message_id, in_reply_to, references_json, delivery_status, raw_r2_key, created_at)
-         VALUES (?, ?, 'outbound', ?, ?, ?, '[]', '[]', NULL, ?, ?, 'pending', NULL, ?)`,
-      ).bind(posted.id, threadId, access.mailboxAddress, access.displayName, JSON.stringify(recipients), previous?.rfcMessageId || null, JSON.stringify(references), created),
+         VALUES (?, ?, ?, 'outbound', ?, ?, ?, '[]', '[]', NULL, ?, ?, 'pending', NULL, ?)`,
+      ).bind(posted.id, threadId, access.mailboxId, access.mailboxAddress, access.displayName, JSON.stringify(recipients), threading.inReplyTo, JSON.stringify(threading.references), created),
       this.env.DB.prepare('UPDATE email_threads SET last_message_at = ?, updated_at = ? WHERE channel_id = ?').bind(created, created, threadId),
     ])
-    const subject = /^re:/iu.test(access.subject) ? access.subject : `Re: ${access.subject}`
-    try {
-      const result = await sendWorkspaceEmail(this.env, {
-        from: { email: access.mailboxAddress, name: access.displayName },
-        to: recipients,
-        subject,
-        text: content,
-        headers: {
-          ...(previous?.rfcMessageId ? { 'In-Reply-To': previous.rfcMessageId } : {}),
-          ...(references.length ? { References: references.join(' ') } : {}),
-        },
-      })
-      await this.env.DB.prepare("UPDATE email_messages SET delivery_status = 'sent', rfc_message_id = ? WHERE message_id = ?")
-        .bind(result.messageId || null, posted.id).run()
-      return { ...posted, recipients, deliveryStatus: 'sent' }
-    }
-    catch (error) {
-      await this.env.DB.prepare("UPDATE email_messages SET delivery_status = 'failed' WHERE message_id = ?").bind(posted.id).run()
-      throw error
-    }
+    const deliveryStatus = await this.deliverAgentMail(access.mailboxId, threadId, posted.id)
+    return { ...posted, recipients, deliveryStatus }
   }
 
   private async sendNewMail(mailboxId: string, to: string[], subject: string, content: string) {
     const mailbox = await this.mailboxAccess(mailboxId, 'send')
     if (!workspaceEmailAvailable(this.env)) throw new Error('Workspace email sending is not bound')
-    const recipients = [...new Set(to.map(value => value.trim().toLowerCase()).filter(value => value !== mailbox.mailboxAddress))]
+    const recipients = mergeMailAddresses(to).filter(value => value !== mailbox.mailboxAddress)
     if (!recipients.length) throw new Error('Enter at least one external recipient')
     const posted = await this.postMessage(mailboxId, content)
     const threadId = newId()
@@ -745,26 +735,13 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
       ).bind(threadId, mailboxId, subject, JSON.stringify(recipients), created, created, created),
       this.env.DB.prepare(
         `INSERT INTO email_messages
-         (message_id, thread_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
+         (message_id, thread_channel_id, mailbox_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
           rfc_message_id, in_reply_to, references_json, delivery_status, raw_r2_key, created_at)
-         VALUES (?, ?, 'outbound', ?, ?, ?, '[]', '[]', NULL, NULL, '[]', 'pending', NULL, ?)`,
-      ).bind(posted.id, threadId, mailbox.mailboxAddress, mailbox.displayName, JSON.stringify(recipients), created),
+         VALUES (?, ?, ?, 'outbound', ?, ?, ?, '[]', '[]', NULL, NULL, '[]', 'pending', NULL, ?)`,
+      ).bind(posted.id, threadId, mailboxId, mailbox.mailboxAddress, mailbox.displayName, JSON.stringify(recipients), created),
     ])
-    try {
-      const result = await sendWorkspaceEmail(this.env, {
-        from: { email: mailbox.mailboxAddress, name: mailbox.displayName },
-        to: recipients,
-        subject,
-        text: content,
-      })
-      await this.env.DB.prepare("UPDATE email_messages SET delivery_status = 'sent', rfc_message_id = ? WHERE message_id = ?")
-        .bind(result.messageId || null, posted.id).run()
-      return { threadId, messageId: posted.id, recipients, deliveryStatus: 'sent' }
-    }
-    catch (error) {
-      await this.env.DB.prepare("UPDATE email_messages SET delivery_status = 'failed' WHERE message_id = ?").bind(posted.id).run()
-      throw error
-    }
+    const deliveryStatus = await this.deliverAgentMail(mailboxId, threadId, posted.id)
+    return { threadId, messageId: posted.id, recipients, deliveryStatus }
   }
 
   private async profile(): Promise<AgentProfile | null> {

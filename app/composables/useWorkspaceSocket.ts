@@ -62,7 +62,7 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
           connection.value = 'connected'
         }
         else if (parsed.t === 'presence') presence.apply(parsed.users)
-        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'members.changed' || parsed.t === 'huddle.changed' || parsed.t === 'huddle.schedule') {
+        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'mail.changed' || parsed.t === 'members.changed' || parsed.t === 'huddle.changed' || parsed.t === 'huddle.schedule') {
           const qc = queryClient()
           if (qc) applyWorkspaceRealtimeEvent(qc, parsed)
           if (parsed.t === 'huddle.changed') {

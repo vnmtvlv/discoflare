@@ -31,7 +31,8 @@ export async function receiveMailGatewayRequest(request: Request, env: Discoflar
   const from = request.headers.get('X-Discoflare-Mail-From')?.trim()
   const to = request.headers.get('X-Discoflare-Mail-To')?.trim()
   if (!from || !to || !request.body) return new Response('Invalid mail envelope', { status: 400 })
-  const result = await ingestWorkspaceEmail({ from, to, raw: request.body }, env)
+  const size = Number(request.headers.get('Content-Length'))
+  const result = await ingestWorkspaceEmail({ from, to, raw: request.body, rawSize: Number.isFinite(size) && size > 0 ? size : undefined }, env)
   if (!result.accepted) return new Response(result.reason, { status: 404 })
   return new Response(null, { status: 202 })
 }

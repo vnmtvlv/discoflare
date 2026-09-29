@@ -70,6 +70,9 @@ const databaseQ = useQuery({
   }),
   enabled: computed(() => Boolean(activeDatabaseSummary.value?.id)),
   refetchInterval: 10_000,
+  // Opening a database without a view in the URL loads its first view, and the
+  // page then adds that view to the URL. Keep the table on screen through it.
+  placeholderData: previous => previous?.database.id === activeDatabaseSummary.value?.id && previous?.view.id === selectedViewId.value ? previous : undefined,
 })
 const activeDatabase = computed<DatabaseDTO | null>(() => databaseQ.data.value
   ? { ...databaseQ.data.value.database, items: databaseQ.data.value.items }
@@ -555,8 +558,6 @@ function dropBoard(group: string) {
  * and the field stays focused for the next one.
  */
 const newRecordTitle = ref('')
-const pendingRecords = ref<Array<{ key: number, title: string }>>([])
-let pendingKey = 0
 
 function focusNewRecord() {
   void nextTick(() => {
@@ -582,44 +583,41 @@ function filterDefaults(): Record<string, DatabaseValue> {
   return values
 }
 
-async function createRecord(title: string, key = ++pendingKey) {
-  const database = activeDatabase.value
-  if (!database) {
-    pendingRecords.value = pendingRecords.value.filter(record => record.key !== key)
-    return
-  }
-  if (!pendingRecords.value.some(record => record.key === key)) pendingRecords.value = [...pendingRecords.value, { key, title }]
-  try {
-    const res = await api<{ item: DatabaseItemDTO }>(`/api/databases/${database.id}/items`, { method: 'POST', body: { title, values: filterDefaults() } })
-    createdHere.value = new Map(createdHere.value).set(res.item.id, res.item)
-    qc.setQueryData<DatabasePageDTO>(databaseKey.value, old => old && !old.items.some(item => item.id === res.item.id)
-      ? { ...old, items: [...old.items, res.item], total: old.total + 1 }
-      : old)
-    void qc.invalidateQueries({ queryKey: ['data-resources'] })
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-    if (!newRecordTitle.value) newRecordTitle.value = title
-  }
-  finally {
-    pendingRecords.value = pendingRecords.value.filter(record => record.key !== key)
+const newRecords = useNewRecords(
+  async (databaseId, title, values) => (await api<{ item: DatabaseItemDTO }>(`/api/databases/${databaseId}/items`, { method: 'POST', body: { title, values } })).item,
+  {
+    onCreated(databaseId, item) {
+      void qc.invalidateQueries({ queryKey: ['data-resources'] })
+      const key = databaseKey.value
+      if (key[1] !== databaseId) return
+      createdHere.value = new Map(createdHere.value).set(item.id, item)
+      const page = qc.getQueryData<DatabasePageDTO>(key)
+      // The view changed or is loading while the record saved; that load may predate it.
+      if (!page || databaseQ.isFetching.value) {
+        void qc.invalidateQueries({ queryKey: ['database', databaseId] })
+        return
+      }
+      if (!page.items.some(existing => existing.id === item.id)) qc.setQueryData<DatabasePageDTO>(key, { ...page, items: [...page.items, item], total: page.total + 1 })
+    },
+    onFailed(title, error) {
+      toast.add({ title: errorMessage(error), color: 'error' })
+      if (!newRecordTitle.value) newRecordTitle.value = title
+    },
     // Once a burst of typed records has saved, reload the view so the ones its
     // filters leave out are marked; they stay on screen through createdHere.
-    if (!pendingRecords.value.length && activeView.value?.config.filters.length) void databaseQ.refetch()
-  }
-}
-
-// Records typed in quick succession are created one after another, so they keep
-// the order they were typed in; each still shows at once as a pending row.
-let createQueue: Promise<void> = Promise.resolve()
+    onIdle() {
+      if (activeView.value?.config.filters.length) void databaseQ.refetch()
+    },
+  },
+)
+const pendingRecords = computed(() => newRecords.pending.value.filter(record => record.databaseId === activeDatabase.value?.id))
 
 function submitNewRecord() {
   const title = newRecordTitle.value.trim()
-  if (!title) return
+  const database = activeDatabase.value
+  if (!title || !database) return
   newRecordTitle.value = ''
-  const key = ++pendingKey
-  pendingRecords.value = [...pendingRecords.value, { key, title }]
-  createQueue = createQueue.then(() => createRecord(title, key))
+  void newRecords.submit(database.id, title, filterDefaults())
 }
 
 /** + Record: in a table, go to the New record row; elsewhere add an "Untitled" record. */
@@ -628,7 +626,8 @@ async function addItem() {
     focusNewRecord()
     return
   }
-  await createRecord('Untitled')
+  const database = activeDatabase.value
+  if (database) await newRecords.submit(database.id, 'Untitled', filterDefaults())
 }
 
 async function updateTitle(item: DatabaseItemDTO, event: Event) {

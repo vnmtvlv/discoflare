@@ -1,12 +1,12 @@
 import type { H3Event } from 'h3'
-import { and, eq } from 'drizzle-orm'
-import { emailMailboxAccess, emailMailboxes, users } from '../../drizzle/schema'
+import { eq } from 'drizzle-orm'
+import { users } from '../../drizzle/schema'
 import { newId, nowIso } from '../../shared/ids'
 import type { DiscoflareEnv } from '../../workers/env'
 import type { MailboxPermission } from '../../shared/types'
 import { MAIL_DOMAIN_ID, MAIL_EXTERNAL_USER_ID, mailAddress, mailPermissionAllows, normalizeMailLocalPart } from '../../shared/mail'
 import { requireChannelAccess } from './guards'
-import { cf, fail } from './cf'
+import { fail } from './cf'
 import { getDb } from './db'
 
 export type WorkspaceMailDomainConfig = {
@@ -110,20 +110,16 @@ export async function ensureWorkspaceMailFromEnv(env: DiscoflareEnv): Promise<vo
   ).bind(...configuredIds).run()
 }
 
+/**
+ * Mailbox access for a mailbox channel or one of its conversations. The channel
+ * guard already loads the mailbox and the member's grant, so this adds no query.
+ */
 export async function requireMailboxPermission(event: H3Event, channelId: string, needed: MailboxPermission) {
   const access = await requireChannelAccess(event, channelId)
-  const { env } = cf(event)
-  const db = getDb(env.DB)
+  if (!access.mailPermission) fail(404, 'not_found', 'Mailbox not found')
+  if (!mailPermissionAllows(access.mailPermission, needed)) fail(403, 'forbidden', 'Missing mailbox permission')
   const mailboxId = access.channel.type === 'thread' && access.channel.parentId ? access.channel.parentId : access.channel.id
-  const mailbox = (await db.select().from(emailMailboxes).where(eq(emailMailboxes.channelId, mailboxId)).limit(1))[0]
-  if (!mailbox) fail(404, 'not_found', 'Mailbox not found')
-  if (!mailbox.enabled) fail(404, 'not_found', 'Mailbox not found')
-  const grant = (await db.select().from(emailMailboxAccess).where(and(
-    eq(emailMailboxAccess.channelId, mailboxId),
-    eq(emailMailboxAccess.userId, access.user.id),
-  )).limit(1))[0]
-  if (!grant || !mailPermissionAllows(grant.permission, needed)) fail(403, 'forbidden', 'Missing mailbox permission')
-  return { ...access, mailbox, mailboxId, mailPermission: grant.permission }
+  return { ...access, mailboxId, mailPermission: access.mailPermission }
 }
 
 export async function replaceMailboxAccess(env: DiscoflareEnv, channelId: string, rows: Array<{ userId: string; permission: MailboxPermission }>) {

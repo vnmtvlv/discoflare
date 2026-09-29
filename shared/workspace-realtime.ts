@@ -26,6 +26,13 @@ export type WorkspaceTasksChangedEvent = {
   taskId: string | null
 }
 
+/** Something changed in a mailbox: new mail, a reply or note, a delivery result, or a move. */
+export type WorkspaceMailChangedEvent = {
+  t: 'mail.changed'
+  mailboxId: string
+  threadId: string | null
+}
+
 export type WorkspaceMembersChangedEvent = {
   t: 'members.changed'
   workspaceId: string
@@ -59,6 +66,7 @@ export type WorkspaceRealtimeEvent =
   | WorkspaceChannelActivityEvent
   | WorkspaceChannelReadEvent
   | WorkspaceTasksChangedEvent
+  | WorkspaceMailChangedEvent
   | WorkspaceMembersChangedEvent
   | WorkspaceHuddleChangedEvent
   | WorkspaceHuddleScheduleEvent
