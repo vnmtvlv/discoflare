@@ -1,4 +1,4 @@
-import type { HuddleState, ScheduledHuddleDTO } from './types'
+import type { HuddleState } from './types'
 
 export type WorkspaceChannelActivityEvent = {
   t: 'channel.activity'
@@ -50,18 +50,6 @@ export type WorkspaceHuddleChangedEvent = {
   }
 }
 
-export type WorkspaceHuddleScheduleEvent = {
-  t: 'huddle.schedule'
-  channelId: string
-  schedule: ScheduledHuddleDTO
-  ring: boolean
-  notification: {
-    title: string
-    body: string
-    url: string
-  }
-}
-
 export type WorkspaceRealtimeEvent =
   | WorkspaceChannelActivityEvent
   | WorkspaceChannelReadEvent
@@ -69,4 +57,3 @@ export type WorkspaceRealtimeEvent =
   | WorkspaceMailChangedEvent
   | WorkspaceMembersChangedEvent
   | WorkspaceHuddleChangedEvent
-  | WorkspaceHuddleScheduleEvent

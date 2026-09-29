@@ -30,7 +30,7 @@ This repository is the source of truth for the open-source workspace runtime and
 
 Five apps bring conversations, work, email, knowledge, and internal tools into one workspace:
 
-- **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first Live session with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Live sessions can also be scheduled in their parent conversation. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
+- **Chat** — Talk in public and private channels, 1:1 and group Direct Messages, and Threads. Share files and recorded audio messages, start a 1:1 call, or open an audio-first Live session with camera and screen sharing in any conversation using optional Cloudflare RealtimeKit. Typing indicators, presence, unread state, replies, reactions, mentions, and optional Web Push notifications help everyone keep up.
 - **Tasks** — Organize work on realtime boards with ordered Tasks, priorities, due dates, labels, dependencies, checklists, and attachments. Humans and Agents can read and create tracked work.
 - **Mail** — Receive and send domain email through shared Mailboxes. Read email conversations as Threads, collaborate through Internal Notes, and grant humans and Agents read, send, or manage access.
 - **Data** — Keep structured information and knowledge together. Shape each Database through shared table, list, board, and calendar Views with typed filters and sorting; bookmark the Views, Documents, and Canvases important to you; and edit records without exposing their physical D1 storage.

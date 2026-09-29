@@ -304,7 +304,10 @@ export const channels = sqliteTable('channels', {
   `),
 ])
 
-/** Durable invitations to meet in a conversation. RealtimeKit meetings are created only when somebody joins. */
+/**
+ * Retired: scheduling huddles was removed until Discoflare has a calendar
+ * (migration 0029 cancelled pending schedules). Kept so existing history remains.
+ */
 export const scheduledHuddles = sqliteTable('scheduled_huddles', {
   id: text('id').primaryKey(),
   channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),

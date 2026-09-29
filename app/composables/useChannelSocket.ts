@@ -255,9 +255,6 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
           case 'voice':
             huddle.setState(id, parsed.t === 'voice' ? parsed.voice : parsed.huddle)
             break
-          case 'huddle.schedule':
-            void queryClient()?.invalidateQueries({ queryKey: ['scheduled-huddles', parsed.channelId] })
-            break
           case 'dm.participants':
             void queryClient()?.invalidateQueries({ queryKey: ['dms'] })
             break

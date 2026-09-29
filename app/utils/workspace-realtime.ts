@@ -93,10 +93,6 @@ export function applyWorkspaceRealtimeEvent(cache: WorkspaceQueryCache, event: W
     cache.setQueriesData<ChannelList>({ queryKey: ['dms'] }, update)
     return
   }
-  if (event.t === 'huddle.schedule') {
-    void cache.invalidateQueries({ queryKey: ['scheduled-huddles', event.channelId] })
-    return
-  }
   const readCursor = cache.getQueryData<string>(['readCursor', event.sourceChannelId])
   const inThread = event.sourceChannelId !== event.rootChannelId
   if (event.t === 'channel.activity') {

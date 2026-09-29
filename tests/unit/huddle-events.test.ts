@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { HuddleState, ScheduledHuddleDTO } from '../../shared/types'
-import { signalHuddleChanged, signalScheduledHuddleReady } from '../../workers/huddle-events'
+import type { HuddleState } from '../../shared/types'
+import { signalHuddleChanged } from '../../workers/huddle-events'
 
 class Statement {
   args: unknown[] = []
@@ -23,14 +23,12 @@ class Statement {
 
 function fakeEnv(results: unknown[]) {
   const notifyHuddleChanged = vi.fn()
-  const notifyHuddleSchedule = vi.fn()
   return {
     notifyHuddleChanged,
-    notifyHuddleSchedule,
     env: {
       DB: { prepare: () => new Statement(results.shift()) },
       WORKSPACE_DO: {
-        getByName: () => ({ notifyHuddleChanged, notifyHuddleSchedule }),
+        getByName: () => ({ notifyHuddleChanged }),
       },
     } as never,
   }
@@ -45,7 +43,6 @@ const activeCall: HuddleState = {
   startedAt: '2026-09-08T10:00:00.000Z',
   kind: 'call',
   title: null,
-  scheduleId: null,
 }
 
 describe('workspace huddle events', () => {
@@ -62,31 +59,6 @@ describe('workspace huddle events', () => {
     expect(fake.notifyHuddleChanged).toHaveBeenCalledWith(
       expect.objectContaining({ ring: true, notification: expect.objectContaining({ title: 'Alice is calling' }) }),
       ['callee'],
-    )
-  })
-
-  it('rings both participants when their scheduled call becomes ready', async () => {
-    const fake = fakeEnv([
-      { id: 'dm', name: 'Alice', type: 'dm', visibility: 'private' },
-      [{ id: 'caller' }, { id: 'callee' }],
-    ])
-    const schedule: ScheduledHuddleDTO = {
-      id: 'schedule',
-      channelId: 'dm',
-      title: 'Catch up',
-      startsAt: '2026-09-09T10:00:00.000Z',
-      status: 'ready',
-      createdBy: { id: 'caller', kind: 'human', displayName: 'Alice', avatarR2Key: null },
-      meetingId: null,
-      createdAt: '2026-09-08T10:00:00.000Z',
-      updatedAt: '2026-09-09T10:00:00.000Z',
-    }
-
-    await signalScheduledHuddleReady(fake.env, schedule)
-
-    expect(fake.notifyHuddleSchedule).toHaveBeenCalledWith(
-      expect.objectContaining({ ring: true, schedule, notification: expect.objectContaining({ title: 'Scheduled call is ready' }) }),
-      ['caller', 'callee'],
     )
   })
 })

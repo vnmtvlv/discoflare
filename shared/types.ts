@@ -475,21 +475,6 @@ export type HuddleState = {
   startedAt: string | null
   kind: 'call' | 'huddle'
   title: string | null
-  scheduleId: string | null
-}
-
-export type ScheduledHuddleStatus = 'scheduled' | 'ready' | 'started' | 'cancelled'
-
-export type ScheduledHuddleDTO = {
-  id: string
-  channelId: string
-  title: string
-  startsAt: string
-  status: ScheduledHuddleStatus
-  createdBy: PublicUser
-  meetingId: string | null
-  createdAt: string
-  updatedAt: string
 }
 
 export type WorkspaceDTO = {
@@ -643,7 +628,7 @@ export type ClientMsg =
   | { t: 'message.delete'; id: string }
   | { t: 'typing'; active: boolean }
   | { t: 'read'; messageId: string }
-  | { t: 'huddle.start'; scheduleId?: string }
+  | { t: 'huddle.start' }
   | { t: 'huddle.join' }
   | { t: 'huddle.leave' }
   | { t: 'voice.join' }
@@ -662,7 +647,6 @@ export type ServerMsg =
   | { t: 'agent.state'; agentId: string; runs: AgentTurnDTO[] }
   | { t: 'presence'; users: Array<{ userId: string; status: PresenceStatus }> }
   | { t: 'huddle'; huddle: HuddleState }
-  | { t: 'huddle.schedule'; channelId: string }
   | { t: 'voice'; voice: HuddleState }
   | { t: 'dm.participants'; participants: PublicUser[] }
   | { t: 'dm.update'; name: string | null }

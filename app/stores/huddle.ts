@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
 import type { RTKParticipant, RTKSelf } from '@cloudflare/realtimekit'
 import type { HuddleState } from '~~/shared/types'
-import type { WorkspaceHuddleChangedEvent, WorkspaceHuddleScheduleEvent } from '~~/shared/workspace-realtime'
+import type { WorkspaceHuddleChangedEvent } from '~~/shared/workspace-realtime'
 
 type Conn = 'idle' | 'connecting' | 'live' | 'error'
 
@@ -28,7 +28,6 @@ export type IncomingHuddle = {
   title: string
   body: string
   kind: 'call' | 'huddle'
-  scheduleId: string | null
   active: boolean
 }
 
@@ -52,7 +51,7 @@ export const useHuddleStore = defineStore('huddle', () => {
   const activeSpeakerId = ref<string | null>(null)
   const mediaRevision = ref(0)
   const incoming = ref<IncomingHuddle | null>(null)
-  const pendingJoin = ref<{ channelId: string; scheduleId: string | null; start: boolean } | null>(null)
+  const pendingJoin = ref<{ channelId: string; start: boolean } | null>(null)
   let cleanupMeetingEvents: (() => void) | null = null
   let cleanupParticipantEvents: (() => void) | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -256,20 +255,7 @@ export const useHuddleStore = defineStore('huddle', () => {
       title: event.notification.title,
       body: event.notification.body,
       kind: event.huddle.kind,
-      scheduleId: event.huddle.scheduleId,
       active: true,
-    }
-  }
-
-  function receiveSchedule(event: WorkspaceHuddleScheduleEvent) {
-    if (!event.ring || currentChannelId.value === event.channelId) return
-    incoming.value = {
-      channelId: event.channelId,
-      title: event.notification.title,
-      body: event.notification.body,
-      kind: 'call',
-      scheduleId: event.schedule.id,
-      active: false,
     }
   }
 
@@ -277,7 +263,6 @@ export const useHuddleStore = defineStore('huddle', () => {
     if (!incoming.value) return
     pendingJoin.value = {
       channelId: incoming.value.channelId,
-      scheduleId: incoming.value.scheduleId,
       start: !incoming.value.active,
     }
     const channelId = incoming.value.channelId
@@ -320,7 +305,6 @@ export const useHuddleStore = defineStore('huddle', () => {
     toggleScreenShare,
     setDevice,
     receiveHuddle,
-    receiveSchedule,
     answerIncoming,
   }
 })
