@@ -15,6 +15,7 @@ const session = useSessionStore()
 const qc = useQueryClient()
 const huddle = useHuddleStore()
 const { api } = useApi()
+const warm = useMessagePrefetch()
 
 const dmsQ = useQuery({
   queryKey: ['dms'],
@@ -110,6 +111,9 @@ function searchName(member: DmSearchMember) {
           :class="selected === ch.id ? 'bg-accented text-highlighted' : 'text-muted hover:bg-elevated/80 hover:text-default'"
           role="option"
           :aria-selected="selected === ch.id"
+          @pointerenter="warm.intent(ch.id)"
+          @pointerleave="warm.cancel()"
+          @focus="warm.prefetch(ch.id)"
         >
           <UserAvatar v-if="avatarUser(ch)" :user="avatarUser(ch)!" size="2xs" />
           <UAvatar v-else size="2xs" :text="initials(ch)" />

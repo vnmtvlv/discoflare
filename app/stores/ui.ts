@@ -5,6 +5,9 @@ import type { RightPanelTab } from '~~/shared/types'
 
 type LastChannel = { workspaceId: string; channelId: string }
 
+/** Marks `threadId` while a new thread is being created and has no id yet. */
+export const PENDING_THREAD_PREFIX = 'pending:'
+
 export function isLastChannel(value: unknown): value is LastChannel {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<LastChannel>
@@ -42,7 +45,9 @@ export const useUiStore = defineStore('ui', () => {
   type ComposerState = {
     draft: string
     replyToId: string | null
+    /** The message being edited in place, with its own draft so the composer keeps its text. */
     editingId: string | null
+    editDraft: string
   }
 
   const rightPanelOpen = ref(true)
@@ -52,6 +57,7 @@ export const useUiStore = defineStore('ui', () => {
   const huddleSetupOpen = ref(false)
   const threadId = ref<string | null>(null)
   const threadParentId = ref<string | null>(null)
+  const pendingThreadTitle = ref('')
   const dmFrozen = ref(false)
   const searchQuery = ref('')
   const searchOpen = ref(false)
@@ -93,6 +99,7 @@ export const useUiStore = defineStore('ui', () => {
       draft: '',
       replyToId: null,
       editingId: null,
+      editDraft: '',
     }
   }
 
@@ -101,31 +108,36 @@ export const useUiStore = defineStore('ui', () => {
   }
 
   function startReply(channelId: string, messageId: string) {
-    const state = composerState(channelId)
-    state.replyToId = messageId
-    state.editingId = null
+    composerState(channelId).replyToId = messageId
   }
 
   function startEditing(channelId: string, messageId: string, content: string) {
     const state = composerState(channelId)
-    state.draft = content
-    state.replyToId = null
     state.editingId = messageId
+    state.editDraft = content
   }
 
-  function cancelComposerIntent(channelId: string, clearDraft = false) {
+  function setEditDraft(channelId: string, draft: string) {
+    composerState(channelId).editDraft = draft
+  }
+
+  function cancelEditing(channelId: string) {
     const state = composerState(channelId)
-    state.replyToId = null
     state.editingId = null
-    if (clearDraft) state.draft = ''
+    state.editDraft = ''
+  }
+
+  /** Escape: an edit in progress closes first, then a pending reply. */
+  function cancelComposerIntent(channelId: string) {
+    const state = composerState(channelId)
+    if (state.editingId) cancelEditing(channelId)
+    else state.replyToId = null
   }
 
   function clearComposer(channelId: string) {
-    composerStates.value[channelId] = {
-      draft: '',
-      replyToId: null,
-      editingId: null,
-    }
+    const state = composerState(channelId)
+    state.draft = ''
+    state.replyToId = null
   }
 
   return {
@@ -135,6 +147,7 @@ export const useUiStore = defineStore('ui', () => {
     huddleSetupOpen,
     threadId,
     threadParentId,
+    pendingThreadTitle,
     dmFrozen,
     searchQuery,
     searchOpen,
@@ -150,6 +163,8 @@ export const useUiStore = defineStore('ui', () => {
     setComposerDraft,
     startReply,
     startEditing,
+    setEditDraft,
+    cancelEditing,
     cancelComposerIntent,
     clearComposer,
   }

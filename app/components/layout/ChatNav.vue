@@ -9,6 +9,7 @@ const props = defineProps<{ workspaceId: string }>()
 const huddle = useHuddleStore()
 const { api } = useApi()
 const nav = useNavActions()
+const warm = useMessagePrefetch()
 
 const membersQ = useQuery({
   queryKey: computed(() => ['members', props.workspaceId]),
@@ -99,6 +100,9 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               :active="isActive(ch)"
               :ancestor="hasActiveThread(ch)"
               :unread="Boolean(ch.unread)"
+              @pointerenter="warm.intent(ch.id)"
+              @pointerleave="warm.cancel()"
+              @focus="warm.prefetch(ch.id)"
             >
               <template #leading>
                 <UIcon :name="isVoiceType(ch.type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-[18px] shrink-0 text-dimmed" />
@@ -131,6 +135,9 @@ watch(() => channelsQ.data.value?.channels, (list) => {
                   :active="selectedThread === thread.id"
                   :unread="thread.unread"
                   dense
+                  @pointerenter="warm.intent(thread.id)"
+                  @pointerleave="warm.cancel()"
+                  @focus="warm.prefetch(thread.id)"
                 >
                   {{ thread.title }}
                   <template #trailing>
