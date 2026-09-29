@@ -3,7 +3,7 @@ import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/vue-query'
 import type { MailboxDTO, MailMessageDTO, MailThreadDTO, MailThreadPageDTO, MailThreadStatus } from '~~/shared/types'
 import { formatDateTime } from '~~/shared/format'
 import { WORKSPACE_ID } from '~~/shared/ids'
-import { isMailFolder, mailPath } from '~~/shared/paths'
+import { isMailFolder, mailPath, type MailFolder } from '~~/shared/paths'
 import { withMailboxUnread, withMessage, withoutMessage, withoutThread, withThreadActivity, withThreadFirst, withThreadRead, type MailThreadDetail, type MailThreadPages } from '~/utils/mail-cache'
 
 definePageMeta({ layout: 'workspace', middleware: ['auth'] })
@@ -17,7 +17,7 @@ const session = useSessionStore()
 
 /** Mailbox, folder and open thread all live in the URL so the sidebar can link to them. */
 const activeMailboxId = computed(() => String(route.params.mailbox || '') || null)
-const folder = computed<MailThreadStatus>(() => {
+const folder = computed<MailFolder>(() => {
   const value = String(route.params.folder || 'inbox')
   return isMailFolder(value) ? value : 'inbox'
 })
@@ -90,9 +90,14 @@ watch([mailboxes, activeMailboxId], ([items, id]) => {
   if (!items.some(item => item.channelId === id)) void navigateTo(mailPath(items[0]!.channelId), { replace: true })
 }, { immediate: true })
 
+/** Whether a conversation with this status still belongs in the open folder. */
+function listedHere(status: MailThreadStatus) {
+  return folder.value === 'sent' ? status !== 'spam' && status !== 'trash' : status === folder.value
+}
+
 /** A conversation moved to another folder elsewhere closes here. */
 watch(() => threadQ.data.value?.thread.status, (status) => {
-  if (status && !threadQ.isPlaceholderData.value && status !== folder.value) openThread(null)
+  if (status && !threadQ.isPlaceholderData.value && !listedHere(status)) openThread(null)
 })
 
 watch(activeThreadId, () => {
@@ -173,6 +178,8 @@ async function send() {
     replyKey.value = newRequestKey()
     qc.setQueryData<MailThreadDetail>(['mail-thread', threadId], detail => withMessage(detail, result.message, pending.id))
     qc.setQueriesData<MailThreadPages>({ queryKey: ['mail-threads', activeMailboxId.value] }, data => withThreadActivity(data, threadId, result.message))
+    // A first reply puts the conversation in Sent.
+    if (mode === 'reply') void qc.invalidateQueries({ queryKey: ['mail-threads', activeMailboxId.value, 'sent'] })
     if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message)
   }
   catch (error) {
@@ -199,16 +206,22 @@ async function retry(message: MailMessageDTO) {
   }
 }
 
-/** Moving closes the conversation at once; it comes back if the server refuses. */
+/**
+ * Moving closes the conversation at once and takes it out of every folder it
+ * leaves; it comes back if the server refuses. Archiving keeps it in Sent, like Gmail.
+ */
 async function move(status: MailThreadStatus) {
   const threadId = activeThreadId.value
   const mailboxId = activeMailboxId.value
   if (!threadId || !mailboxId) return
   const listKey = ['mail-threads', mailboxId] as const
   const snapshot = qc.getQueriesData<MailThreadPages>({ queryKey: listKey })
-  qc.setQueriesData<MailThreadPages>({ queryKey: listKey }, data => withoutThread(data, threadId))
+  for (const [key] of snapshot) {
+    const keepsInSent = key[2] === 'sent' && status !== 'spam' && status !== 'trash'
+    if (!keepsInSent) qc.setQueryData<MailThreadPages>(key, data => withoutThread(data, threadId))
+  }
   qc.setQueryData<MailThreadDetail>(['mail-thread', threadId], detail => detail && { ...detail, thread: { ...detail.thread, status } })
-  openThread(null)
+  if (!listedHere(status)) openThread(null)
   try {
     await api(`/api/mail/threads/${threadId}`, { method: 'PATCH', body: { status } })
   }
@@ -239,9 +252,10 @@ async function compose() {
     composeSubject.value = ''
     composeBody.value = ''
     qc.setQueryData<MailThreadDetail>(['mail-thread', result.threadId], { thread: result.thread, messages: [result.message] })
-    qc.setQueryData<MailThreadPages>(['mail-threads', mailboxId, 'inbox'], data => withThreadFirst(data, result.thread))
+    // A conversation you start is in Sent; it reaches the Inbox once someone replies.
+    qc.setQueryData<MailThreadPages>(['mail-threads', mailboxId, 'sent'], data => withThreadFirst(data, result.thread))
     if (result.message.email?.deliveryStatus === 'failed') deliveryFailed(result.message, 'email')
-    await navigateTo(mailPath(mailboxId, 'inbox', result.threadId))
+    await navigateTo(mailPath(mailboxId, 'sent', result.threadId))
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
   finally { sending.value = false }

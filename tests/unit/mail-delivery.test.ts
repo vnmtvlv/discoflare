@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { INIT_SQL } from '../../server/utils/db'
 import { deliverOutboundEmail, replyRecipients } from '../../server/utils/mail-outbound'
+import { listMailThreads } from '../../server/utils/mail-threads'
 import { MAIL_LIMITS } from '../../shared/mail'
 import type { DiscoflareEnv } from '../../workers/env'
 import { ingestWorkspaceEmail } from '../../workers/mail-ingress'
@@ -202,5 +203,41 @@ describe('outbound email', () => {
     env = { ...env, MAIL_EMAIL: { send } } as unknown as DiscoflareEnv
     await deliverOutboundEmail(env, 'reply')
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe('mail folders', () => {
+  function started(id: string, at: string, status = 'inbox') {
+    sqlite.exec(`
+      INSERT INTO messages (id, channel_id, author_id, content, created_at) VALUES ('${id}-start', 'support', 'owner', 'Hello from us', '${at}');
+      INSERT INTO channels (id, name, type, visibility, parent_id, parent_message_id) VALUES ('${id}', '${id}', 'thread', 'private', 'support', '${id}-start');
+      INSERT INTO email_threads (channel_id, mailbox_channel_id, subject, status, participants_json, last_message_at) VALUES ('${id}', 'support', '${id}', '${status}', '["customer@example.net"]', '${at}');
+      INSERT INTO email_messages (message_id, thread_channel_id, mailbox_channel_id, direction, from_address, to_json, delivery_status, created_at)
+        VALUES ('${id}-start', '${id}', 'support', 'outbound', 'support@example.com', '["customer@example.net"]', 'sent', '${at}');
+    `)
+  }
+  const list = async (folder: 'inbox' | 'sent' | 'archive' | 'trash') =>
+    (await listMailThreads(env, { mailboxId: 'support', userId: 'owner', folder })).threads.map(thread => thread.subject)
+
+  it('keeps conversations you started in Sent until someone replies', async () => {
+    started('Quote', '2026-09-29T09:00:00.000Z')
+    await receive(email({ id: '<question@example.net>', to: 'support@example.com', subject: 'Question' }), 'support@example.com')
+    expect(await list('inbox')).toEqual(['Question'])
+    expect(await list('sent')).toEqual(['Quote'])
+
+    // The customer replies to the quote; the conversation reaches the Inbox and stays in Sent.
+    sqlite.exec("UPDATE email_messages SET rfc_message_id = '<quote@example.com>' WHERE message_id = 'Quote-start'")
+    await receive(email({ id: '<answer@example.net>', to: 'support@example.com', subject: 'Re: Quote', inReplyTo: '<quote@example.com>' }), 'support@example.com')
+    expect(await list('inbox')).toEqual(['Quote', 'Question'])
+    expect(await list('sent')).toEqual(['Quote'])
+  })
+
+  it('lists Sent by when you last sent and leaves out Spam and Trash', async () => {
+    started('Older', '2026-09-28T09:00:00.000Z', 'archive')
+    started('Newer', '2026-09-29T09:00:00.000Z')
+    started('Binned', '2026-09-29T10:00:00.000Z', 'trash')
+    expect(await list('sent')).toEqual(['Newer', 'Older'])
+    expect(await list('archive')).toEqual(['Older'])
+    expect(await list('trash')).toEqual(['Binned'])
   })
 })

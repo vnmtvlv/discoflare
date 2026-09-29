@@ -20,6 +20,7 @@ const canCompose = computed(() => activeMailbox.value?.permission === 'send' || 
 
 const folderMeta: Record<string, { label: string; icon: string }> = {
   inbox: { label: 'Inbox', icon: 'i-ph-tray' },
+  sent: { label: 'Sent', icon: 'i-ph-paper-plane-tilt' },
   archive: { label: 'Archive', icon: 'i-ph-archive' },
   spam: { label: 'Spam', icon: 'i-ph-warning' },
   trash: { label: 'Trash', icon: 'i-ph-trash' },
