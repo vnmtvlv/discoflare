@@ -12,6 +12,8 @@ const props = defineProps<{
   member?: MemberDTO
   mine: boolean
   canPin?: boolean
+  /** Threads cannot hold threads, so their rows offer no thread action. */
+  canThread?: boolean
   compact?: boolean
   streaming?: boolean
   /** The pointer or keyboard focus is on this row: only then is the toolbar rendered. */
@@ -288,7 +290,7 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
       <UTooltip text="Reply" :content="{ side: 'top' }">
         <UButton size="sm" variant="ghost" color="neutral" square icon="i-ph-arrow-bend-up-left" aria-label="Reply" @click="emit('reply')" />
       </UTooltip>
-      <UTooltip :text="message.threadId ? 'Open thread' : 'Create thread'" :content="{ side: 'top' }">
+      <UTooltip v-if="canThread" :text="message.threadId ? 'Open thread' : 'Create thread'" :content="{ side: 'top' }">
         <UButton
           size="sm"
           variant="ghost"

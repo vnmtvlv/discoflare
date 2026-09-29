@@ -531,6 +531,8 @@ async function goToResult(hit: MessageSearchHitDTO) {
 const linkedTarget = computed(() => String(route.value.params.threadId || route.value.params.channel || route.value.params.channelId || ''))
 watch(() => [route.value.query.message, q.isSuccess.value] as const, async ([messageId, ready]) => {
   if (typeof messageId !== 'string' || !ready || linkedTarget.value !== props.channelId) return
+  // Let the loaded page render first, so a message already in it needs no extra fetch.
+  await nextTick()
   await focusMessage(messageId)
   const { message: _message, ...query } = route.value.query
   void navigateTo({ path: route.value.path, query }, { replace: true })
@@ -606,6 +608,7 @@ defineExpose({ focusMessage })
               :member="membersById.get(m.author.id)"
               :mine="m.author.id === session.user?.id"
               :can-pin="canPin"
+              :can-thread="allowThreads"
               :compact="unreadBoundary !== m.id && compactWith(m, messages[i - 1])"
               :streaming="streamingMessageIds.has(m.id)"
               :active="activeId === m.id"
