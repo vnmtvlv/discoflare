@@ -35,3 +35,7 @@ export function formatDayLabel(iso: string): string {
 export function sameDay(a: string, b: string): boolean {
   return dayjs(a).isSame(dayjs(b), 'day')
 }
+
+export function formatFullDateTime(iso: string): string {
+  return dayjs(iso).format('dddd, D MMMM YYYY HH:mm')
+}

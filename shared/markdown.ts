@@ -1,6 +1,12 @@
 const DANGEROUS_PROTO = /^(javascript|data|vbscript):/i
 /** `- item`, `* item`, or `1. item` / `1) item`; group 1 is the number for ordered items. */
 const LIST_ITEM = /^\s{0,3}(?:[-*]|(\d{1,9})[.)])\s+(.*)$/
+const HEADING = /^(#{1,3})\s+(.+)$/
+const SUBTEXT = /^-#\s+(.+)$/
+/** A bare URL in escaped text; stops before escaped angle brackets and quotes. */
+const BARE_URL = /\bhttps?:\/\/(?:(?!&lt;|&gt;|&quot;)\S)+/g
+/** Placeholders are wrapped in NUL, which escaped user text never contains. */
+const SLOT = /\0(\d+)\0/g
 
 export function escapeHtml(input: string): string {
   return input
@@ -9,6 +15,15 @@ export function escapeHtml(input: string): string {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#39;')
+}
+
+function unescapeHtml(input: string): string {
+  return input
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&amp;', '&')
 }
 
 function safeHref(raw: string): string | null {
@@ -20,34 +35,68 @@ function safeHref(raw: string): string | null {
   return null
 }
 
+/** Trailing sentence punctuation, and a closing parenthesis the URL never opened, belong to the text. */
+function splitUrlTail(url: string): [string, string] {
+  let end = url.length
+  while (end > 0) {
+    const ch = url[end - 1]!
+    if ('.,;:!?\'"'.includes(ch)) end -= 1
+    else if (ch === ')' && !url.slice(0, end).includes('(')) end -= 1
+    else break
+  }
+  return [url.slice(0, end), url.slice(end)]
+}
+
+function link(href: string, label: string): string {
+  return `<a href="${href}" rel="noopener noreferrer" target="_blank">${label}</a>`
+}
+
+/**
+ * Formats one line of already-escaped text. Code spans, links, and mentions are
+ * lifted into placeholders first, so emphasis never reaches inside them.
+ */
 function inline(src: string): string {
+  const slots: string[] = []
+  const hold = (html: string) => `\0${slots.push(html) - 1}\0`
   let out = escapeHtml(src)
-  out = out.replace(/`([^`]+)`/g, '<code>$1</code>')
-  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-  out = out.replace(/(^|[^*])\*([^*]+)\*(?!\*)/g, '$1<em>$2</em>')
-  out = out.replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1<em>$2</em>')
-  out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, label: string, url: string) => {
-    const href = safeHref(url)
-    if (!href) return label
-    return `<a href="${href}" rel="noopener noreferrer" target="_blank">${label}</a>`
+
+  out = out.replace(/`([^`]+)`/g, (_m, code: string) => hold(`<code>${code}</code>`))
+  out = out.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (full, label: string, url: string) => {
+    const href = safeHref(unescapeHtml(url))
+    return href ? hold(link(href, label)) : label
   })
-  out = out.replace(/\bhttps?:\/\/[^\s<]+/g, (url) => {
-    const href = safeHref(url)
-    if (!href) return url
-    return `<a href="${href}" rel="noopener noreferrer" target="_blank">${href}</a>`
+  out = out.replace(BARE_URL, (match) => {
+    const [url, tail] = splitUrlTail(match)
+    const href = safeHref(unescapeHtml(url))
+    return href ? hold(link(href, href)) + tail : match
   })
   out = out.replace(
     /&lt;@([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})&gt;/gi,
-    '<span class="mention" data-user-id="$1">@$1</span>',
+    (_m, id: string) => hold(`<span class="mention" data-user-id="${id}">@${id}</span>`),
   )
-  return out
+
+  out = out.replace(/\|\|(.+?)\|\|/g, '<span class="spoiler" role="button" tabindex="0" aria-label="Spoiler">$1</span>')
+  out = out.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>')
+  out = out.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  out = out.replace(/__([^_]+)__/g, '<u>$1</u>')
+  out = out.replace(/(^|[^*])\*([^*\s](?:[^*]*[^*\s])?)\*(?!\*)/g, '$1<em>$2</em>')
+  out = out.replace(/(^|[^\w])_([^_]+)_(?!\w)/g, '$1<em>$2</em>')
+  out = out.replace(/~~([^~]+)~~/g, '<s>$1</s>')
+
+  return out.replace(SLOT, (_m, index: string) => slots[Number(index)] ?? '')
 }
 
 export function renderMarkdown(src: string, names?: Record<string, string>): string {
   const fences: string[] = []
-  const withFences = src.replace(/```([\s\S]*?)```/g, (_m, code: string) => {
+  // `>>> ` quotes everything after it, like Discord.
+  const multiQuote = src.match(/^([\s\S]*?)(?:^|\n)>>> ([\s\S]*)$/)
+  const body = multiQuote
+    ? `${multiQuote[1]}\n${(multiQuote[2] ?? '').split('\n').map(line => `> ${line}`).join('\n')}`
+    : src
+  const withFences = body.replace(/```(?:([\w+#.-]{1,20})\n)?([\s\S]*?)```/g, (_m, lang: string | undefined, code: string) => {
     const i = fences.length
-    fences.push(`<pre><code>${escapeHtml(code.replace(/^\n/, ''))}</code></pre>`)
+    const language = lang ? ` class="language-${escapeHtml(lang.toLowerCase())}"` : ''
+    fences.push(`<pre><code${language}>${escapeHtml(code.replace(/^\n/, '').replace(/\n$/, ''))}</code></pre>`)
     return `\n%%FENCE${i}%%\n`
   })
 
@@ -62,13 +111,26 @@ export function renderMarkdown(src: string, names?: Record<string, string>): str
       i += 1
       continue
     }
-    if (line.startsWith('> ')) {
+    if (line.startsWith('> ') || line === '>') {
       const quote: string[] = []
-      while (i < lines.length && (lines[i] ?? '').startsWith('> ')) {
+      while (i < lines.length && ((lines[i] ?? '').startsWith('> ') || lines[i] === '>')) {
         quote.push((lines[i] ?? '').slice(2))
         i += 1
       }
       html.push(`<blockquote>${quote.map((q) => inline(q)).join('<br>')}</blockquote>`)
+      continue
+    }
+    const heading = line.match(HEADING)
+    if (heading) {
+      const level = heading[1]!.length
+      html.push(`<h${level}>${inline(heading[2] ?? '')}</h${level}>`)
+      i += 1
+      continue
+    }
+    const subtext = line.match(SUBTEXT)
+    if (subtext) {
+      html.push(`<p class="subtext">${inline(subtext[1] ?? '')}</p>`)
+      i += 1
       continue
     }
     const list = line.match(LIST_ITEM)

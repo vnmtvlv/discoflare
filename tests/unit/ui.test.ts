@@ -55,10 +55,49 @@ describe('composer state', () => {
       editingId: null,
     })
     expect(ui.composerState('thread-1')).toMatchObject({
-      draft: 'edit me',
+      draft: '',
       replyToId: null,
       editingId: 'message-2',
+      editDraft: 'edit me',
     })
+  })
+
+  it('edits in place without touching the unsent draft or reply', () => {
+    const ui = useUiStore()
+
+    ui.setComposerDraft('channel-1', 'half-written thought')
+    ui.startReply('channel-1', 'message-1')
+    ui.startEditing('channel-1', 'message-2', 'old text')
+    ui.setEditDraft('channel-1', 'new text')
+
+    expect(ui.composerState('channel-1')).toMatchObject({
+      draft: 'half-written thought',
+      replyToId: 'message-1',
+      editingId: 'message-2',
+      editDraft: 'new text',
+    })
+  })
+
+  it('closes an edit before a reply on Escape', () => {
+    const ui = useUiStore()
+
+    ui.startReply('channel-1', 'message-1')
+    ui.startEditing('channel-1', 'message-2', 'text')
+    ui.cancelComposerIntent('channel-1')
+    expect(ui.composerState('channel-1')).toMatchObject({ editingId: null, replyToId: 'message-1' })
+
+    ui.cancelComposerIntent('channel-1')
+    expect(ui.composerState('channel-1').replyToId).toBeNull()
+  })
+
+  it('keeps an edit in progress when a message is sent', () => {
+    const ui = useUiStore()
+
+    ui.setComposerDraft('channel-1', 'sent')
+    ui.startEditing('channel-1', 'message-2', 'text')
+    ui.clearComposer('channel-1')
+
+    expect(ui.composerState('channel-1')).toMatchObject({ draft: '', editingId: 'message-2' })
   })
 })
 

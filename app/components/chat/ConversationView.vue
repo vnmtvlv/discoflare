@@ -209,31 +209,46 @@ watch(() => oneQ.data.value?.channel, (ch) => {
   if (liveRoute.value.path !== want) void navigateTo(want, { replace: true })
 })
 
-const typingLine = computed(() => {
-  const ids = presence.typingIn(channelId.value).filter((id) => id !== session.user?.id)
-  const names = ids.map((id) => (channel.value?.participants ?? members.value.map((m) => m.user)).find((u) => u.id === id)?.displayName || 'someone')
-  if (!names.length) return ''
-  if (names.length === 1) return `${names[0]} is typing…`
-  return `${names.join(', ')} are typing…`
-})
+const typingNames = computed(() => presence.typingIn(channelId.value)
+  .filter((id) => id !== session.user?.id)
+  .map((id) => {
+    const member = members.value.find(m => m.user.id === id)
+    return member?.nickname || member?.user.displayName
+      || channel.value?.participants?.find(u => u.id === id)?.displayName || 'Someone'
+  }))
 const agentBusy = computed(() => presence.agentTurnsIn(channelId.value).length > 0)
 const canApproveAgent = computed(() => can(Permission.manageWorkspace))
 
 function onReply(id: string) {
   ui.startReply(channelId.value, id)
 }
-function onEdit(msg: MessageDTO) {
-  const content = msg.content.replace(/<@([0-9a-f-]+)>/gi, (_m, id: string) => {
-    const m = members.value.find((x) => x.user.id === id)
-    return `@${m?.user.displayName || id}`
-  })
-  ui.startEditing(channelId.value, msg.id, content)
+
+// Files dropped anywhere on the conversation attach to the message being written.
+const composer = ref<{ addFiles: (files: File[]) => void } | null>(null)
+const dragDepth = ref(0)
+const dropping = computed(() => dragDepth.value > 0)
+function hasFiles(event: DragEvent) {
+  return Array.from(event.dataTransfer?.types ?? []).includes('Files')
 }
-function onLast() {
-  const data = qc.getQueryData<InfiniteData<{ messages: MessageDTO[] }>>(['messages', channelId.value])
-  const all = [...(data?.pages ?? [])].reverse().flatMap((p) => p.messages)
-  const last = [...all].reverse().find((m) => m.author.id === session.user?.id && !m.deletedAt)
-  if (last) onEdit(last)
+function onDragEnter(event: DragEvent) {
+  if (!hasFiles(event) || !canAttachFiles.value || !canSendMessages.value) return
+  event.preventDefault()
+  dragDepth.value += 1
+}
+function onDragOver(event: DragEvent) {
+  if (!hasFiles(event) || !dropping.value) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
+}
+function onDragLeave(event: DragEvent) {
+  if (!hasFiles(event) || !dropping.value) return
+  dragDepth.value = Math.max(0, dragDepth.value - 1)
+}
+function onDrop(event: DragEvent) {
+  if (!dropping.value) return
+  event.preventDefault()
+  dragDepth.value = 0
+  composer.value?.addFiles(Array.from(event.dataTransfer?.files ?? []))
 }
 
 function linkThreadToMessage(messageId: string, threadId: string) {
@@ -311,7 +326,6 @@ defineShortcuts({
     ui.huddleSetupOpen = false
     ui.cancelComposerIntent(channelId.value)
     if (ui.threadId) ui.cancelComposerIntent(ui.threadId)
-    ui.threadId = null
     renaming.value = false
     addOpen.value = false
   },
@@ -320,7 +334,23 @@ defineShortcuts({
 
 <template>
   <div class="relative flex-1 min-h-0 h-full flex bg-default">
-    <div class="flex-1 min-w-0 flex flex-col min-h-0">
+    <div
+      class="relative flex-1 min-w-0 flex flex-col min-h-0"
+      @dragenter="onDragEnter"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
+    >
+      <div
+        v-if="dropping"
+        class="pointer-events-none absolute inset-0 z-40 flex items-center justify-center bg-default/80 p-6 backdrop-blur-sm"
+      >
+        <div class="flex w-full max-w-sm flex-col items-center gap-2 rounded-xl border-2 border-dashed border-primary bg-elevated px-6 py-8 text-center">
+          <UIcon name="i-ph-upload-simple" class="size-10 text-primary" />
+          <p class="text-lg font-semibold text-highlighted">Upload to {{ isDm ? headerName : `#${headerName}` }}</p>
+          <p class="text-sm text-muted">Drop files to attach them to your message.</p>
+        </div>
+      </div>
       <header class="@container relative h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
         <LayoutMobileMenuButton />
         <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
@@ -465,8 +495,8 @@ defineShortcuts({
         :channel-name="headerName"
         :is-dm="isDm"
         :can-pin="canPin"
+        :link-path="channelPath(channelId)"
         @reply="onReply"
-        @edit="onEdit"
         @thread="onThread"
         @read="(messageId) => send({ t: 'read', messageId })"
         @retry="retry"
@@ -478,7 +508,6 @@ defineShortcuts({
         :send="send"
         :can-approve="canApproveAgent"
       />
-      <p v-if="typingLine && !agentBusy" class="h-5 shrink-0 px-4 text-xs text-muted">{{ typingLine }}</p>
       <HuddleBar
         v-if="isConversation && (huddle.state?.active || joinedHere)"
         :channel-id="channelId"
@@ -487,18 +516,36 @@ defineShortcuts({
         @start="openPrejoin('start')"
         @join="openPrejoin('join')"
       />
-      <ChatComposer
-        :channel-id="channelId"
-        :workspace-id="workspaceId"
-        :members="members"
-        :send="send"
-        :disabled="!permissionsKnown || !canSendMessages"
-        :disabled-placeholder="composerDisabledPlaceholder"
-        :can-attach="canAttachFiles"
-        :agent-busy="agentBusy"
-        :placeholder="composerPlaceholder"
-        @last="onLast"
-      />
+      <div class="relative shrink-0">
+        <ChatComposer
+          ref="composer"
+          :channel-id="channelId"
+          :workspace-id="workspaceId"
+          :members="members"
+          :send="send"
+          :disabled="!permissionsKnown || !canSendMessages"
+          :disabled-placeholder="composerDisabledPlaceholder"
+          :can-attach="canAttachFiles"
+          :agent-busy="agentBusy"
+          :placeholder="composerPlaceholder"
+          primary
+        />
+        <!-- In the composer's bottom padding, so it never pushes the layout. -->
+        <p
+          v-if="typingNames.length && !agentBusy"
+          class="pointer-events-none absolute bottom-1 start-4 flex items-center gap-1.5 text-xs text-toned"
+          aria-live="polite"
+        >
+          <span class="typing-dots" aria-hidden="true"><i /><i /><i /></span>
+          <span v-if="typingNames.length > 3" class="truncate">Several people are typing…</span>
+          <span v-else class="truncate">
+            <template v-for="(name, index) in typingNames" :key="name + index">
+              <template v-if="index">{{ index === typingNames.length - 1 ? ' and ' : ', ' }}</template><strong>{{ name }}</strong>
+            </template>
+            {{ typingNames.length === 1 ? ' is typing…' : ' are typing…' }}
+          </span>
+        </p>
+      </div>
     </div>
     <Transition name="right-panel" :css="isMobile">
       <ChatThreadPanel
@@ -550,7 +597,29 @@ defineShortcuts({
   transform: translateX(100%);
 }
 
+.typing-dots {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.typing-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: 9999px;
+  background: currentColor;
+  animation: typing-dot 1.2s infinite ease-in-out;
+}
+
+.typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.35; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .typing-dots i { animation: none; }
   .right-panel-enter-active,
   .right-panel-leave-active {
     transition-duration: 1ms;

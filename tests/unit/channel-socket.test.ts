@@ -46,8 +46,10 @@ class FakeWebSocket {
 }
 
 let useChannelSocket: typeof ChannelSocketFactory
+let apiResponder: (path: string) => Promise<unknown> = async () => ({ token: 'test-token' })
 const queryData = new Map<string, unknown>()
 const queryClient = {
+  getQueryData: vi.fn((queryKey: string[]) => queryData.get(queryKey.join(':'))),
   setQueryData: vi.fn((queryKey: string[], updater: unknown) => {
     const key = queryKey.join(':')
     const current = queryData.get(key)
@@ -89,7 +91,7 @@ beforeAll(async () => {
   vi.stubGlobal('useSessionStore', () => ({ user: null }))
   vi.stubGlobal('useNuxtApp', () => ({ $queryClient: queryClient }))
   vi.stubGlobal('useApi', () => ({
-    api: vi.fn(async () => ({ token: 'test-token' })),
+    api: (path: string) => apiResponder(path),
     socketUrl: (path: string) => `ws://localhost:3000${path}`,
   }))
   vi.stubGlobal('$fetch', vi.fn(async () => ({ token: 'test-token' })))
@@ -102,6 +104,7 @@ describe('channel read reconnect delivery', () => {
     FakeWebSocket.instances = []
     queryData.clear()
     vi.clearAllMocks()
+    apiResponder = async () => ({ token: 'test-token' })
   })
 
   it('replays the latest unacknowledged read after reconnect', async () => {
@@ -290,6 +293,51 @@ describe('channel read reconnect delivery', () => {
     const retried = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ deliveryState?: string }> }> }
     expect(retried.pages[0]!.messages[0]!.deliveryState).toBe('sending')
     expect(socket.sent.map(JSON.parse).filter(message => message.t === 'message.create')).toHaveLength(2)
+    channel.disconnect()
+  })
+
+  it('catches up on messages sent while the socket was connecting', async () => {
+    const author = { id: 'user-2', displayName: 'B', avatarR2Key: null }
+    const cachedMessage = { id: 'm1', author, attachments: [], reactions: [], createdAt: '2026-09-28T10:01:00.000Z' }
+    const missedMessage = { id: 'm2', author, attachments: [], reactions: [], createdAt: '2026-09-28T10:02:00.000Z' }
+    queryData.set('messages:channel-1', { pages: [{ messages: [cachedMessage], nextCursor: null }], pageParams: [undefined] })
+    apiResponder = async path => path.includes('/messages')
+      ? { messages: [cachedMessage, missedMessage], nextCursor: null }
+      : { token: 'test-token' }
+
+    const channel = useChannelSocket(ref('channel-1'))
+    await flush()
+    const socket = FakeWebSocket.instances[0]!
+    socket.open()
+    socket.message({ t: 'hello', channelId: 'channel-1', you: { id: 'user-1', displayName: 'A', avatarR2Key: null } })
+    await flush()
+
+    const data = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ id: string }> }> }
+    expect(data.pages[0]!.messages.map(message => message.id)).toEqual(['m1', 'm2'])
+    channel.disconnect()
+  })
+
+  it('keeps one copy when an acknowledged message was already caught up', async () => {
+    const clientId = 'client-1'
+    queryData.set('messages:channel-1', {
+      pages: [{
+        messages: [
+          { id: 'm9', attachments: [] },
+          { id: `tmp:${clientId}`, clientId, deliveryState: 'sending', attachments: [] },
+        ],
+        nextCursor: null,
+      }],
+      pageParams: [undefined],
+    })
+    const channel = useChannelSocket(ref('channel-1'))
+    await flush()
+    const socket = FakeWebSocket.instances[0]!
+    socket.open()
+    socket.message({ t: 'hello', channelId: 'channel-1', you: { id: 'user-1', displayName: 'A', avatarR2Key: null } })
+    socket.message({ t: 'ack', clientId, id: 'm9' })
+
+    const data = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ id: string }> }> }
+    expect(data.pages[0]!.messages.map(message => message.id)).toEqual(['m9'])
     channel.disconnect()
   })
 })

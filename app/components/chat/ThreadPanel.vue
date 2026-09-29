@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useQuery } from '@tanstack/vue-query'
-import type { ChannelDTO, ClientMsg, MemberDTO, MessageDTO } from '~~/shared/types'
+import type { ChannelDTO, ClientMsg, MemberDTO } from '~~/shared/types'
 import { hasPermission, Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
 
@@ -41,9 +41,7 @@ function close() {
 function onReply(id: string) {
   if (threadId.value) ui.startReply(threadId.value, id)
 }
-function onEdit(msg: MessageDTO) {
-  if (threadId.value) ui.startEditing(threadId.value, msg.id, msg.content)
-}
+const linkPath = computed(() => ui.threadParentId && threadId.value ? channelPath(ui.threadParentId, threadId.value) : undefined)
 
 defineShortcuts({
   escape: () => {
@@ -82,8 +80,9 @@ defineShortcuts({
       :channel-name="threadTitle"
       :show-intro="false"
       :can-pin="props.canPin"
+      :allow-threads="false"
+      :link-path="linkPath"
       @reply="onReply"
-      @edit="onEdit"
       @read="(messageId) => send({ t: 'read', messageId })"
       @retry="retry"
     />

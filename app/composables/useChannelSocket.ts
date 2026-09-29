@@ -2,12 +2,14 @@ import type { InfiniteData, QueryClient } from '@tanstack/vue-query'
 import { ref } from 'vue'
 import type { ChannelDTO, ClientMsg, MessageDTO, ServerMsg } from '~~/shared/types'
 import { applyReactionChange } from '../utils/message-reactions'
+import { mergeLatestPage } from '../utils/message-cache'
 
 type Page = { messages: MessageDTO[]; nextCursor: string | null }
 type ChannelList = { channels: ChannelDTO[] }
 export type RealtimeConnection = 'connecting' | 'connected' | 'reconnecting' | 'offline'
 
 const DELIVERY_TIMEOUT_MS = 15_000
+const CATCH_UP_LIMIT = 20
 
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()
@@ -44,6 +46,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
       const pages = old.pages.map((p, i) => {
         if (i !== 0) return p
         if (exists) {
+          const seen = new Set<string>()
           return {
             ...p,
             messages: p.messages.map((m) => {
@@ -57,6 +60,11 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
                 pin: m.pin,
                 threadId: m.threadId,
               }
+            // An optimistic copy and a caught-up copy can both match; keep one.
+            }).filter((m) => {
+              if (seen.has(m.id)) return false
+              seen.add(m.id)
+              return true
             }),
           }
         }
@@ -95,6 +103,38 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
       updateOptimisticMessage(clientId, message => ({ ...message, deliveryState: 'failed' }))
       deliveryTimers.delete(clientId)
     }, DELIVERY_TIMEOUT_MS))
+  }
+
+  // The socket only carries events sent while it is open. Whenever it (re)opens
+  // over cached messages, fetch the newest page so anything sent in between shows up.
+  async function catchUp(id: string, gen: number) {
+    const qc = queryClient()
+    if (!qc?.getQueryData<InfiniteData<Page>>(['messages', id])) return
+    try {
+      const latest = await api<Page>(`/api/channels/${id}/messages`, { query: { limit: CATCH_UP_LIMIT } })
+      if (gen !== generation || !Array.isArray(latest?.messages)) return
+      qc.setQueryData<InfiniteData<Page>>(['messages', id], old => mergeLatestPage(old, latest))
+    }
+    catch { /* the next reconnect or refetch tries again */ }
+  }
+
+  function acknowledge(clientId: string, id: string) {
+    const qc = queryClient()
+    if (!qc) return
+    qc.setQueryData<InfiniteData<Page>>(['messages', toValue(channelId)], (old) => {
+      if (!old) return old
+      // A catch-up fetch may already hold the delivered copy; keep only one.
+      const delivered = old.pages.some(page => page.messages.some(message => message.id === id))
+      return {
+        ...old,
+        pages: old.pages.map(page => ({
+          ...page,
+          messages: delivered
+            ? page.messages.filter(message => message.clientId !== clientId || message.id === id)
+            : page.messages.map(message => message.clientId === clientId ? { ...message, id, deliveryState: undefined } : message),
+        })),
+      }
+    })
   }
 
   function applyReadAck(channelId: string, unread: boolean) {
@@ -149,6 +189,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             if (parsed.huddle) huddle.setState(id, parsed.huddle)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
             presence.hydrateAgentTurns(id, parsed.agentTurns ?? [])
+            void catchUp(id, gen)
             break
           case 'message':
             applyMessage(parsed.message)
@@ -190,7 +231,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
           }
           case 'ack':
             clearDeliveryTimer(parsed.clientId)
-            updateOptimisticMessage(parsed.clientId, message => ({ ...message, id: parsed.id, deliveryState: undefined }))
+            acknowledge(parsed.clientId, parsed.id)
             outstanding.delete(parsed.clientId)
             break
           case 'typing':
