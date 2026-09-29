@@ -176,16 +176,22 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
         @save="emit('saveEdit')"
         @cancel="emit('cancelEdit')"
       />
-      <div v-else class="message-body leading-[1.375rem]" :class="jumbo ? 'jumbo' : ''">
+      <div
+        v-else
+        class="message-body leading-[1.375rem] transition-opacity"
+        :class="[jumbo ? 'jumbo' : '', message.deliveryState === 'sending' || message.deliveryState === 'uploading' ? 'opacity-50' : '']"
+        :aria-busy="message.deliveryState === 'sending' || undefined"
+      >
         <ChatMarkdownView :content="message.content" :names="names" />
         <span v-if="streaming" class="inline-block h-4 w-0.5 animate-pulse bg-primary align-text-bottom" aria-label="Streaming" />
         <span v-if="message.editedAt" class="ms-1 select-none text-[10px] text-muted" :title="formatFullDateTime(message.editedAt)">(edited)</span>
       </div>
       <AttachmentGallery v-if="message.attachments.length" :attachments="message.attachments" />
-      <div v-if="message.deliveryState" class="mt-0.5 flex h-5 items-center gap-1.5 text-xs" aria-live="polite">
-        <template v-if="message.deliveryState !== 'failed'">
+      <!-- A message on its way is only dimmed, as in Discord; uploads say so because they can take a while. -->
+      <div v-if="message.deliveryState && message.deliveryState !== 'sending'" class="mt-0.5 flex h-5 items-center gap-1.5 text-xs" aria-live="polite">
+        <template v-if="message.deliveryState === 'uploading'">
           <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-muted" />
-          <span class="text-muted">{{ message.deliveryState === 'uploading' ? 'Uploading' : 'Sending' }}</span>
+          <span class="text-muted">Uploading…</span>
         </template>
         <template v-else>
           <UIcon name="i-ph-warning-circle" class="size-3.5 text-error" />
