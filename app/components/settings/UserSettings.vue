@@ -11,6 +11,7 @@ const { api } = useApi()
 const huddle = useHuddleStore()
 const prefs = usePrefsStore()
 const push = usePushNotifications()
+const presence = usePresenceStore()
 const toast = useToast()
 const colorMode = useColorMode()
 const revealEmail = ref(false)
@@ -33,6 +34,16 @@ const passwordError = computed(() => {
 const canSavePassword = computed(() => Boolean(
   password.current && password.next.length >= 8 && password.next === password.confirm,
 ))
+const avatarInput = ref<HTMLInputElement | null>(null)
+const avatarBusy = ref(false)
+const avatarDragging = ref(false)
+const avatarAccept = AVATAR_ACCEPT
+const hasAvatar = computed(() => Boolean(session.user && userAvatarSrc(session.user)))
+const presenceLabel = computed(() => {
+  const status = session.user ? presence.statusOf(session.user.id) : 'offline'
+  if (!prefs.showOnline) return 'Activity hidden'
+  return status === 'online' ? 'Online' : status === 'idle' ? 'Idle' : 'Offline'
+})
 const nameChanged = computed(() => (state.displayName || '') !== (session.user?.displayName || ''))
 
 const inputId = ref('')
@@ -85,7 +96,9 @@ watch([open, () => section.value], ([isOpen]) => {
   if (!known) section.value = 'account'
 }, { immediate: true })
 
-const initial = computed(() => (session.user?.displayName || '?').slice(0, 1).toUpperCase())
+const previewUser = computed(() => session.user
+  ? { ...session.user, displayName: state.displayName?.trim() || session.user.displayName }
+  : null)
 const email = computed(() => session.user?.email || '')
 const maskedEmail = computed(() => {
   const [name, domain] = email.value.split('@')
@@ -123,6 +136,46 @@ async function onSaveName(event: FormSubmitEvent<Schema>) {
   }
   finally {
     savingName.value = false
+  }
+}
+
+async function uploadAvatar(file: File | undefined) {
+  if (!file || avatarBusy.value) return
+  avatarBusy.value = true
+  try {
+    const image = await prepareAvatarImage(file)
+    const form = new FormData()
+    form.append('file', image, file.name)
+    const res = await api<{ avatarR2Key: string }>('/api/me/avatar', { method: 'PUT', body: form })
+    if (session.user) session.user.avatarR2Key = res.avatarR2Key
+    toast.add({ title: 'Avatar updated', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    avatarBusy.value = false
+    if (avatarInput.value) avatarInput.value.value = ''
+  }
+}
+
+function onAvatarDrop(event: DragEvent) {
+  avatarDragging.value = false
+  void uploadAvatar(event.dataTransfer?.files[0])
+}
+
+async function removeAvatar() {
+  avatarBusy.value = true
+  try {
+    await api('/api/me/avatar', { method: 'DELETE' })
+    if (session.user) session.user.avatarR2Key = null
+    toast.add({ title: 'Avatar removed', color: 'success' })
+  }
+  catch (err) {
+    toast.add({ title: errorMessage(err), color: 'error' })
+  }
+  finally {
+    avatarBusy.value = false
   }
 }
 
@@ -229,9 +282,14 @@ async function logout() {
       <div class="rounded-lg overflow-hidden bg-elevated ring ring-default">
         <div class="h-[100px]" :style="bannerStyle" />
         <div class="relative px-4 pb-4">
-          <div class="absolute -top-10 start-4 rounded-full ring-8 ring-[var(--ui-bg-elevated)]">
-            <UAvatar size="3xl" :text="initial" :alt="session.user?.displayName" />
-          </div>
+          <button
+            type="button"
+            class="absolute -top-10 start-4 rounded-full ring-8 ring-[var(--ui-bg-elevated)] focus-visible:outline-2 focus-visible:outline-primary"
+            aria-label="Change avatar"
+            @click="section = 'profile'"
+          >
+            <UserAvatar v-if="session.user" :user="session.user" size="3xl" />
+          </button>
           <div class="flex items-start justify-between gap-3 pt-2 ps-[88px] min-h-12">
             <p class="text-xl font-bold text-highlighted truncate">{{ session.user?.displayName }}</p>
             <UButton size="sm" label="Edit User Profile" class="shrink-0" @click="section = 'profile'" />
@@ -286,28 +344,93 @@ async function logout() {
     </template>
 
     <template v-else-if="section === 'profile'">
-      <h1 class="text-xl font-semibold text-highlighted mb-5">Profiles</h1>
+      <h1 class="text-xl font-semibold text-highlighted mb-5">Profile</h1>
       <div class="grid gap-8 lg:grid-cols-[1fr_320px]">
-        <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSaveName">
-          <UFormField name="displayName" label="Display Name">
-            <UInput v-model="state.displayName" class="w-full" />
-          </UFormField>
-          <p class="text-sm text-muted">This is how you appear in channels, DMs, and live sessions.</p>
-          <UButton type="submit" label="Save Changes" :loading="savingName" :disabled="!nameChanged || !state.displayName?.trim()" />
-        </UForm>
+        <div class="space-y-8 min-w-0">
+          <section>
+            <h2 class="text-xs font-bold uppercase tracking-wide text-muted mb-3">Avatar</h2>
+            <div class="flex items-center gap-4">
+              <button
+                type="button"
+                class="group relative shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                :class="avatarDragging ? 'outline-2 outline-offset-2 outline-primary' : ''"
+                :disabled="avatarBusy"
+                aria-label="Upload avatar"
+                @click="avatarInput?.click()"
+                @dragover.prevent="avatarDragging = true"
+                @dragleave="avatarDragging = false"
+                @drop.prevent="onAvatarDrop"
+              >
+                <UserAvatar v-if="session.user" :user="session.user" size="3xl" />
+                <span
+                  class="absolute inset-0 flex items-center justify-center rounded-full bg-black/55 text-white transition-opacity"
+                  :class="avatarBusy || avatarDragging ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100'"
+                >
+                  <UIcon :name="avatarBusy ? 'i-ph-spinner-gap' : 'i-ph-camera'" class="size-6" :class="avatarBusy ? 'animate-spin' : ''" />
+                </span>
+              </button>
+              <div class="min-w-0 space-y-2">
+                <div class="flex flex-wrap gap-2">
+                  <UButton size="sm" :label="hasAvatar ? 'Change Avatar' : 'Upload Avatar'" :loading="avatarBusy" @click="avatarInput?.click()" />
+                  <UButton
+                    v-if="hasAvatar"
+                    size="sm"
+                    color="neutral"
+                    variant="ghost"
+                    label="Remove"
+                    :disabled="avatarBusy"
+                    @click="removeAvatar"
+                  />
+                </div>
+                <p class="text-xs text-muted">PNG, JPEG, WebP, or GIF up to 2 MB. Images are cropped to a centered square.</p>
+              </div>
+              <input
+                ref="avatarInput"
+                type="file"
+                class="hidden"
+                :accept="avatarAccept"
+                @change="uploadAvatar(($event.target as HTMLInputElement).files?.[0])"
+              >
+            </div>
+          </section>
+          <UForm :schema="schema" :state="state" class="space-y-4" @submit="onSaveName">
+            <UFormField name="displayName" label="Display Name" :hint="`${state.displayName?.length ?? 0}/80`">
+              <UInput v-model="state.displayName" class="w-full" :maxlength="80" />
+            </UFormField>
+            <p class="text-sm text-muted">This is how you appear in channels, DMs, and live sessions.</p>
+            <div class="flex gap-2">
+              <UButton type="submit" label="Save Changes" :loading="savingName" :disabled="!nameChanged || !state.displayName?.trim()" />
+              <UButton
+                v-if="nameChanged"
+                color="neutral"
+                variant="ghost"
+                label="Reset"
+                @click="state.displayName = session.user?.displayName || ''"
+              />
+            </div>
+          </UForm>
+        </div>
         <div>
           <p class="text-[11px] font-bold uppercase tracking-wide text-muted mb-2">Preview</p>
           <div class="rounded-lg overflow-hidden bg-elevated ring ring-default">
             <div class="h-20" :style="bannerStyle" />
             <div class="px-4 pb-4">
               <div class="rounded-full ring-8 ring-[var(--ui-bg-elevated)] -mt-8 w-fit">
-                <UAvatar size="xl" :text="initial" />
+                <UserAvatar v-if="previewUser" :user="previewUser" size="xl" />
               </div>
-              <p class="mt-3 text-lg font-bold text-highlighted">{{ state.displayName || session.user?.displayName }}</p>
-              <p v-if="email" class="text-sm text-muted">{{ email }}</p>
+              <p class="mt-3 text-lg font-bold text-highlighted truncate">{{ previewUser?.displayName }}</p>
+              <p v-if="email" class="text-sm text-muted truncate">{{ email }}</p>
               <USeparator class="my-3" />
-              <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Custom Status</p>
-              <p class="text-sm text-muted mt-1">Online in this workspace</p>
+              <p class="text-[11px] font-bold uppercase tracking-wide text-muted">Status</p>
+              <p class="text-sm text-muted mt-1">{{ presenceLabel }}</p>
+            </div>
+          </div>
+          <p class="mt-3 text-xs text-muted">Sample message</p>
+          <div class="mt-1 flex items-start gap-3 rounded-lg bg-muted p-3">
+            <UserAvatar v-if="previewUser" :user="previewUser" size="md" />
+            <div class="min-w-0">
+              <p class="text-sm font-semibold text-highlighted truncate">{{ previewUser?.displayName }}</p>
+              <p class="text-sm text-default">Hey team, new look!</p>
             </div>
           </div>
         </div>

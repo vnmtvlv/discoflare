@@ -34,11 +34,7 @@ const statusLabel = computed(() => {
         @click="settingsOpen = true"
       >
         <UChip inset :color="chipColor" position="bottom-right" size="sm">
-          <UAvatar
-            size="sm"
-            :text="(session.user?.displayName || '?').slice(0, 1).toUpperCase()"
-            :alt="session.user?.displayName"
-          />
+          <UserAvatar v-if="session.user" :user="session.user" size="sm" />
         </UChip>
         <span class="min-w-0 flex-1 leading-tight">
           <span class="block text-sm font-semibold text-highlighted truncate">{{ session.user?.displayName }}</span>
