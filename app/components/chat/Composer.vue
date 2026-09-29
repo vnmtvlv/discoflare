@@ -481,7 +481,7 @@ defineExpose({ addFiles, focus })
         <UButton size="xs" color="neutral" variant="ghost" square icon="i-ph-x-circle-fill" aria-label="Cancel reply" @click="cancelReply" />
       </div>
       <AttachmentDraftPreview v-if="files.length" :files="files" @remove="removeFile" />
-      <div class="flex items-end gap-1 px-1.5 min-h-11">
+      <div class="flex min-h-11 items-end gap-0.5 px-2">
         <UTooltip text="Upload a file">
           <UButton
             icon="i-ph-plus"
@@ -489,7 +489,8 @@ defineExpose({ addFiles, focus })
             variant="ghost"
             size="sm"
             square
-            class="mb-0! size-11 self-center md:size-8"
+            class="composer-icon"
+            :ui="{ leadingIcon: 'size-5' }"
             :disabled="attachmentsDisabled || recording"
             aria-label="Attach files"
             @click="() => openFiles()"
@@ -506,7 +507,8 @@ defineExpose({ addFiles, focus })
               variant="ghost"
               size="sm"
               square
-              class="ms-auto size-11 md:size-8"
+              class="composer-icon ms-auto"
+              :ui="{ leadingIcon: 'size-5' }"
               aria-label="Cancel recording"
               @click="cancelAudioRecording"
             />
@@ -518,7 +520,8 @@ defineExpose({ addFiles, focus })
               variant="soft"
               size="sm"
               square
-              class="size-11 md:size-8"
+              class="composer-icon danger"
+              :ui="{ leadingIcon: 'size-5' }"
               aria-label="Stop recording"
               @click="stopAudioRecording"
             />
@@ -559,7 +562,8 @@ defineExpose({ addFiles, focus })
             variant="ghost"
             size="sm"
             square
-            class="mb-0! size-11 self-center md:size-8"
+            class="composer-icon"
+            :ui="{ leadingIcon: 'size-5' }"
             :disabled="disabled"
             aria-label="Emoji"
           />
@@ -574,7 +578,8 @@ defineExpose({ addFiles, focus })
             variant="ghost"
             size="sm"
             square
-            class="mb-0! size-11 self-center md:size-8"
+            class="composer-icon"
+            :ui="{ leadingIcon: 'size-5' }"
             :disabled="attachmentsDisabled"
             aria-label="Record audio"
             @click="recordAudio"
@@ -598,7 +603,8 @@ defineExpose({ addFiles, focus })
             variant="ghost"
             size="sm"
             square
-            class="mb-0! size-11 self-center md:size-8"
+            class="composer-icon accent"
+            :ui="{ leadingIcon: 'size-5' }"
             :disabled="disabled || overLimit"
             aria-label="Send message"
           />
@@ -607,3 +613,42 @@ defineExpose({ addFiles, focus })
     </div>
   </form>
 </template>
+
+<style scoped>
+/* One compact style for every composer icon: a tight square, a larger glyph,
+   and a colour change on hover instead of a filled box. */
+.composer-icon {
+  margin-bottom: 0 !important;
+  display: inline-flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  align-self: center;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent !important;
+  color: var(--ui-text-muted);
+}
+
+.composer-icon:hover:not(:disabled) {
+  color: var(--ui-text-highlighted);
+}
+
+.composer-icon.accent,
+.composer-icon.accent:hover:not(:disabled) {
+  color: var(--ui-primary);
+}
+
+.composer-icon.danger,
+.composer-icon.danger:hover:not(:disabled) {
+  color: var(--ui-error);
+}
+
+@media (min-width: 768px) {
+  .composer-icon {
+    width: 2rem;
+    height: 2rem;
+  }
+}
+</style>

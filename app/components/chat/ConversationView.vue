@@ -9,6 +9,8 @@ import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 import { hasPermission, Permission } from '~~/shared/permissions'
 import { isSearchShortcut } from '~~/shared/shortcuts'
+import { threadTitle } from '~~/shared/threads'
+import { PENDING_THREAD_PREFIX } from '~/stores/ui'
 
 const route = useRoute()
 const ui = useUiStore()
@@ -16,6 +18,7 @@ const session = useSessionStore()
 const presence = usePresenceStore()
 const huddle = useHuddleStore()
 const qc = useQueryClient()
+const toast = useToast()
 const { workspaceId } = useWorkspace()
 const { api } = useApi()
 const channelId = computed(() => String(route.params.channel || route.params.channelId || ''))
@@ -269,19 +272,37 @@ function linkThreadToMessage(messageId: string, threadId: string) {
 async function onThread(msg: MessageDTO) {
   ui.rightPanelOpen = true
   ui.rightPanelTab = 'threads'
+  ui.threadParentId = channelId.value
   if (msg.threadId) {
     ui.threadId = msg.threadId
-    ui.threadParentId = channelId.value
     return
   }
-  const res = await api<{ channel: { id: string } }>(`/api/channels/${channelId.value}/threads`, {
-    method: 'POST',
-    body: { messageId: msg.id },
-  })
+  // Open the panel at once; creating the thread is a network round trip.
+  const pendingId = `${PENDING_THREAD_PREFIX}${msg.id}`
+  ui.pendingThreadTitle = threadTitle(msg.content, msg.attachments.map(item => item.filename))
+  ui.threadId = pendingId
+  let res: { channel: { id: string }, created?: boolean }
+  try {
+    res = await api(`/api/channels/${channelId.value}/threads`, {
+      method: 'POST',
+      body: { messageId: msg.id },
+    })
+  }
+  catch (error) {
+    if (ui.threadId === pendingId) ui.threadId = null
+    toast.add({ title: errorMessage(error), color: 'error' })
+    return
+  }
+  // A thread created just now has no messages, so there is nothing to fetch.
+  if (res.created) {
+    qc.setQueryData(['messages', res.channel.id], {
+      pages: [{ messages: [], nextCursor: null, lastReadMessageId: null }],
+      pageParams: [undefined],
+    })
+  }
   linkThreadToMessage(msg.id, res.channel.id)
-  ui.threadId = res.channel.id
-  ui.threadParentId = channelId.value
-  await qc.invalidateQueries({ queryKey: ['threads', channelId.value] })
+  if (ui.threadId === pendingId) ui.threadId = res.channel.id
+  void qc.invalidateQueries({ queryKey: ['threads', channelId.value] })
 }
 
 const addOpen = ref(false)

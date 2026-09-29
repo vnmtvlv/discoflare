@@ -5,6 +5,9 @@ import type { RightPanelTab } from '~~/shared/types'
 
 type LastChannel = { workspaceId: string; channelId: string }
 
+/** Marks `threadId` while a new thread is being created and has no id yet. */
+export const PENDING_THREAD_PREFIX = 'pending:'
+
 export function isLastChannel(value: unknown): value is LastChannel {
   if (!value || typeof value !== 'object') return false
   const candidate = value as Partial<LastChannel>
@@ -54,6 +57,7 @@ export const useUiStore = defineStore('ui', () => {
   const huddleSetupOpen = ref(false)
   const threadId = ref<string | null>(null)
   const threadParentId = ref<string | null>(null)
+  const pendingThreadTitle = ref('')
   const dmFrozen = ref(false)
   const searchQuery = ref('')
   const searchOpen = ref(false)
@@ -143,6 +147,7 @@ export const useUiStore = defineStore('ui', () => {
     huddleSetupOpen,
     threadId,
     threadParentId,
+    pendingThreadTitle,
     dmFrozen,
     searchQuery,
     searchOpen,
