@@ -526,8 +526,16 @@ export const emailMessages = sqliteTable('email_messages', {
   deliveryStatus: text('delivery_status', { enum: ['received', 'pending', 'sent', 'failed'] }).notNull().default('received'),
   rawR2Key: text('raw_r2_key'),
   createdAt: text('created_at').notNull(),
+  /** The mailbox that received or sent it; Message-IDs are unique within a mailbox. */
+  mailboxChannelId: text('mailbox_channel_id').references(() => emailMailboxes.channelId, { onDelete: 'cascade' }),
+  /** Outbound only: the sender's request key, so a retried send is not emailed twice. */
+  clientRequestId: text('client_request_id'),
+  deliveryAttempts: integer('delivery_attempts').notNull().default(0),
+  deliveryError: text('delivery_error'),
+  deliveredAt: text('delivered_at'),
 }, table => [
-  uniqueIndex('email_messages_rfc_message_id_unique').on(table.rfcMessageId).where(sql`${table.rfcMessageId} is not null`),
+  uniqueIndex('email_messages_mailbox_rfc_message_id_unique').on(table.mailboxChannelId, table.rfcMessageId).where(sql`${table.rfcMessageId} is not null`),
+  uniqueIndex('email_messages_mailbox_client_request_unique').on(table.mailboxChannelId, table.clientRequestId).where(sql`${table.clientRequestId} is not null`),
   index('email_messages_thread_created_idx').on(table.threadChannelId, table.createdAt),
   check('email_messages_direction_check', sql`${table.direction} in ('inbound', 'outbound')`),
   check('email_messages_delivery_status_check', sql`${table.deliveryStatus} in ('received', 'pending', 'sent', 'failed')`),

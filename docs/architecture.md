@@ -57,12 +57,26 @@ RealtimeKit
 
 ```text
 Internet email → exact Cloudflare literal-address rule → owning workspace Worker → local email handler
-  → raw MIME + attachments in R2
+  → size and attachment limits (25 MiB message, 20 attachments of up to 10 MiB each)
+  → raw MIME + attachments in R2, removed again if the D1 write fails
   → Mailbox Channel root Message + Email Conversation Thread in D1
+  → mail.changed to Members with access to that Mailbox
 
-New email/reply → mailbox send permission → owning workspace Worker → Email Sending → Internet
+New email/reply → mailbox send permission → pending email in D1 → Email Sending → sent or failed
 Internal note   → ordinary Message in the same Thread → workspace only
 ```
+
+An RFC Message-ID is unique within one Mailbox, not across the Installation.
+Duplicate detection and reply threading look only inside the Mailbox that
+received the email, so one email sent to two Mailboxes lands in both and a reply
+never joins another Mailbox's conversation. A reply goes to the sender, To, and
+Cc of the latest email received in the conversation.
+
+Each outbound email is recorded before it is sent and keeps its delivery
+attempts, last error, and delivery time. A client request key makes a retried
+send return the email already recorded, and a delivery attempt first claims the
+email, so it is never sent twice concurrently. A failed email can be retried
+from the conversation.
 
 ## Agent task access
 

@@ -5,7 +5,7 @@ import { resolveChannelPermissions } from '../../shared/channel-permissions'
 import { WORKSPACE_ID } from '../../shared/ids'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
 import { mailPermissionAllows } from '../../shared/mail'
-import type { ChannelType, PublicUser } from '../../shared/types'
+import type { ChannelType, MailboxPermission, PublicUser } from '../../shared/types'
 import type { AuthorizationContext } from '../../shared/authorization'
 import { requireUser } from './auth'
 import { cf, fail } from './cf'
@@ -28,6 +28,8 @@ export type ChannelAccess = Membership & {
   accessRootType: ChannelType
   frozen: boolean
   participants: PublicUser[]
+  /** The member's grant when the channel is a mailbox or one of its conversations. */
+  mailPermission: MailboxPermission | null
 }
 
 export async function requireMember(event: H3Event, workspaceId: string, flag?: PermissionFlag): Promise<Membership> {
@@ -169,6 +171,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
       accessRootType: rootType,
       frozen,
       participants,
+      mailPermission: null,
       authorization: { ...baseMember.authorization, principal: { ...baseMember.authorization.principal, permissions: perms } },
     }
   }
@@ -196,5 +199,6 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     accessRootType: rootType,
     frozen: false,
     participants: [],
+    mailPermission: mailbox ? grants[0]!.permission : null,
   }
 }

@@ -65,6 +65,12 @@ export function applyWorkspaceRealtimeEvent(cache: WorkspaceQueryCache, event: W
     void cache.invalidateQueries({ queryKey: ['dms'] })
     return
   }
+  if (event.t === 'mail.changed') {
+    void cache.invalidateQueries({ queryKey: ['mailboxes'] })
+    void cache.invalidateQueries({ queryKey: ['mail-threads', event.mailboxId] })
+    if (event.threadId) void cache.invalidateQueries({ queryKey: ['mail-thread', event.threadId] })
+    return
+  }
   if (event.t === 'tasks.changed') {
     void cache.invalidateQueries({ queryKey: ['boards'] })
     if (event.taskId) void cache.invalidateQueries({ queryKey: ['task', event.taskId] })

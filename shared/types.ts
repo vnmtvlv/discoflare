@@ -298,7 +298,15 @@ export type MailMessageDTO = MessageDTO & {
     cc: string[]
     bcc: string[]
     deliveryStatus: 'received' | 'pending' | 'sent' | 'failed'
+    /** Why the last delivery attempt failed, when it did. */
+    deliveryError: string | null
   }
+}
+
+export type MailThreadPageDTO = {
+  threads: MailThreadDTO[]
+  /** Pass as `before` to load older conversations; null when there are none. */
+  nextCursor: string | null
 }
 
 export type MailSettingsDTO = {

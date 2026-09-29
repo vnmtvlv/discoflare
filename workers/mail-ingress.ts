@@ -1,7 +1,8 @@
 import PostalMime, { type Address } from 'postal-mime'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
-import { MAIL_EXTERNAL_USER_ID } from '../shared/mail'
+import { MAIL_EXTERNAL_USER_ID, MAIL_LIMITS, mailAddressList, mergeMailAddresses } from '../shared/mail'
 import type { DiscoflareEnv } from './env'
+import { signalMailChanged } from './mail-events'
 
 type MailboxRow = {
   channelId: string
@@ -12,6 +13,8 @@ export type WorkspaceEmailEnvelope = {
   from: string
   to: string
   raw: ReadableStream<Uint8Array>
+  /** Size of the raw message when the transport reports it. */
+  rawSize?: number
 }
 
 export type WorkspaceEmailIngressResult =
@@ -28,7 +31,7 @@ function addressList(values: Address[] | undefined): Array<{ name: string; addre
 function referenceIds(inReplyTo?: string, references?: string): string[] {
   const source = `${inReplyTo || ''} ${references || ''}`
   const bracketed = source.match(/<[^>]+>/gu)
-  return [...new Set((bracketed?.length ? bracketed : source.split(/\s+/u)).map(value => value.trim()).filter(Boolean))]
+  return [...new Set((bracketed?.length ? bracketed : source.split(/\s+/u)).map(value => value.trim()).filter(Boolean))].slice(0, 50)
 }
 
 function safeFilename(value: string | null, index: number): string {
@@ -42,6 +45,40 @@ function plainBody(text: string | undefined, html: string | undefined): string {
   return `${body.slice(0, 200_000)}\n\n[Message truncated by Discoflare]`
 }
 
+function formatBytes(bytes: number): string {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`
+}
+
+/** Reads the raw message, giving up once it passes the size limit. */
+async function readRaw(stream: ReadableStream<Uint8Array>, limit: number): Promise<Uint8Array | null> {
+  const reader = stream.getReader()
+  const chunks: Uint8Array[] = []
+  let size = 0
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    size += value.byteLength
+    if (size > limit) {
+      await reader.cancel().catch(() => {})
+      return null
+    }
+    chunks.push(value)
+  }
+  const raw = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    raw.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return raw
+}
+
+/**
+ * Stores one inbound email in the mailbox it was addressed to. Duplicate
+ * detection and threading only ever look inside that mailbox, so the same email
+ * sent to two mailboxes lands in both, and a reply never joins another
+ * mailbox's conversation.
+ */
 export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env: DiscoflareEnv): Promise<WorkspaceEmailIngressResult> {
   const recipient = message.to.trim().toLowerCase()
   const mailbox = await env.DB.prepare(
@@ -53,10 +90,13 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
     return { accepted: false, reason: 'Unknown Discoflare mailbox' }
   }
 
-  const raw = await new Response(message.raw).arrayBuffer()
+  if ((message.rawSize ?? 0) > MAIL_LIMITS.rawBytes) return { accepted: false, reason: 'Message is too large' }
+  const raw = await readRaw(message.raw, MAIL_LIMITS.rawBytes)
+  if (!raw) return { accepted: false, reason: 'Message is too large' }
   const parsed = await PostalMime.parse(raw)
   if (parsed.messageId) {
-    const duplicate = await env.DB.prepare('SELECT message_id FROM email_messages WHERE rfc_message_id = ?').bind(parsed.messageId).first()
+    const duplicate = await env.DB.prepare('SELECT message_id FROM email_messages WHERE mailbox_channel_id = ? AND rfc_message_id = ?')
+      .bind(mailbox.channelId, parsed.messageId).first()
     if (duplicate) return { accepted: true }
   }
 
@@ -66,52 +106,56 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
   const cc = addressList(parsed.cc)
   const bcc = addressList(parsed.bcc)
   const refs = referenceIds(parsed.inReplyTo, parsed.references)
-  let threadChannelId: string | null = null
+  let thread: { channelId: string; participantsJson: string } | null = null
   if (refs.length) {
     const placeholders = refs.map(() => '?').join(',')
-    const match = await env.DB.prepare(
-      `SELECT thread_channel_id as threadChannelId FROM email_messages
-       WHERE rfc_message_id IN (${placeholders}) ORDER BY created_at DESC LIMIT 1`,
-    ).bind(...refs).first<{ threadChannelId: string }>()
-    threadChannelId = match?.threadChannelId || null
+    thread = await env.DB.prepare(
+      `SELECT t.channel_id as channelId, t.participants_json as participantsJson
+       FROM email_messages em JOIN email_threads t ON t.channel_id = em.thread_channel_id
+       WHERE em.mailbox_channel_id = ? AND t.mailbox_channel_id = ? AND em.rfc_message_id IN (${placeholders})
+       ORDER BY em.created_at DESC LIMIT 1`,
+    ).bind(mailbox.channelId, mailbox.channelId, ...refs).first<{ channelId: string; participantsJson: string }>()
   }
 
   const created = nowIso()
   const messageId = newId()
   const subject = (parsed.subject || '(no subject)').replace(/[\r\n]+/gu, ' ').trim().slice(0, 500)
-  const content = plainBody(parsed.text, parsed.html)
   const rawKey = `${WORKSPACE_ID}/mail/raw/${messageId}.eml`
-  await env.FILES.put(rawKey, raw, { httpMetadata: { contentType: 'message/rfc822' } })
 
-  const attachmentRows = parsed.attachments
-    .filter(attachment => {
-      const size = typeof attachment.content === 'string' ? new TextEncoder().encode(attachment.content).byteLength : attachment.content.byteLength
-      return size > 0
-    })
-    .map((attachment, index) => {
-      const id = newId()
-      const filename = safeFilename(attachment.filename, index)
-      const contentBytes = typeof attachment.content === 'string' ? new TextEncoder().encode(attachment.content) : attachment.content
-      return {
-        id,
-        filename,
-        contentType: attachment.mimeType || 'application/octet-stream',
-        content: contentBytes,
-        size: contentBytes.byteLength,
-        key: `${WORKSPACE_ID}/mail/attachments/${messageId}/${id}-${filename}`,
-      }
-    })
+  // Keep attachments within the limits; the message says what was left out.
+  const omitted: string[] = []
+  const attachmentRows = parsed.attachments.flatMap((attachment, index) => {
+    const content = typeof attachment.content === 'string' ? new TextEncoder().encode(attachment.content) : new Uint8Array(attachment.content)
+    const filename = safeFilename(attachment.filename, index)
+    if (!content.byteLength) return []
+    if (content.byteLength > MAIL_LIMITS.attachmentBytes) {
+      omitted.push(`${filename} (${formatBytes(content.byteLength)})`)
+      return []
+    }
+    const id = newId()
+    return [{
+      id,
+      filename,
+      contentType: attachment.mimeType || 'application/octet-stream',
+      content,
+      size: content.byteLength,
+      key: `${WORKSPACE_ID}/mail/attachments/${messageId}/${id}-${filename}`,
+    }]
+  })
+  for (const extra of attachmentRows.splice(MAIL_LIMITS.attachments)) omitted.push(extra.filename)
+  const body = plainBody(parsed.text, parsed.html)
+  const content = omitted.length
+    ? `${body}\n\n[Discoflare did not keep ${omitted.length === 1 ? 'this attachment' : `these ${omitted.length} attachments`}: ${omitted.join(', ')}]`
+    : body
 
-  for (const attachment of attachmentRows) {
-    await env.FILES.put(attachment.key, attachment.content, { httpMetadata: { contentType: attachment.contentType } })
-  }
-
-  const participants = [...new Set([from.address, ...to.map(item => item.address), ...cc.map(item => item.address)].filter(address => address !== mailbox.address))]
+  const participants = mergeMailAddresses(
+    mailAddressList(thread?.participantsJson),
+    [from.address, ...to.map(item => item.address), ...cc.map(item => item.address)],
+  ).filter(address => address !== mailbox.address)
   const statements: D1PreparedStatement[] = []
-  let messageChannelId = threadChannelId
-  if (!threadChannelId) {
-    threadChannelId = newId()
-    messageChannelId = mailbox.channelId
+  const threadChannelId = thread?.channelId ?? newId()
+  const messageChannelId = thread ? threadChannelId : mailbox.channelId
+  if (!thread) {
     statements.push(
       env.DB.prepare(
         `INSERT INTO messages (id, channel_id, author_id, content, reply_to_id, edited_at, deleted_at, created_at)
@@ -141,17 +185,18 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
   statements.push(
     env.DB.prepare(
       `INSERT INTO email_messages
-       (message_id, thread_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
+       (message_id, thread_channel_id, mailbox_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
         rfc_message_id, in_reply_to, references_json, delivery_status, raw_r2_key, created_at)
-       VALUES (?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?)`,
+       VALUES (?, ?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?)`,
     ).bind(
       messageId,
       threadChannelId,
+      mailbox.channelId,
       from.address,
       from.name || null,
-      JSON.stringify(to.map(item => item.address)),
-      JSON.stringify(cc.map(item => item.address)),
-      JSON.stringify(bcc.map(item => item.address)),
+      JSON.stringify(mergeMailAddresses(to.map(item => item.address))),
+      JSON.stringify(mergeMailAddresses(cc.map(item => item.address))),
+      JSON.stringify(mergeMailAddresses(bcc.map(item => item.address))),
       parsed.messageId || null,
       parsed.inReplyTo || null,
       JSON.stringify(refs),
@@ -164,11 +209,32 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
     ).bind(attachment.id, messageId, messageChannelId, MAIL_EXTERNAL_USER_ID, attachment.key, attachment.filename, attachment.contentType, attachment.size, created)),
   )
-  await env.DB.batch(statements)
+
+  // Files go to R2 before their rows exist; if the rows cannot be written, remove them again.
+  const keys = [rawKey, ...attachmentRows.map(attachment => attachment.key)]
+  try {
+    await Promise.all([
+      env.FILES.put(rawKey, raw, { httpMetadata: { contentType: 'message/rfc822' } }),
+      ...attachmentRows.map(attachment => env.FILES.put(attachment.key, attachment.content, { httpMetadata: { contentType: attachment.contentType } })),
+    ])
+    await env.DB.batch(statements)
+  }
+  catch (error) {
+    await env.FILES.delete(keys).catch(() => {})
+    // Another delivery of the same email saved it first.
+    if (/UNIQUE constraint failed/iu.test(error instanceof Error ? error.message : String(error))) return { accepted: true }
+    throw error
+  }
+  try {
+    await signalMailChanged(env, mailbox.channelId, threadChannelId)
+  }
+  catch {
+    // The email is stored; open mail views still pick it up on their next refresh.
+  }
   return { accepted: true }
 }
 
 export async function receiveWorkspaceEmail(message: ForwardableEmailMessage, env: DiscoflareEnv): Promise<void> {
-  const result = await ingestWorkspaceEmail(message, env)
+  const result = await ingestWorkspaceEmail({ from: message.from, to: message.to, raw: message.raw, rawSize: message.rawSize }, env)
   if (!result.accepted) message.setReject(result.reason)
 }

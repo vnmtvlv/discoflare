@@ -10,7 +10,7 @@ const nav = useNavActions()
 const mailboxesQ = useQuery({
   queryKey: ['mailboxes'],
   queryFn: () => api<{ mailboxes: MailboxDTO[] }>('/api/mail/mailboxes'),
-  refetchInterval: 15_000,
+  refetchInterval: 60_000,
 })
 const mailboxes = computed(() => mailboxesQ.data.value?.mailboxes ?? [])
 const activeMailboxId = computed(() => String(route.params.mailbox || ''))
