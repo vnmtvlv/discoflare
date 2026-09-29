@@ -141,7 +141,7 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
     </button>
     <div class="flex gap-4">
     <div class="w-10 shrink-0 flex justify-center">
-      <UPopover v-if="!compact" v-model:open="profileOpen" :content="{ side: 'right', align: 'start', sideOffset: 8 }">
+      <UPopover v-if="!compact" v-model:open="profileOpen" :content="{ side: 'right', align: 'start', sideOffset: 8 }" :ui="{ content: 'overflow-hidden' }">
         <button type="button" class="mt-0.5 h-fit rounded-full" :aria-label="`View ${message.author.displayName}'s profile`">
           <UserAvatar :user="message.author" size="md" />
         </button>
@@ -158,7 +158,7 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
     </div>
     <div class="min-w-0 flex-1">
       <div v-if="!compact" class="flex items-baseline gap-2 leading-[1.375rem]">
-        <UPopover v-model:open="nameProfileOpen" :content="{ side: 'right', align: 'start', sideOffset: 8 }">
+        <UPopover v-model:open="nameProfileOpen" :content="{ side: 'right', align: 'start', sideOffset: 8 }" :ui="{ content: 'overflow-hidden' }">
           <button type="button" class="font-medium text-highlighted hover:underline">
             {{ member?.nickname || message.author.displayName }}
           </button>
