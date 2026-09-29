@@ -11,6 +11,13 @@ export type RealtimeConnection = 'connecting' | 'connected' | 'reconnecting' | '
 const DELIVERY_TIMEOUT_MS = 15_000
 const CATCH_UP_LIMIT = 20
 
+function keepOwnReactions(next: MessageDTO['reactions'], previous: MessageDTO['reactions']): MessageDTO['reactions'] {
+  return next.map(reaction => ({
+    ...reaction,
+    me: previous.find(item => item.emoji === reaction.emoji)?.me ?? reaction.me,
+  }))
+}
+
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
@@ -51,7 +58,8 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             ...p,
             messages: p.messages.map((m) => {
               if (m.id !== msg.id && (!msg.clientId || m.clientId !== msg.clientId)) return m
-              if (!mergeLiveState) return msg
+              // Broadcast copies cannot know which reactions are this viewer's; keep ours.
+              if (!mergeLiveState) return { ...msg, reactions: keepOwnReactions(msg.reactions ?? [], m.reactions ?? []) }
               return {
                 ...msg,
                 attachments: m.attachments,

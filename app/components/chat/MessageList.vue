@@ -11,7 +11,7 @@ import { nowIso } from '~~/shared/ids'
 import { mergeMessageContext, type MessagePage } from '~/utils/message-cache'
 import { applyReactionChange } from '~/utils/message-reactions'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   channelId: string
   members: MemberDTO[]
   channelName?: string
@@ -22,7 +22,7 @@ const props = defineProps<{
   allowThreads?: boolean
   /** The app path a copied message link opens, before `?message=`. */
   linkPath?: string
-}>()
+}>(), { channelName: undefined, linkPath: undefined, showIntro: true, allowThreads: true })
 const { api } = useApi()
 const emit = defineEmits<{
   reply: [id: string]
@@ -382,7 +382,7 @@ function actionsFor(message: MessageDTO): DropdownMenuItem[][] {
   ]
   if (mine) main.push({ label: 'Edit message', icon: 'i-ph-pencil-simple', onSelect: () => startEdit(message) })
   main.push({ label: 'Reply', icon: 'i-ph-arrow-bend-up-left', onSelect: () => emit('reply', message.id) })
-  if (props.allowThreads !== false) {
+  if (props.allowThreads) {
     main.push({ label: message.threadId ? 'Open thread' : 'Create thread', icon: 'i-ph-chats', onSelect: () => emit('thread', message) })
   }
   if (props.canPin) main.push({ label: message.pin ? 'Unpin message' : 'Pin message', icon: 'i-ph-push-pin', onSelect: () => { void togglePin(message) } })
@@ -477,7 +477,7 @@ function onRowKey(event: KeyboardEvent) {
   }
   else if (key === 'e' && mine) { event.preventDefault(); startEdit(message) }
   else if (key === 'r') { event.preventDefault(); emit('reply', message.id) }
-  else if (key === 't' && props.allowThreads !== false) { event.preventDefault(); emit('thread', message) }
+  else if (key === 't' && props.allowThreads) { event.preventDefault(); emit('thread', message) }
   else if (key === 'p' && props.canPin) { event.preventDefault(); void togglePin(message) }
   else if ((key === 'delete' || key === 'backspace') && mine) { event.preventDefault(); remove(message.id, event.shiftKey) }
 }
@@ -559,7 +559,7 @@ defineExpose({ focusMessage })
         <LayoutSkeleton variant="messages" class="flex-1" />
       </div>
       <LayoutLoadError v-else-if="q.error.value" class="my-auto" message="Messages did not load." :retry="q.refetch" />
-      <div v-else-if="showIntro !== false && !q.hasNextPage.value" class="px-4 pt-4 pb-2">
+      <div v-else-if="showIntro && !q.hasNextPage.value" class="px-4 pt-4 pb-2">
         <div class="size-16 rounded-full bg-accented flex items-center justify-center mb-2">
           <UIcon :name="isDm ? 'i-ph-at' : 'i-ph-hash'" class="size-9 text-highlighted" />
         </div>
@@ -618,7 +618,7 @@ defineExpose({ focusMessage })
               @save-edit="saveEdit(m)"
               @cancel-edit="ui.cancelEditing(channelId)"
               @remove="(immediate) => remove(m.id, immediate)"
-              @thread="allowThreads !== false && emit('thread', m)"
+              @thread="allowThreads && emit('thread', m)"
               @jump="focusMessage"
               @react="(emoji) => react(m.id, emoji)"
               @pin="togglePin(m)"

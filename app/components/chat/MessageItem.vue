@@ -53,6 +53,7 @@ const pickerOpen = ref(false)
 const reactionPickerOpen = ref(false)
 const moreOpen = ref(false)
 const profileOpen = ref(false)
+const nameProfileOpen = ref(false)
 const toolbarVisible = computed(() => actionable.value && !props.editing
   && (props.active || pickerOpen.value || moreOpen.value))
 
@@ -155,13 +156,14 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
     </div>
     <div class="min-w-0 flex-1">
       <div v-if="!compact" class="flex items-baseline gap-2 leading-[1.375rem]">
-        <button
-          type="button"
-          class="font-medium text-highlighted hover:underline"
-          @click="profileOpen = true"
-        >
-          {{ member?.nickname || message.author.displayName }}
-        </button>
+        <UPopover v-model:open="nameProfileOpen" :content="{ side: 'right', align: 'start', sideOffset: 8 }">
+          <button type="button" class="font-medium text-highlighted hover:underline">
+            {{ member?.nickname || message.author.displayName }}
+          </button>
+          <template #content>
+            <ChatUserCard :user="message.author" :member="member" @close="nameProfileOpen = false" />
+          </template>
+        </UPopover>
         <UBadge v-if="message.author.kind === 'agent'" label="AI" size="sm" color="primary" variant="subtle" class="self-center px-1 py-0 text-[10px]" />
         <time class="text-xs text-muted" :datetime="message.createdAt" :title="formatFullDateTime(message.createdAt)">{{ formatMessageTime(message.createdAt) }}</time>
       </div>
@@ -172,8 +174,8 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
         @save="emit('saveEdit')"
         @cancel="emit('cancelEdit')"
       />
-      <div v-else class="leading-[1.375rem]" :class="jumbo ? 'jumbo' : ''">
-        <ChatMarkdownView :content="message.content" :names="names" class="inline-block w-full" />
+      <div v-else class="message-body leading-[1.375rem]" :class="jumbo ? 'jumbo' : ''">
+        <ChatMarkdownView :content="message.content" :names="names" />
         <span v-if="streaming" class="inline-block h-4 w-0.5 animate-pulse bg-primary align-text-bottom" aria-label="Streaming" />
         <span v-if="message.editedAt" class="ms-1 select-none text-[10px] text-muted" :title="formatFullDateTime(message.editedAt)">(edited)</span>
       </div>
@@ -342,6 +344,12 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
   border-top: 2px solid var(--ui-border-accented);
   border-start-start-radius: 6px;
   pointer-events: none;
+}
+
+/* "(edited)" and the streaming caret follow the last line of text, as in Discord. */
+.message-body > :deep(.md),
+.message-body > :deep(.md > p:last-child) {
+  display: inline;
 }
 
 .jumbo :deep(.md) {

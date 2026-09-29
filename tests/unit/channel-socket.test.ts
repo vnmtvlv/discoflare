@@ -340,4 +340,22 @@ describe('channel read reconnect delivery', () => {
     expect(data.pages[0]!.messages.map(message => message.id)).toEqual(['m9'])
     channel.disconnect()
   })
+
+  it('keeps the viewer\'s own reactions when an edited message is broadcast', async () => {
+    const author = { id: 'user-2', displayName: 'B', avatarR2Key: null }
+    const base = { id: 'm1', channelId: 'channel-1', author, attachments: [], content: 'old' }
+    queryData.set('messages:channel-1', {
+      pages: [{ messages: [{ ...base, reactions: [{ emoji: '👍', count: 1, me: true }] }], nextCursor: null }],
+      pageParams: [undefined],
+    })
+    const channel = useChannelSocket(ref('channel-1'))
+    await flush()
+    const socket = FakeWebSocket.instances[0]!
+    socket.open()
+    socket.message({ t: 'message.update', message: { ...base, content: 'new', reactions: [{ emoji: '👍', count: 2, me: false }] } })
+
+    const data = queryData.get('messages:channel-1') as { pages: Array<{ messages: Array<{ content: string, reactions: unknown[] }> }> }
+    expect(data.pages[0]!.messages[0]).toMatchObject({ content: 'new', reactions: [{ emoji: '👍', count: 2, me: true }] })
+    channel.disconnect()
+  })
 })

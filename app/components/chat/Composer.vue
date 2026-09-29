@@ -191,7 +191,9 @@ const suggestions = computed<Suggestion[]>(() => {
           : display.includes(needle) || nick.includes(needle) ? 1 : -1
       return { member, rank }
     })
-    .filter(item => item.rank >= 0 && item.member.user.id !== session.user?.id)
+    .filter(item => item.rank >= 0)
+    // You can mention yourself, as in Discord, but everyone else comes first.
+    .map(item => ({ ...item, rank: item.member.user.id === session.user?.id ? item.rank + 2 : item.rank }))
     .sort((a, b) => a.rank - b.rank || (a.member.nickname || a.member.user.displayName).localeCompare(b.member.nickname || b.member.user.displayName))
     .slice(0, 8)
     .map(({ member }) => ({
