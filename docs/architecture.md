@@ -72,6 +72,11 @@ received the email, so one email sent to two Mailboxes lands in both and a reply
 never joins another Mailbox's conversation. A reply goes to the sender, To, and
 Cc of the latest email received in the conversation.
 
+Inbox lists conversations in the inbox that contain received email; a
+conversation a Member starts appears there once it gets a reply. Sent lists every
+conversation with sent email, by when it was last sent, except those in Spam or
+Trash. Archive, Spam, and Trash list conversations moved there.
+
 Each outbound email is recorded before it is sent and keeps its delivery
 attempts, last error, and delivery time. A client request key makes a retried
 send return the email already recorded, and a delivery attempt first claims the

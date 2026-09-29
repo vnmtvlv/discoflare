@@ -26,17 +26,19 @@ const domainsQ = useQuery({
 const managed = computed(() => domainsQ.data.value?.managed ?? false)
 const zones = computed(() => (domainsQ.data.value?.zones ?? []).filter(zone => zone.status === 'active'))
 
-type Row = { id: string | null, domain: string, detail: string }
+type Row = { id: string | null, domain: string, zoneId: string | null, detail: string, cannotSend: boolean }
 const rows = computed<Row[]>(() => {
   const connected = domainsQ.data.value?.emailDomains
   if (props.isOwner && connected) {
     return connected.map(domain => ({
       id: domain.id,
       domain: domain.domain,
+      zoneId: domain.zoneId,
       detail: domain.zoneName === domain.domain ? '' : `in ${domain.zoneName}`,
+      cannotSend: domain.sendingEnabled === false,
     }))
   }
-  return props.mail.domains.map(domain => ({ id: null, domain: domain.domain, detail: '' }))
+  return props.mail.domains.map(domain => ({ id: null, domain: domain.domain, zoneId: null, detail: '', cannotSend: false }))
 })
 
 function mailboxCount(domain: string) {
@@ -85,6 +87,24 @@ async function addDomain() {
   }
   catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
   finally { adding.value = false }
+}
+
+// Repair: connecting a domain again finishes a setup that left it unable to send.
+const repairing = ref<string | null>(null)
+async function repairSending(row: Row) {
+  if (!row.zoneId) return
+  repairing.value = row.domain
+  try {
+    const result = await api<{ sendingEnabled?: boolean }>(`/api/workspaces/${props.workspaceId}/email-domains`, {
+      method: 'POST',
+      body: { zoneId: row.zoneId, domain: row.domain },
+    })
+    await refresh()
+    if (result.sendingEnabled === false) toast.add({ title: `${row.domain} still cannot send`, description: 'Cloudflare has not finished enabling Email Sending. Try again in a few minutes.', color: 'warning' })
+    else toast.add({ title: `${row.domain} can send mail`, color: 'success' })
+  }
+  catch (error) { toast.add({ title: `Sending was not repaired for ${row.domain}`, description: errorMessage(error), color: 'error' }) }
+  finally { repairing.value = null }
 }
 
 // Disconnect
@@ -140,7 +160,21 @@ async function disconnect() {
           <span class="block truncate text-xs text-muted">
             {{ mailboxCount(row.domain) }} {{ mailboxCount(row.domain) === 1 ? 'mailbox' : 'mailboxes' }}<template v-if="row.detail"> · {{ row.detail }}</template>
           </span>
+          <span v-if="row.cannotSend" class="mt-0.5 flex items-center gap-1 text-xs text-warning">
+            <UIcon name="i-ph-warning" class="size-3.5 shrink-0" />
+            Receives mail but cannot send it
+          </span>
         </span>
+        <UButton
+          v-if="isOwner && row.cannotSend"
+          label="Repair sending"
+          color="warning"
+          variant="soft"
+          size="sm"
+          :loading="repairing === row.domain"
+          :disabled="Boolean(repairing) && repairing !== row.domain"
+          @click="repairSending(row)"
+        />
         <template v-if="isOwner && row.id">
           <!-- A domain with mailboxes cannot be disconnected; say why instead of showing a dead button. -->
           <UTooltip v-if="mailboxCount(row.domain)" text="Delete its mailboxes to disconnect this domain.">
