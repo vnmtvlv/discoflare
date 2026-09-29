@@ -228,9 +228,10 @@ function reactionLabel(emoji: string, count: number, me: boolean) {
           </template>
         </UPopover>
       </div>
-      <div v-if="message.threadId" class="relative mt-2 ml-5 max-w-xl">
+      <div v-if="message.threadId" class="relative mt-1 max-w-xl ps-6">
+        <!-- Connector: drops from under the message and curves into the card's middle. -->
         <span
-          class="pointer-events-none absolute -left-5 -top-3 h-8 w-4 rounded-bl-lg border-l-2 border-b-2 border-muted"
+          class="pointer-events-none absolute start-1.5 top-1 h-[calc(50%-0.25rem)] w-4.5 rounded-es-[10px] border-s-2 border-b-2 border-accented"
           aria-hidden="true"
         />
         <button

@@ -484,12 +484,12 @@ defineExpose({ addFiles, focus })
       <div class="flex items-end gap-1 px-1.5 min-h-11">
         <UTooltip text="Upload a file">
           <UButton
-            icon="i-ph-plus-circle-fill"
+            icon="i-ph-plus"
             color="neutral"
             variant="ghost"
             size="sm"
             square
-            class="mb-0! size-11 self-center rounded-full md:size-8 [&_svg]:size-6"
+            class="mb-0! size-11 self-center md:size-8"
             :disabled="attachmentsDisabled || recording"
             aria-label="Attach files"
             @click="() => openFiles()"

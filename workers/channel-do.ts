@@ -17,6 +17,7 @@ import { signalAgentsForMessage } from './agent-ingress'
 import { listAgentTurns } from './agent-turns'
 import { AGENT_REACTION_EMOJIS, replaceAgentReaction } from './agent-reactions'
 import { mailPermissionAllows } from '../shared/mail'
+import { createSerialQueue } from './serial-queue'
 
 type Sock = { userId: string; user: PublicUser }
 type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean; canManageAgents: boolean }
@@ -71,6 +72,8 @@ const emptyHuddle = (): HuddleState => ({
 })
 
 export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
+  private readonly inOrder = createSerialQueue()
+
   constructor(ctx: DurableObjectState, env: DiscoflareEnv) {
     super(ctx, env)
     this.ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'))
@@ -119,7 +122,10 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
 
     try {
-      await this.handle(ws, sock, raw)
+      // New messages are handled strictly in arrival order. Their D1 writes
+      // otherwise interleave, and a quick second message could be stored first.
+      if (msg.t === 'message.create') await this.inOrder(() => this.handle(ws, sock, raw))
+      else await this.handle(ws, sock, raw)
     }
     catch (err) {
       const message = err instanceof Error ? err.message : 'error'
