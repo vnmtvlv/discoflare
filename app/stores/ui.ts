@@ -68,6 +68,9 @@ export const useUiStore = defineStore('ui', () => {
   const rightPanelWidth = import.meta.client
     ? useLocalStorage('df:right-panel-width', 280)
     : ref(280)
+  const mailListWidth = import.meta.client
+    ? useLocalStorage('df:mail-list-width', 320)
+    : ref(320)
   const navCollapsed = import.meta.client
     ? useLocalStorage<Record<string, boolean>>('df:nav-collapsed', {})
     : ref<Record<string, boolean>>({})
@@ -154,6 +157,7 @@ export const useUiStore = defineStore('ui', () => {
     memberTab,
     channelPaneWidth,
     rightPanelWidth,
+    mailListWidth,
     navCollapsed,
     isCollapsed,
     setCollapsed,

@@ -89,6 +89,10 @@ async function addDomain() {
   finally { adding.value = false }
 }
 
+// The Email settings header shows Add domain beside New mailbox, so both actions sit in one place.
+const canAdd = computed(() => props.isOwner && managed.value && zones.value.length > 0)
+defineExpose({ canAdd, openAdd: () => { addOpen.value = true } })
+
 // Repair: connecting a domain again finishes a setup that left it unable to send.
 const repairing = ref<string | null>(null)
 async function repairSending(row: Row) {
@@ -127,21 +131,9 @@ async function disconnect() {
 
 <template>
   <div>
-    <div class="flex items-center justify-between gap-3">
-      <p class="text-sm text-muted">
-        {{ isOwner ? 'Domains this workspace sends and receives mail on.' : 'Only the workspace owner can add or remove email domains.' }}
-      </p>
-      <UButton
-        v-if="isOwner && managed"
-        icon="i-ph-plus"
-        label="Add domain"
-        size="sm"
-        color="neutral"
-        variant="soft"
-        :disabled="!zones.length"
-        @click="addOpen = true"
-      />
-    </div>
+    <p class="text-sm text-muted">
+      {{ isOwner ? 'Domains this workspace sends and receives mail on.' : 'Only the workspace owner can add or remove email domains.' }}
+    </p>
 
     <LayoutSkeleton v-if="isOwner && domainsQ.isPending.value" variant="rows" :rows="2" class="mt-3 -mx-2" />
     <LayoutLoadError v-else-if="isOwner && domainsQ.error.value" message="Email domains did not load." :retry="domainsQ.refetch" />
