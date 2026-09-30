@@ -139,10 +139,11 @@ describe('RealtimeKit settings', () => {
       REALTIMEKIT_PRESET_AV: 'group-call',
     } as unknown as DiscoflareEnv
 
+    // Installs deployed before the split name one preset; everyone keeps sharing it.
     await expect(loadRealtimeKitConfig(env)).resolves.toMatchObject({
       apiToken: 'token',
       hostPreset: 'group-call',
-      participantPreset: 'group_call_participant',
+      participantPreset: 'group-call',
     })
   })
 

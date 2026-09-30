@@ -49,6 +49,22 @@ function blankConfig(): RealtimeKitRuntimeConfig {
 }
 
 /**
+ * Presets named by the deployment. Installs made before hosts and participants
+ * were split name only `REALTIMEKIT_PRESET_AV`, and their app may have no
+ * default presets, so everyone keeps sharing that one until it is reconnected.
+ */
+function deploymentPresets(env: DiscoflareEnv): { hostPreset: string, participantPreset: string } {
+  const host = env.REALTIMEKIT_PRESET_HOST?.trim()
+  const participant = env.REALTIMEKIT_PRESET_PARTICIPANT?.trim()
+  const legacy = env.REALTIMEKIT_PRESET_AV?.trim()
+  if (host || participant) {
+    return { hostPreset: host || participant!, participantPreset: participant || host! }
+  }
+  if (legacy) return { hostPreset: legacy, participantPreset: legacy }
+  return { hostPreset: DEFAULT_HOST_PRESET, participantPreset: DEFAULT_PARTICIPANT_PRESET }
+}
+
+/**
  * One source at a time: complete deployment variables override everything the
  * owner saved in Workspace Settings, including presets.
  */
@@ -62,8 +78,7 @@ export async function loadRealtimeKitConfig(env: DiscoflareEnv): Promise<Realtim
       accountId,
       appId,
       apiToken,
-      hostPreset: env.REALTIMEKIT_PRESET_HOST?.trim() || env.REALTIMEKIT_PRESET_AV?.trim() || DEFAULT_HOST_PRESET,
-      participantPreset: env.REALTIMEKIT_PRESET_PARTICIPANT?.trim() || DEFAULT_PARTICIPANT_PRESET,
+      ...deploymentPresets(env),
       source: 'deployment',
       apiTokenConfigured: true,
       secretReadable: true,

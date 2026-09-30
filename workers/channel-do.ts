@@ -8,15 +8,8 @@ import { liveKindFor } from '../shared/live'
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
 import { asRpc, type DiscoflareEnv } from './env'
-import {
-  addParticipant,
-  createMeeting,
-  endMeeting,
-  loadRealtimeKitConfig,
-  realtimekitConfigured,
-  removeParticipants,
-  type RealtimeKitParticipant,
-} from './realtimekit'
+import type { RealtimeKitParticipant } from './realtimekit'
+import { liveMedia } from './live-media'
 import { userFromTicket } from './ticket'
 import { channelHasUnread } from './unread'
 import { liveNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
@@ -366,7 +359,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         await this.endLiveNow({})
         return
       }
-      await removeParticipants(await loadRealtimeKitConfig(this.env), live.meetingId, revoked.map(id => seats[id]!.participantId))
+      await (await liveMedia(this.env))?.removeParticipants(live.meetingId, revoked.map(id => seats[id]!.participantId))
       const keep = ([userId]: [string, unknown]) => !revoked.includes(userId)
       const presence = Object.fromEntries(Object.entries(await this.livePresence()).filter(keep))
       live.participantIds = live.participantIds.filter(id => !revoked.includes(id))
@@ -663,8 +656,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     if (authz.mailbox) return liveFailure('forbidden', 'Live sessions are unavailable for mailboxes')
     if (authz.type === 'thread') return liveFailure('forbidden', 'Join the live session in the parent conversation')
     if (authz.frozen) return liveFailure('frozen', 'You can no longer call in this Direct Message')
-    const config = await loadRealtimeKitConfig(this.env)
-    if (!realtimekitConfigured(config)) return liveFailure('realtimekit_unconfigured', 'Live needs RealtimeKit')
+    const media = await liveMedia(this.env)
+    if (!media) return liveFailure('realtimekit_unconfigured', 'Live needs RealtimeKit')
 
     const directMessage = isDmType(authz.type)
     let live = await this.getLive()
@@ -677,7 +670,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       if (!await limiter.take(10, 60 * 60 * 1000)) return liveFailure('rate_limited', 'Too many live sessions started. Try again later.')
       const kind = liveKindFor(directMessage && await this.directMessageSize() === 2)
       try {
-        const meeting = await createMeeting(config, `${kind}:${this.channelId()}`)
+        const meeting = await media.createMeeting(`${kind}:${this.channelId()}`)
         live = { active: true, meetingId: meeting.id, participantIds: [], startedBy: user.id, startedAt: nowIso(), kind, ringing: kind === 'call' }
       }
       catch {
@@ -689,20 +682,16 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     const host = isLiveHost(live, user.id, { directMessage, perms: authz.perms })
     let participant: RealtimeKitParticipant
     try {
-      participant = await addParticipant(config, meetingId, {
-        name: user.displayName,
-        customId: user.id,
-        preset: host ? config.hostPreset : config.participantPreset,
-      })
+      participant = await media.addParticipant(meetingId, { name: user.displayName, customId: user.id, host })
     }
     catch {
-      if (starting) this.ctx.waitUntil(endMeeting(config, meetingId).catch(() => {}))
+      if (starting) this.ctx.waitUntil(media.endMeeting(meetingId).catch(() => {}))
       return liveFailure('realtimekit_failed', 'RealtimeKit could not add you to the live session')
     }
 
     // One seat per person: joining again, say from another tab, replaces the older seat.
     const previous = seats[user.id]
-    if (previous) this.ctx.waitUntil(removeParticipants(config, meetingId, [previous.participantId]).catch(() => {}))
+    if (previous) this.ctx.waitUntil(media.removeParticipants(meetingId, [previous.participantId]).catch(() => {}))
     seats[user.id] = { participantId: participant.id }
     if (!live.participantIds.includes(user.id)) live.participantIds.push(user.id)
     if (live.ringing && user.id !== live.startedBy) {
@@ -744,8 +733,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     live.participantIds = live.participantIds.filter(id => id !== userId)
     await this.ctx.storage.put({ huddlePresence: presence, liveSeats: remainingSeats })
     if (seat) {
-      const config = await loadRealtimeKitConfig(this.env)
-      this.ctx.waitUntil(removeParticipants(config, live.meetingId, [seat.participantId]).catch(() => {}))
+      const media = await liveMedia(this.env)
+      if (media) this.ctx.waitUntil(media.removeParticipants(live.meetingId, [seat.participantId]).catch(() => {}))
     }
     if (!live.participantIds.length) await this.scheduleCleanup(liveGraceMs(live.kind, await this.isDirectMessage()))
     await this.setLive(live)
@@ -756,8 +745,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
 
   private async endLiveNow(opts: { outcome?: 'declined' | 'unanswered' }): Promise<LiveState> {
     const current = await this.getLive()
-    const config = await loadRealtimeKitConfig(this.env)
-    if (current.meetingId && realtimekitConfigured(config)) await endMeeting(config, current.meetingId)
+    const media = await liveMedia(this.env)
+    if (current.meetingId && media) await media.endMeeting(current.meetingId)
     const live: LiveState = { ...emptyLive(), kind: current.kind }
     await this.setLive(live)
     await this.ctx.storage.delete(['huddlePresence', 'huddleCleanupAt', 'liveSeats', 'liveRingUntil'])
