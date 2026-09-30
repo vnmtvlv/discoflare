@@ -81,6 +81,9 @@ export type DiscoflareEnv = {
   DISCOFLARE_TELEMETRY_ID?: string
   DISCOFLARE_TELEMETRY_TOKEN?: string
   DISCOFLARE_TELEMETRY_ENDPOINT?: string
+  /** Service binding to the account's Discoflare Admin (`WorkspaceControl`). See workers/discoflare-admin.ts. */
+  DISCOFLARE_ADMIN?: Fetcher
+  /** Legacy Installation Control Credential from discoflare.com, replaced by DISCOFLARE_ADMIN. */
   DISCOFLARE_CONTROL_ID?: string
   DISCOFLARE_CONTROL_TOKEN?: string
   DISCOFLARE_CONTROL_ENDPOINT?: string

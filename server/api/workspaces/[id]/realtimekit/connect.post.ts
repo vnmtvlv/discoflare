@@ -37,6 +37,7 @@ export default defineEventHandler(async (event): Promise<{ realtimekit: Realtime
   if (!member.isOwner) fail(403, 'forbidden', 'Only the owner can connect RealtimeKit')
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
+  if (env.DISCOFLARE_ADMIN) fail(400, 'managed_by_admin', 'Live is provided by your Discoflare Admin')
   const current = await loadRealtimeKitConfig(env)
   if (current.source === 'deployment') fail(400, 'managed_by_deployment', 'RealtimeKit is managed by the deployment')
 

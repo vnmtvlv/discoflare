@@ -1,6 +1,6 @@
 # Move guided installation authority to discoflare.com
 
-Status: accepted; supersedes ADR 0002 for new Installations.
+Status: superseded by ADR 0005.
 
 Discoflare.com is the private account and Installation Control Plane. An operator creates a permanent Discoflare Account, connects Cloudflare through OAuth, and manages discovered or newly provisioned Installations at `/admin`. Renewable Cloudflare credentials are encrypted at rest in the Control Plane and never copied into a workspace Worker.
 

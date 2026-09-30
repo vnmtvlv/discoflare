@@ -85,12 +85,12 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 
 ### Guided installation
 
-1. Open [Discoflare Admin](https://discoflare.com/admin), sign in with Cloudflare, and choose the account.
-2. The private control plane stores the renewable OAuth credential encrypted and provisions only the selected Discoflare Installation resources.
-3. The first workspace in an account becomes Primary. It starts on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim.
-4. After the base workspace is healthy, open **Workspace Settings → System → Domain** to connect its one App Domain, and **Workspace Settings → Email → Domains** for any Email Domains. Mailbox addresses remain workspace objects; each address gets an exact Cloudflare routing rule to its owning workspace through the same fixed per-Installation control channel.
+1. On [discoflare.com](https://discoflare.com/admin), sign in and deploy a **Discoflare Admin** into the Cloudflare account you choose.
+2. Claim the Admin with the private setup link. It runs in your account on `workers.dev` and is the only place there that holds a Cloudflare credential; discoflare.com keeps none.
+3. Create workspaces from the Admin. Each starts on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim.
+4. In a workspace, open **Workspace Settings → System → Domain** for its App Domain and **Workspace Settings → Email → Domains** for Email Domains. Live needs no setup. The workspace asks the Admin over a service binding; it holds no Cloudflare credential of its own.
 
-The renewable Cloudflare credential never enters a workspace Worker. Workspace chat and data keep running when `discoflare.com` is unavailable; provisioning and infrastructure changes wait until the control plane returns. A future independent mode will restore the same management operations to an operator-owned path.
+The Admin updates itself and, when you ask, your workspaces. Workspaces, updates, domains, email, and Live keep working when `discoflare.com` is unavailable; it is needed only to create an Admin or reconnect Cloudflare.
 
 ### Manual deployment
 

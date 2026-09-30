@@ -1,0 +1,17 @@
+{
+  // Local development of the Admin UI and API. Cloudflare calls need a real credential.
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "discoflare-admin",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": { "directory": ".output/public", "binding": "ASSETS" },
+  "d1_databases": [{ "binding": "ADMIN_DB", "database_name": "discoflare-admin-dev", "database_id": "local-discoflare-admin" }],
+  "durable_objects": { "bindings": [{ "name": "COORDINATOR", "class_name": "AdminCoordinator" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["AdminCoordinator"] }],
+  "vars": {
+    "CLOUDFLARE_ACCOUNT_ID": "00000000000000000000000000000000",
+    "DISCOFLARE_VERSION": "0.2.0",
+    "ADMIN_WORKER_NAME": "discoflare-admin"
+  }
+}

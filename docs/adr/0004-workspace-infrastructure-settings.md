@@ -1,6 +1,6 @@
 # Put managed Installation settings in the workspace
 
-Status: accepted; refines ADR 0003 for post-install infrastructure.
+Status: superseded by ADR 0005.
 
 Discoflare Admin creates and discovers a Base Installation. It is not the everyday settings surface for that workspace. Once the Owner Setup Claim has created the Owner, App Domain, Email Domain, and Mailbox configuration belongs in Workspace Settings.
 

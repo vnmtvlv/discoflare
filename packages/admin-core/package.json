@@ -1,0 +1,33 @@
+{
+  "name": "@discoflare/admin-core",
+  "version": "0.2.0",
+  "description": "Cloudflare provisioning engine shared by the Discoflare Admin and discoflare.com",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "prebuild": "node scripts/clean-dist.mjs",
+    "build": "tsc -p tsconfig.json",
+    "pack:release": "pnpm build && pnpm pack --pack-destination ../../.installer/release",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "cloudflare": "7.1.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vnmtvlv/discoflare",
+    "directory": "packages/admin-core"
+  }
+}

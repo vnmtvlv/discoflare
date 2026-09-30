@@ -21,6 +21,22 @@
         ".env.remote"
       ],
       "port": 3000
+    },
+    {
+      "name": "admin",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@discoflare/admin",
+        "exec",
+        "wrangler",
+        "dev",
+        "-c",
+        "wrangler.dev.jsonc",
+        "--port",
+        "8790"
+      ],
+      "port": 8790
     }
   ]
 }

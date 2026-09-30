@@ -3,6 +3,7 @@ import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 import { installationOrigin, uninstallUrl } from '../../../utils/installation-management'
 import { writeAudit } from '../../../utils/messages'
+import { discoflareAdminWorkspaceUrl } from '../../../../workers/discoflare-admin'
 
 const CLAIM_TTL_SECONDS = 15 * 60
 
@@ -28,5 +29,7 @@ export default defineEventHandler(async (event): Promise<ServerDeletionStartDTO>
     targetType: 'workspace',
     targetId: workspaceId,
   })
-  return { uninstallUrl: uninstallUrl(origin, claim), expiresAt }
+  // A linked Admin deletes the workspace; otherwise discoflare.com does.
+  const adminUrl = await discoflareAdminWorkspaceUrl(env, { deletion: claim })
+  return { uninstallUrl: adminUrl ?? uninstallUrl(origin, claim), expiresAt }
 })

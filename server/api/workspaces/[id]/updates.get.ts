@@ -3,6 +3,7 @@ import { compareStableVersions, newerStableReleases, stableSemver, type UpdateSt
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 import { discoflareReleases } from '../../../utils/releases'
+import { discoflareAdminWorkspaceUrl } from '../../../../workers/discoflare-admin'
 
 export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -26,6 +27,8 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
       : getRequestURL(event).origin
     const upgrade = new URL('/admin', 'https://discoflare.com')
     upgrade.searchParams.set('installation', origin)
+    // A linked Discoflare Admin updates the workspace from inside the account.
+    const adminUrl = await discoflareAdminWorkspaceUrl(env)
 
     return {
       installedVersion,
@@ -33,7 +36,7 @@ export default defineEventHandler(async (event): Promise<UpdateStatusDTO> => {
       latestRelease,
       releasesBehind: newer.length,
       updateAvailable: newer.length > 0,
-      upgradeUrl: installationKind === 'guided' && newer.length ? upgrade.toString() : null,
+      upgradeUrl: adminUrl ?? (installationKind === 'guided' && newer.length ? upgrade.toString() : null),
       checkedAt,
       checkFailed: false,
     }

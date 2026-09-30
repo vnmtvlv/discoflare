@@ -379,7 +379,10 @@ export type AuthSettingsAdminDTO = PublicAuthConfig & {
 
 export type RealtimeKitSettingsAdminDTO = {
   configured: boolean
-  source: 'deployment' | 'database' | 'missing'
+  /** `admin`: the account's Discoflare Admin provides Live; nothing is configured here. */
+  source: 'admin' | 'deployment' | 'database' | 'missing'
+  /** Where the owner manages Live when `source` is `admin`. */
+  adminUrl?: string | null
   accountId: string | null
   appId: string | null
   apiTokenConfigured: boolean
