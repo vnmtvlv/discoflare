@@ -2,6 +2,7 @@ import type { InstallationManagementStatusDTO } from '../../../../shared/release
 import { cf, fail } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 import { workspaceMailDomains } from '../../../utils/workspace-mail'
+import { liveAvailable } from '../../../../workers/realtimekit'
 
 export default defineEventHandler(async (event): Promise<InstallationManagementStatusDTO> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event): Promise<InstallationManagementS
     hostname: hostname || null,
     primary: env.DISCOFLARE_PRIMARY === 'true',
     customDomainEnabled: env.DISCOFLARE_CUSTOM_DOMAIN === 'true',
-    huddlesEnabled: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID),
+    liveEnabled: await liveAvailable(env),
     emailEnabled: emailDomains.length > 0,
     emailDomains,
     emailEligible: env.DISCOFLARE_PRIMARY === 'true',

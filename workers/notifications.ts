@@ -1,4 +1,5 @@
-import type { PublicUser } from '../shared/types'
+import type { LiveKind, PublicUser } from '../shared/types'
+import { liveNotificationTitle } from '../shared/live'
 import { channelPath } from '../shared/paths'
 import { notificationPreview, type NotificationKind, type PushNotificationPayload } from '../shared/notifications'
 import type { DiscoflareEnv } from './env'
@@ -77,17 +78,18 @@ async function accessibleMentions(env: DiscoflareEnv, root: ChannelRow, actorId:
   return (rows.results ?? []).map(row => row.id)
 }
 
-async function huddleRecipients(env: DiscoflareEnv, channel: ChannelRow, actorId?: string): Promise<string[]> {
-  if (channel.type === 'dm' || channel.visibility === 'private') {
-    return activeDmRecipients(env, channel.id, actorId)
-  }
-  const rows = actorId
+/** People who can open the conversation. Agents never join a Live room, so they are not told about one. */
+async function liveRecipients(env: DiscoflareEnv, channel: ChannelRow, actorId: string): Promise<string[]> {
+  const rows = channel.type === 'dm' || channel.visibility === 'private'
     ? await env.DB.prepare(
-        `SELECT id FROM users WHERE status = 'active' AND id <> ?`,
-      ).bind(actorId).all<{ id: string }>()
+        `SELECT cm.user_id AS id
+         FROM channel_members cm
+         JOIN users u ON u.id = cm.user_id AND u.status = 'active' AND u.kind = 'human'
+         WHERE cm.channel_id = ? AND cm.user_id <> ?`,
+      ).bind(channel.id, actorId).all<{ id: string }>()
     : await env.DB.prepare(
-        `SELECT id FROM users WHERE status = 'active'`,
-      ).all<{ id: string }>()
+        `SELECT id FROM users WHERE status = 'active' AND kind = 'human' AND id <> ?`,
+      ).bind(actorId).all<{ id: string }>()
   return (rows.results ?? []).map(row => row.id)
 }
 
@@ -143,27 +145,27 @@ export async function messageNotificationStatement(env: DiscoflareEnv, message: 
   })
 }
 
-export async function huddleNotificationStatement(
+/** Push for a Live room that just went live: a ringing Call in a 1:1 DM, a joinable session elsewhere. */
+export async function liveNotificationStatement(
   env: DiscoflareEnv,
   channelId: string,
   meetingId: string,
   actor: PublicUser,
-  details: { kind?: 'call' | 'huddle'; title?: string | null } = {},
+  kind: LiveKind,
 ): Promise<D1PreparedStatement | null> {
   const channels = await channelAndRoot(env, channelId)
   if (!channels || channels.channel.type === 'thread') return null
-  const recipientIds = await huddleRecipients(env, channels.channel, actor.id)
+  const recipientIds = await liveRecipients(env, channels.channel, actor.id)
   return outboxStatement(env, {
-    eventId: `huddle:${meetingId}`,
+    eventId: `live:${meetingId}`,
+    // The stored outbox kind keeps its pre-Live name.
     kind: 'huddle_started',
     channelId,
     recipientIds,
     payload: {
-      title: details.kind === 'call'
-        ? `${actor.displayName} is calling`
-        : `${actor.displayName} started a huddle in ${channels.channel.name}`,
-      body: details.title || 'Tap to join',
-      tag: `huddle:${meetingId}`,
+      title: liveNotificationTitle(kind, actor.displayName, channels.channel.type === 'dm' ? null : channels.channel.name),
+      body: kind === 'call' ? 'Tap to answer' : 'Tap to join',
+      tag: `live:${meetingId}`,
       url: channelPath(channelId),
       icon: '/android-chrome-192x192.png',
       badge: '/favicon-32x32.png',

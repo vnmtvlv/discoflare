@@ -40,7 +40,6 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
   const channelsCategoryId = newId()
   const generalId = newId()
   const randomId = newId()
-  const voiceId = newId()
   const auditId = newId()
   const created = nowIso()
   const authCreated = new Date(created)
@@ -89,9 +88,8 @@ export async function provisionWorkspace(event: H3Event, seed: AdminSeed) {
       updatedAt: created,
     }),
     db.insert(channels).values([
-      { id: generalId, name: 'general', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 0, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
-      { id: randomId, name: 'random', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 1, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
-      { id: voiceId, name: 'General', topic: '', type: 'voice', visibility: 'workspace', categoryId: channelsCategoryId, position: 2, huddleMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: generalId, name: 'general', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 0, liveMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
+      { id: randomId, name: 'random', topic: '', type: 'text', visibility: 'workspace', categoryId: channelsCategoryId, position: 1, liveMeetingId: null, parentId: null, parentMessageId: null, createdAt: created, updatedAt: created },
     ]),
     db.insert(auditLog).values({
       id: auditId,

@@ -1,4 +1,4 @@
-import { loadRealtimeKitConfig, realtimekitConfigured } from '../../../workers/realtimekit'
+import { liveAvailable } from '../../../workers/realtimekit'
 import { ensureAdminFromEnv, readAdminEnv } from '../../utils/bootstrap'
 import { cf } from '../../utils/cf'
 import { ensureMigrated, userCount, workspaceReady } from '../../utils/db'
@@ -54,7 +54,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
         // head of missing key still proves the binding works on most runtimes
       })
     : null
-  const realtimekit = loadRealtimeKitConfig(env).then(realtimekitConfigured)
+  const realtimekit = liveAvailable(env)
   if (env.DB) {
     try {
       migrated = await ensureMigrated(env.DB)

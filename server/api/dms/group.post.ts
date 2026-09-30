@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
     type: 'dm',
     visibility: 'private',
     position: 0,
-    huddleMeetingId: null,
+    liveMeetingId: null,
     parentId: null,
     parentMessageId: null,
     createdAt: created,

@@ -1,57 +1,39 @@
 <script setup lang="ts">
-import type { Form, FormSubmitEvent } from '@nuxt/ui'
-import * as z from 'zod'
 import type { RealtimeKitSettingsAdminDTO } from '~~/shared/types'
+
+type Account = { id: string, name: string }
 
 const props = defineProps<{ workspaceId: string }>()
 const toast = useToast()
+const session = useSessionStore()
 const loading = ref(true)
-const saving = ref(false)
+const connecting = ref(false)
 const testing = ref(false)
-const revealingApiToken = ref(false)
+const removing = ref(false)
 const removeConfirm = ref(false)
-const showApiToken = ref(false)
+const replacing = ref(false)
+const apiToken = ref('')
+const accounts = ref<Account[]>([])
+const accountId = ref('')
 const realtimekit = ref<RealtimeKitSettingsAdminDTO | null>(null)
 
-const schema = z.object({
-  accountId: z.string().trim().regex(/^[a-f0-9]{32}$/iu, 'Enter a 32-character Cloudflare account ID'),
-  appId: z.string().trim().regex(/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu, 'Enter a RealtimeKit app UUID'),
-  apiToken: z.string().max(4000),
-  voicePreset: z.string().trim().min(1, 'Required').max(100),
-  avPreset: z.string().trim().min(1, 'Required').max(100),
-})
-const form = useTemplateRef<Form<typeof schema>>('form')
-type Schema = z.output<typeof schema>
-const state = reactive<Schema>({
-  accountId: '',
-  appId: '',
-  apiToken: '',
-  voicePreset: 'voice',
-  avPreset: 'group_call_host',
-})
+// Account API tokens belong to the account, not to whoever created them.
+const createTokenUrl = 'https://dash.cloudflare.com/?to=/:account/api-tokens&name=Discoflare%20Live'
 
 const managed = computed(() => realtimekit.value?.source === 'deployment')
-const managedLabel = computed(() => 'Managed by deployment')
-const canRevealApiToken = computed(() => (
-  realtimekit.value?.source === 'database'
-  && realtimekit.value.apiTokenConfigured
-  && realtimekit.value.secretReadable
-))
+const connected = computed(() => Boolean(realtimekit.value?.configured))
+const unreadable = computed(() => realtimekit.value?.source === 'database' && !realtimekit.value.secretReadable)
+const showTokenForm = computed(() => !managed.value && (!connected.value || replacing.value || unreadable.value))
 const statusLabel = computed(() => {
-  if (realtimekit.value?.configured) return 'Configured'
-  if (realtimekit.value?.source === 'database' && !realtimekit.value.secretReadable) return 'Replace API token'
-  return 'Not configured'
+  if (connected.value) return 'Connected'
+  if (unreadable.value) return 'Reconnect needed'
+  return 'Not connected'
 })
-const statusColor = computed(() => realtimekit.value?.configured ? 'success' : 'neutral')
 
 function apply(value: RealtimeKitSettingsAdminDTO) {
   realtimekit.value = value
-  state.accountId = value.accountId ?? ''
-  state.appId = value.appId ?? ''
-  state.apiToken = ''
-  showApiToken.value = false
-  state.voicePreset = value.voicePreset
-  state.avPreset = value.avPreset
+  // The app shell reads this to decide whether to offer calls at all.
+  if (session.health) session.health = { ...session.health, realtimekit: value.configured }
 }
 
 async function load() {
@@ -68,75 +50,45 @@ async function load() {
   }
 }
 
-async function save(event: FormSubmitEvent<Schema>) {
-  saving.value = true
+/** With a token: connect or replace it. Without one: reconnect using the saved token. */
+async function connect(withToken: boolean) {
+  connecting.value = true
   try {
-    const response = await $fetch<{ realtimekit: RealtimeKitSettingsAdminDTO }>(`/api/workspaces/${props.workspaceId}/realtimekit`, {
-      method: 'PATCH',
-      body: event.data,
-    })
+    const response = await $fetch<{ realtimekit: RealtimeKitSettingsAdminDTO } | { accounts: Account[] }>(
+      `/api/workspaces/${props.workspaceId}/realtimekit/connect`,
+      {
+        method: 'POST',
+        body: {
+          ...(withToken ? { apiToken: apiToken.value.trim() } : {}),
+          ...(accountId.value ? { accountId: accountId.value } : {}),
+        },
+      },
+    )
+    if ('accounts' in response) {
+      accounts.value = response.accounts
+      accountId.value = response.accounts[0]?.id ?? ''
+      return
+    }
     apply(response.realtimekit)
-    toast.add({ title: 'RealtimeKit updated', color: 'success' })
+    apiToken.value = ''
+    accounts.value = []
+    accountId.value = ''
+    replacing.value = false
+    toast.add({ title: 'Live is connected', description: 'Every channel and direct message can now go live.', color: 'success' })
   }
   catch (error) {
     toast.add({ title: errorMessage(error), color: 'error' })
   }
   finally {
-    saving.value = false
-  }
-}
-
-async function toggleApiTokenVisibility() {
-  if (showApiToken.value) {
-    showApiToken.value = false
-    return
-  }
-  if (state.apiToken) {
-    showApiToken.value = true
-    return
-  }
-  if (!canRevealApiToken.value) return
-
-  revealingApiToken.value = true
-  try {
-    const response = await $fetch<{ apiToken: string }>(`/api/workspaces/${props.workspaceId}/realtimekit/reveal`, {
-      method: 'POST',
-    })
-    state.apiToken = response.apiToken
-    showApiToken.value = true
-  }
-  catch (error) {
-    toast.add({ title: errorMessage(error), color: 'error' })
-  }
-  finally {
-    revealingApiToken.value = false
+    connecting.value = false
   }
 }
 
 async function testConnection() {
-  let data: Partial<Schema> = {}
-  if (!managed.value) {
-    try {
-      const validated = await form.value?.validate({ transform: true })
-      if (!validated) return
-      data = validated
-    }
-    catch {
-      return
-    }
-  }
-
   testing.value = true
   try {
-    const response = await $fetch<{ ok: true, presets: string[] }>(`/api/workspaces/${props.workspaceId}/realtimekit/test`, {
-      method: 'POST',
-      body: data,
-    })
-    toast.add({
-      title: 'RealtimeKit connected',
-      description: `${response.presets.length} presets available`,
-      color: 'success',
-    })
+    await $fetch(`/api/workspaces/${props.workspaceId}/realtimekit/test`, { method: 'POST' })
+    toast.add({ title: 'RealtimeKit is working', color: 'success' })
   }
   catch (error) {
     toast.add({ title: errorMessage(error), color: 'error' })
@@ -147,21 +99,20 @@ async function testConnection() {
 }
 
 async function remove() {
-  saving.value = true
+  removing.value = true
   try {
     const response = await $fetch<{ realtimekit: RealtimeKitSettingsAdminDTO }>(`/api/workspaces/${props.workspaceId}/realtimekit`, {
-      method: 'PATCH',
-      body: { remove: true },
+      method: 'DELETE',
     })
     apply(response.realtimekit)
     removeConfirm.value = false
-    toast.add({ title: 'RealtimeKit removed', color: 'success' })
+    toast.add({ title: 'Live disconnected', color: 'success' })
   }
   catch (error) {
     toast.add({ title: errorMessage(error), color: 'error' })
   }
   finally {
-    saving.value = false
+    removing.value = false
   }
 }
 
@@ -172,96 +123,119 @@ onMounted(load)
   <div>
     <div class="flex items-center gap-3">
       <h1 class="text-xl font-semibold text-highlighted">Live</h1>
-      <UBadge :label="statusLabel" :color="statusColor" variant="subtle" />
-      <UButton
-        class="ms-auto"
-        label="RealtimeKit dashboard"
-        icon="i-ph-arrow-square-out"
-        color="neutral"
-        variant="ghost"
-        to="https://dash.cloudflare.com/?to=/:account/realtime/kit"
-        target="_blank"
-      />
+      <UBadge :label="statusLabel" :color="connected ? 'success' : 'neutral'" variant="subtle" />
     </div>
+    <p class="mt-1 text-sm text-muted">
+      Every channel and direct message has one live room for audio, camera, and screen sharing. A 1:1 direct message rings as a call. Media runs on Cloudflare RealtimeKit in your account; nothing is recorded.
+    </p>
 
     <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />
     <template v-else-if="realtimekit">
-      <UAlert v-if="managed" class="mt-6" color="neutral" variant="subtle" :title="managedLabel" />
       <UAlert
-        v-else-if="realtimekit.source === 'database' && !realtimekit.secretReadable"
+        v-if="managed"
+        class="mt-6"
+        color="neutral"
+        variant="subtle"
+        title="Managed by the deployment"
+        description="RealtimeKit credentials come from the Worker's environment and override anything saved here."
+      />
+      <UAlert
+        v-else-if="unreadable"
         class="mt-6"
         color="error"
         variant="subtle"
-        title="Saved API token cannot be decrypted. Replace it."
+        title="The saved token can no longer be read"
+        description="AUTH_SECRET changed since Live was connected. Paste a token to reconnect."
+      />
+      <UAlert
+        v-else-if="connected && realtimekit.sharedPreset"
+        class="mt-6"
+        color="warning"
+        variant="subtle"
+        title="Everyone joins with host controls"
+        description="Live was connected before hosts and participants had separate permissions. Reconnect to set them up."
+        :actions="[{ label: 'Reconnect', color: 'warning', variant: 'solid', loading: connecting, onClick: () => connect(false) }]"
       />
 
-      <UForm ref="form" :schema="schema" :state="state" class="mt-6 space-y-5" @submit="save">
-        <div class="grid gap-5 sm:grid-cols-2">
-          <UFormField name="accountId" label="Account ID" required>
-            <UInput v-model="state.accountId" class="w-full" :disabled="managed" autocomplete="off" />
-          </UFormField>
-          <UFormField name="appId" label="App ID" required>
-            <UInput v-model="state.appId" class="w-full" :disabled="managed" autocomplete="off" />
-          </UFormField>
+      <dl v-if="connected" class="mt-6 grid gap-x-6 gap-y-3 rounded-lg border border-default p-4 text-sm sm:grid-cols-2">
+        <div>
+          <dt class="text-xs text-muted">Account</dt>
+          <dd class="truncate font-mono text-xs text-highlighted">{{ realtimekit.accountId }}</dd>
         </div>
+        <div>
+          <dt class="text-xs text-muted">RealtimeKit app</dt>
+          <dd class="truncate font-mono text-xs text-highlighted">{{ realtimekit.appId }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-muted">Host preset</dt>
+          <dd class="truncate font-mono text-xs text-highlighted">{{ realtimekit.hostPreset }}</dd>
+        </div>
+        <div>
+          <dt class="text-xs text-muted">Participant preset</dt>
+          <dd class="truncate font-mono text-xs text-highlighted">{{ realtimekit.participantPreset }}</dd>
+        </div>
+      </dl>
 
-        <UFormField name="apiToken" label="API token" :required="!realtimekit.apiTokenConfigured">
-          <UInput
-            v-model="state.apiToken"
-            class="w-full"
-            :type="showApiToken ? 'text' : 'password'"
-            :disabled="managed"
-            :placeholder="managed ? managedLabel : realtimekit.apiTokenConfigured ? 'Saved; reveal or enter to replace' : ''"
-            autocomplete="new-password"
-          >
-            <template #trailing>
+      <div v-if="showTokenForm" class="mt-6 space-y-4">
+        <ol class="space-y-3 text-sm">
+          <li class="flex gap-3">
+            <span class="grid size-6 shrink-0 place-items-center rounded-full bg-elevated text-xs font-semibold">1</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-highlighted">Create a Cloudflare API token</p>
+              <p class="text-muted">Give it the permission <span class="font-medium text-default">Realtime Admin</span> for the account Discoflare runs in.</p>
               <UButton
-                v-if="state.apiToken || canRevealApiToken"
-                type="button"
-                :icon="showApiToken ? 'i-ph-eye-slash' : 'i-ph-eye'"
-                :aria-label="showApiToken ? 'Hide API token' : 'Show API token'"
-                color="neutral"
-                variant="link"
+                class="mt-2"
                 size="sm"
-                :loading="revealingApiToken"
-                @click="toggleApiTokenVisibility"
+                color="neutral"
+                variant="soft"
+                icon="i-ph-arrow-square-out"
+                label="Create token"
+                :to="createTokenUrl"
+                target="_blank"
               />
-            </template>
-          </UInput>
+            </div>
+          </li>
+          <li class="flex gap-3">
+            <span class="grid size-6 shrink-0 place-items-center rounded-full bg-elevated text-xs font-semibold">2</span>
+            <div class="min-w-0 flex-1">
+              <p class="text-highlighted">Paste it here</p>
+              <p class="text-muted">Discoflare sets up its own RealtimeKit app and presets. The token is stored encrypted.</p>
+              <UInput
+                v-model="apiToken"
+                class="mt-2 w-full"
+                type="password"
+                placeholder="Cloudflare API token"
+                autocomplete="new-password"
+                @keydown.enter.prevent="apiToken.trim() && connect(true)"
+              />
+            </div>
+          </li>
+        </ol>
+
+        <UFormField v-if="accounts.length" label="This token reaches more than one account. Which one should Live use?">
+          <USelect v-model="accountId" :items="accounts.map(item => ({ label: item.name, value: item.id }))" value-key="value" class="w-full" />
         </UFormField>
 
-        <div class="grid gap-5 sm:grid-cols-2">
-          <UFormField name="voicePreset" label="Voice preset" required>
-            <UInput v-model="state.voicePreset" class="w-full" :disabled="managed" />
-          </UFormField>
-          <UFormField name="avPreset" label="Audio and video preset" required>
-            <UInput v-model="state.avPreset" class="w-full" :disabled="managed" />
-          </UFormField>
+        <div class="flex justify-end gap-2">
+          <UButton v-if="replacing" label="Cancel" color="neutral" variant="ghost" @click="replacing = false; apiToken = ''; accounts = []" />
+          <UButton label="Connect" icon="i-ph-plugs-connected" :loading="connecting" :disabled="!apiToken.trim()" @click="connect(true)" />
         </div>
+      </div>
 
-        <div class="flex items-center justify-between gap-3">
-          <div v-if="!managed && realtimekit.source === 'database'" class="flex items-center gap-2">
-            <template v-if="removeConfirm">
-              <UButton label="Cancel" color="neutral" variant="ghost" @click="removeConfirm = false" />
-              <UButton label="Confirm removal" color="error" variant="soft" :loading="saving" @click="remove" />
-            </template>
-            <UButton v-else label="Remove configuration" color="error" variant="ghost" @click="removeConfirm = true" />
-          </div>
-          <span v-else />
-          <div class="flex items-center gap-2">
-            <UButton
-              type="button"
-              label="Test connection"
-              icon="i-ph-plugs-connected"
-              color="neutral"
-              variant="soft"
-              :loading="testing"
-              @click="testConnection"
-            />
-            <UButton v-if="!managed" type="submit" label="Save changes" :loading="saving" />
-          </div>
+      <div v-if="connected" class="mt-6 flex flex-wrap items-center justify-between gap-3">
+        <div v-if="!managed" class="flex items-center gap-2">
+          <template v-if="removeConfirm">
+            <UButton label="Cancel" color="neutral" variant="ghost" @click="removeConfirm = false" />
+            <UButton label="Disconnect Live" color="error" variant="soft" :loading="removing" @click="remove" />
+          </template>
+          <UButton v-else label="Disconnect" color="error" variant="ghost" @click="removeConfirm = true" />
         </div>
-      </UForm>
+        <span v-else />
+        <div class="flex items-center gap-2">
+          <UButton v-if="!managed && !replacing" label="Replace token" color="neutral" variant="ghost" @click="replacing = true" />
+          <UButton label="Test connection" icon="i-ph-pulse" color="neutral" variant="soft" :loading="testing" @click="testConnection" />
+        </div>
+      </div>
     </template>
   </div>
 </template>

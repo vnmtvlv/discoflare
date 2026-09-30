@@ -11,7 +11,7 @@ describe('permissions', () => {
   it('keeps the default member role limited to chat', () => {
     expect(hasPermission(MemberPermissions, Permission.sendMessages)).toBe(true)
     expect(hasPermission(MemberPermissions, Permission.attachFiles)).toBe(true)
-    expect(hasPermission(MemberPermissions, Permission.startHuddle)).toBe(true)
+    expect(hasPermission(MemberPermissions, Permission.startLive)).toBe(true)
     expect(hasPermission(MemberPermissions, Permission.manageTasks)).toBe(false)
     expect(hasPermission(MemberPermissions, Permission.manageDatabases)).toBe(false)
     expect(hasPermission(MemberPermissions, Permission.useGadgets)).toBe(false)

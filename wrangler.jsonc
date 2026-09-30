@@ -81,8 +81,6 @@
     }
   ],
   "vars": {
-    "REALTIMEKIT_PRESET_VOICE": "voice",
-    "REALTIMEKIT_PRESET_AV": "group_call_host",
     "PUBLIC_ORIGIN": "https://sandbox.discoflare.com",
     "AUTH_REGISTRATION_MODE": "open",
     "APP_NAME": "Discoflare Sandbox",

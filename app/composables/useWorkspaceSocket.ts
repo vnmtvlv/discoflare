@@ -62,19 +62,21 @@ export function useWorkspaceSocket(workspaceId: MaybeRefOrGetter<string>) {
           connection.value = 'connected'
         }
         else if (parsed.t === 'presence') presence.apply(parsed.users)
-        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'mail.changed' || parsed.t === 'members.changed' || parsed.t === 'huddle.changed') {
+        else if (parsed.t === 'channel.activity' || parsed.t === 'channel.read' || parsed.t === 'tasks.changed' || parsed.t === 'mail.changed' || parsed.t === 'members.changed' || parsed.t === 'live.changed') {
           const qc = queryClient()
           if (qc) applyWorkspaceRealtimeEvent(qc, parsed)
-          if (parsed.t === 'huddle.changed') {
-            const huddle = useHuddleStore()
+          if (parsed.t === 'live.changed') {
+            const live = useLiveStore()
             const toast = useToast()
-            huddle.receiveHuddle(parsed)
-            if (parsed.huddle.active && !parsed.ring && huddle.viewingChannelId !== parsed.channelId) {
+            live.receiveLive(parsed)
+            // Announce a room once, when it starts; joins and leaves only update the sidebar.
+            const announcement = parsed.notification
+            if (announcement && parsed.live.active && !parsed.ring && live.viewingChannelId !== parsed.channelId) {
               toast.add({
-                title: parsed.notification.title,
-                description: parsed.notification.body,
+                title: announcement.title,
+                description: announcement.body,
                 icon: 'i-ph-waveform',
-                actions: [{ label: 'Open', onClick: () => navigateTo(parsed.notification.url) }],
+                actions: [{ label: 'Open', onClick: () => navigateTo(announcement.url) }],
               })
             }
           }

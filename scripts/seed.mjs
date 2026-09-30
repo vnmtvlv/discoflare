@@ -18,7 +18,6 @@ const ownerRole = uuidv7()
 const memberRole = uuidv7()
 const adminRole = uuidv7()
 const generalId = uuidv7()
-const huddleId = uuidv7()
 const now = new Date().toISOString()
 const authNow = Date.now()
 
@@ -38,8 +37,7 @@ INSERT INTO users (id, handle, display_name, status, role_id, joined_at, created
   ('${memberId}', 'member', 'Member', 'active', '${memberRole}', '${now}', '${now}', '${now}');
 INSERT INTO workspace (id, name, owner_id, created_at, updated_at) VALUES ('${workspaceId}', 'Local', '${ownerId}', '${now}', '${now}');
 INSERT INTO channels (id, name, topic, type, visibility, position, created_at, updated_at) VALUES
-  ('${generalId}', 'general', '', 'text', 'workspace', 0, '${now}', '${now}'),
-  ('${huddleId}', 'General', '', 'voice', 'workspace', 1, '${now}', '${now}');
+  ('${generalId}', 'general', '', 'text', 'workspace', 0, '${now}', '${now}');
 `
 
 const file = 'scripts/.seed.sql'

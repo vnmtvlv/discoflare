@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const session = useSessionStore()
 const presence = usePresenceStore()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 
 const settingsOpen = ref(false)
 
@@ -17,7 +17,7 @@ const chipColor = computed(() => {
 })
 
 const statusLabel = computed(() => {
-  if (huddle.connection === 'live') return huddle.muted ? 'Muted' : 'Voice Connected'
+  if (live.connection === 'connected') return live.muted ? 'Muted' : live.currentKind === 'call' ? 'In a call' : 'Live'
   if (status.value === 'online') return 'Online'
   if (status.value === 'idle') return 'Idle'
   return 'Offline'
@@ -41,28 +41,28 @@ const statusLabel = computed(() => {
           <span class="block text-[11px] text-muted truncate">{{ statusLabel }}</span>
         </span>
       </button>
-      <UTooltip :text="huddle.muted ? 'Unmute' : 'Mute'">
+      <UTooltip :text="live.muted ? 'Unmute' : 'Mute'">
         <UButton
-          :icon="huddle.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
-          :color="huddle.muted ? 'error' : 'neutral'"
+          :icon="live.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
+          :color="live.muted ? 'error' : 'neutral'"
           variant="ghost"
           size="sm"
           square
-          :aria-pressed="huddle.muted"
-          :aria-label="huddle.muted ? 'Unmute' : 'Mute'"
-          @click="huddle.toggleMute()"
+          :aria-pressed="live.muted"
+          :aria-label="live.muted ? 'Unmute' : 'Mute'"
+          @click="live.toggleMute()"
         />
       </UTooltip>
-      <UTooltip :text="huddle.deafened ? 'Undeafen' : 'Deafen'">
+      <UTooltip :text="live.deafened ? 'Undeafen' : 'Deafen'">
         <UButton
-          :icon="huddle.deafened ? 'i-ph-speaker-slash' : 'i-ph-headphones'"
-          :color="huddle.deafened ? 'error' : 'neutral'"
+          :icon="live.deafened ? 'i-ph-speaker-slash' : 'i-ph-headphones'"
+          :color="live.deafened ? 'error' : 'neutral'"
           variant="ghost"
           size="sm"
           square
-          :aria-pressed="huddle.deafened"
-          :aria-label="huddle.deafened ? 'Undeafen' : 'Deafen'"
-          @click="huddle.toggleDeafen()"
+          :aria-pressed="live.deafened"
+          :aria-label="live.deafened ? 'Undeafen' : 'Deafen'"
+          @click="live.toggleDeafen()"
         />
       </UTooltip>
       <UTooltip text="User settings">

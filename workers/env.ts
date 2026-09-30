@@ -30,9 +30,11 @@ export type DiscoflareEnv = {
   ASSETS?: { fetch: (request: Request) => Promise<Response> }
   REALTIMEKIT_ACCOUNT_ID?: string
   REALTIMEKIT_APP_ID?: string
+  REALTIMEKIT_API_TOKEN?: string
+  REALTIMEKIT_PRESET_HOST?: string
+  REALTIMEKIT_PRESET_PARTICIPANT?: string
+  /** Pre-Live names, still read when the new ones are unset. */
   REALTIMEKIT_API_KEY?: string
-  REALTIMEKIT_API_SECRET?: string
-  REALTIMEKIT_PRESET_VOICE?: string
   REALTIMEKIT_PRESET_AV?: string
   AUTH_SECRET?: string
   AUTH_MODE?: string

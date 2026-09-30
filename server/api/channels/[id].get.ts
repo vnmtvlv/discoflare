@@ -6,7 +6,8 @@ import { threadTitle } from '../../../shared/threads'
 import { attachments, messages } from '../../../drizzle/schema'
 import { eq } from 'drizzle-orm'
 import { getDb } from '../../utils/db'
-import type { HuddleState } from '../../../shared/types'
+import type { LiveState } from '../../../shared/types'
+import { liveRoom } from '../../utils/live'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -26,11 +27,10 @@ export default defineEventHandler(async (event) => {
     const attachmentRows = await db.select({ filename: attachments.filename }).from(attachments).where(eq(attachments.messageId, ch.parentMessageId))
     title = threadTitle(root?.content ?? '', attachmentRows.map(row => row.filename))
   }
-  let huddle: HuddleState | null = null
-  if (ch.huddleMeetingId) {
-    const stub = asRpc<{ getHuddle: () => Promise<HuddleState> }>(env.CHANNEL_DO.getByName(`channel:${ch.id}`))
-    const current = await stub.getHuddle()
-    if (current.active) huddle = current
+  let live: LiveState | null = null
+  if (ch.liveMeetingId) {
+    const current = await liveRoom(env, ch.id).getLive()
+    if (current.active) live = current
   }
   return {
     channel: {
@@ -42,12 +42,12 @@ export default defineEventHandler(async (event) => {
       visibility: ch.visibility,
       categoryId: ch.categoryId,
       position: ch.position,
-      huddleMeetingId: ch.huddleMeetingId,
+      liveMeetingId: ch.liveMeetingId,
       parentId: ch.parentId,
       parentMessageId: ch.parentMessageId,
       unread: false,
       permissions: access.perms,
-      huddle,
+      live,
       createdAt: ch.createdAt,
       title,
     },

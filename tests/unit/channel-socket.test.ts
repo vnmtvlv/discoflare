@@ -86,8 +86,8 @@ beforeAll(async () => {
     hydrateAgentTurns: vi.fn(),
     apply: vi.fn(),
   }))
-  vi.stubGlobal('useHuddleStore', () => ({ setState: vi.fn() }))
-  vi.stubGlobal('useUiStore', () => ({ dmFrozen: false, huddleSetupOpen: false }))
+  vi.stubGlobal('useLiveStore', () => ({ setState: vi.fn() }))
+  vi.stubGlobal('useUiStore', () => ({ dmFrozen: false, liveSetupOpen: false }))
   vi.stubGlobal('useSessionStore', () => ({ user: null }))
   vi.stubGlobal('useNuxtApp', () => ({ $queryClient: queryClient }))
   vi.stubGlobal('useApi', () => ({

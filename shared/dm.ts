@@ -14,10 +14,6 @@ export function dmTitle(name: string | null | undefined, participants: PublicUse
   return `${first.join(', ')} and ${others.length - 3} others`
 }
 
-export function isVoiceType(type: string): boolean {
-  return type === 'voice'
-}
-
 export function isDmType(type: string): boolean {
   return type === 'dm'
 }

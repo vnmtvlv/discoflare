@@ -9,11 +9,11 @@ The single named space in a Discoflare installation. It owns the installation's 
 _Avoid_: Guild, server, team (in data), tenant
 
 **Channel**:
-A named stream inside the workspace. Type is `text`, `voice`, `thread`, or `dm`; visibility is `workspace` or `private`.
+A named stream inside the workspace. Type is `text`, `thread`, or `dm`; visibility is `workspace` or `private`.
 _Avoid_: Room, chat, conversation
 
 **Channel Category**:
-An ordered, collapsible sidebar group for workspace text and voice Channels. A Channel may be uncategorized. Direct Messages and Threads do not belong to Channel Categories.
+An ordered, collapsible sidebar group for workspace Channels. A Channel may be uncategorized. Direct Messages and Threads do not belong to Channel Categories.
 _Avoid_: Folder, section as a separate data model, category as a Channel type
 
 **Channel Member**:
@@ -33,17 +33,13 @@ A private Channel among workspace members. Two members is 1:1; three to twenty-f
 _Avoid_: Friend chat, private message, Group DM as a separate kind, DM voice channel
 
 **Live**:
-A live session in a workspace Channel or group Direct Message. It starts as audio and participants may turn on camera or share their screen. The parent conversation owns access and there is at most one active Live session per conversation.
-_Avoid_: Huddle, permanent audio room, meeting as a second conversation entity
+The one live room each Channel and Direct Message owns. It starts as audio and participants may turn on camera or share their screen. The conversation owns access: anyone who can open it can join, and starting a room needs the Start live sessions grant. The person who started it and Channel managers are its hosts.
+_Avoid_: Huddle, voice channel, permanent audio room, meeting as a second conversation entity
 
 **Call**:
 The 1:1 Direct Message presentation of a live session. A Call rings the other participant; it uses the same lifecycle and RealtimeKit media plane as a Live session.
 _Avoid_: Separate call store, separate call permissions
 
-
-**Voice channel**:
-A legacy workspace Channel type retained for existing installations. New Channels are ordinary text Channels because every Channel can host a Live session.
-_Avoid_: Creating a new permanent voice-only taxonomy
 
 **Thread**:
 A child Channel of type `thread` hanging off a text or Direct Message Channel.

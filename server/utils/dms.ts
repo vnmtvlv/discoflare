@@ -7,6 +7,7 @@ import type { DiscoflareEnv } from '../../workers/env'
 import { asRpc } from './cf'
 import { getDb } from './db'
 import { toPublicUser } from './messages'
+import { liveRoom } from './live'
 
 export async function loadParticipants(env: DiscoflareEnv, channelId: string): Promise<PublicUser[]> {
   const db = getDb(env.DB)
@@ -34,16 +35,16 @@ export async function toDmDto(
     'SELECT created_at FROM messages WHERE channel_id = ? ORDER BY id DESC LIMIT 1',
   ).bind(ch.id).first<{ created_at: string }>()
   const frozen = await dmFrozen(env, participants.map((p) => p.id))
-  let huddle: ChannelDTO['huddle']
-  try {
-    const stub = asRpc<{ getHuddle: () => Promise<NonNullable<ChannelDTO['huddle']>> }>(env.CHANNEL_DO.getByName(`channel:${ch.id}`))
-    huddle = await Promise.race([
-      stub.getHuddle(),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), 800)),
-    ])
-  }
-  catch {
-    huddle = null
+  let live: ChannelDTO['live'] = null
+  if (ch.liveMeetingId) {
+    try {
+      const current = await Promise.race([
+        liveRoom(env, ch.id).getLive(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 800)),
+      ])
+      if (current?.active) live = current
+    }
+    catch { /* the sidebar shows the room once its realtime event arrives */ }
   }
   return {
     id: ch.id,
@@ -54,11 +55,11 @@ export async function toDmDto(
     visibility: 'private',
     categoryId: null,
     position: ch.position,
-    huddleMeetingId: ch.huddleMeetingId,
+    liveMeetingId: ch.liveMeetingId,
     parentId: ch.parentId,
     parentMessageId: ch.parentMessageId,
     unread,
-    huddle,
+    live,
     createdAt: ch.createdAt,
     title: dmTitle(ch.name === 'dm' ? null : ch.name, participants, meId),
     participants,
@@ -96,7 +97,7 @@ export async function openPairDm(env: DiscoflareEnv, meId: string, otherId: stri
     type: 'dm',
     visibility: 'private',
     position: 0,
-    huddleMeetingId: null,
+    liveMeetingId: null,
     parentId: null,
     parentMessageId: null,
     createdAt: created,

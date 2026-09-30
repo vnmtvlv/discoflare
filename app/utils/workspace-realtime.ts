@@ -76,15 +76,15 @@ export function applyWorkspaceRealtimeEvent(cache: WorkspaceQueryCache, event: W
     if (event.taskId) void cache.invalidateQueries({ queryKey: ['task', event.taskId] })
     return
   }
-  if (event.t === 'huddle.changed') {
+  if (event.t === 'live.changed') {
     const update = (old: ChannelList | undefined) => old
       ? {
           ...old,
           channels: old.channels.map(channel => channel.id === event.channelId
             ? {
                 ...channel,
-                huddle: event.huddle,
-                huddleMeetingId: event.huddle.meetingId,
+                live: event.live.active ? event.live : null,
+                liveMeetingId: event.live.meetingId,
               }
             : channel),
         }

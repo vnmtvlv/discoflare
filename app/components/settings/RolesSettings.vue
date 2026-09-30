@@ -41,7 +41,7 @@ const tabs = computed(() => [
 // Grants grouped by what they govern, so a role reads as a policy rather than a flat list.
 const grantGroups: Array<{ label: string, keys: PermissionGrantKey[] }> = [
   { label: 'Workspace', keys: ['manageWorkspace', 'manageChannels', 'manageRoles', 'invite', 'kick'] },
-  { label: 'Conversations', keys: ['sendMessages', 'attachFiles', 'startHuddle'] },
+  { label: 'Conversations', keys: ['sendMessages', 'attachFiles', 'startLive'] },
   { label: 'Tools', keys: ['manageTasks', 'manageDatabases', 'useGadgets', 'manageGadgets'] },
 ]
 const groupedGrants = grantGroups.map(group => ({

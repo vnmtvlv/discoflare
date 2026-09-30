@@ -21,7 +21,7 @@ function keepOwnReactions(next: MessageDTO['reactions'], previous: MessageDTO['r
 export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
   const { api, socketUrl } = useApi()
   const presence = usePresenceStore()
-  const huddle = useHuddleStore()
+  const live = useLiveStore()
   const nuxt = useNuxtApp()
   const connection = ref<RealtimeConnection>('connecting')
 
@@ -194,7 +194,7 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
             for (const message of outstanding.values()) socket.send(JSON.stringify(message))
             for (const queued of pending.splice(0)) socket.send(JSON.stringify(queued))
             if (pendingRead) socket.send(JSON.stringify(pendingRead))
-            if (parsed.huddle) huddle.setState(id, parsed.huddle)
+            if (parsed.live) live.setState(id, parsed.live)
             useUiStore().dmFrozen = Boolean(parsed.frozen)
             presence.hydrateAgentTurns(id, parsed.agentTurns ?? [])
             void catchUp(id, gen)
@@ -251,9 +251,8 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
           case 'presence':
             presence.apply(parsed.users)
             break
-          case 'huddle':
-          case 'voice':
-            huddle.setState(id, parsed.t === 'voice' ? parsed.voice : parsed.huddle)
+          case 'live':
+            live.setState(id, parsed.live)
             break
           case 'dm.participants':
             void queryClient()?.invalidateQueries({ queryKey: ['dms'] })
@@ -308,7 +307,6 @@ export function useChannelSocket(channelId: MaybeRefOrGetter<string>) {
               clearDeliveryTimer(parsed.clientId)
               updateOptimisticMessage(parsed.clientId, message => ({ ...message, deliveryState: 'failed' }))
             }
-            if (parsed.code === 'realtimekit_unconfigured') useUiStore().huddleSetupOpen = true
             break
         }
       })

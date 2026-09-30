@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     type: 'thread',
     visibility: access.channel.visibility,
     position: 0,
-    huddleMeetingId: null,
+    liveMeetingId: null,
     parentId,
     parentMessageId: body.messageId,
     createdAt: created,

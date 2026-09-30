@@ -1,17 +1,37 @@
 import { DurableObject } from 'cloudflare:workers'
 import { z } from 'zod'
-import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
+import type { AttachmentDTO, LiveState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
 import { extractMentionIds } from '../shared/mentions'
 import { canAccessAgentConversation, isDmType } from '../shared/dm'
-import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '../shared/permissions'
+import { ALL_PERMISSIONS, directMessagePermissions, hasPermission, Permission } from '../shared/permissions'
+import { liveKindFor } from '../shared/live'
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
 import { asRpc, type DiscoflareEnv } from './env'
-import { createMeeting, endMeeting, loadRealtimeKitConfig, realtimekitConfigured } from './realtimekit'
+import {
+  addParticipant,
+  createMeeting,
+  endMeeting,
+  loadRealtimeKitConfig,
+  realtimekitConfigured,
+  removeParticipants,
+  type RealtimeKitParticipant,
+} from './realtimekit'
 import { userFromTicket } from './ticket'
 import { channelHasUnread } from './unread'
-import { huddleNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
-import { signalHuddleChanged } from './huddle-events'
+import { liveNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
+import { signalLiveChanged } from './live-events'
+import {
+  emptyLive,
+  isLiveHost,
+  LIVE_PRESENCE_TTL_MS,
+  LIVE_RING_TIMEOUT_MS,
+  liveFailure,
+  liveGraceMs,
+  normalizeLive,
+  type LiveEndResult,
+  type LiveJoinResult,
+} from './live-room'
 import { signalChannelActivity, signalChannelRead } from './channel-activity'
 import { signalAgentsForMessage } from './agent-ingress'
 import { listAgentTurns } from './agent-turns'
@@ -20,7 +40,7 @@ import { mailPermissionAllows } from '../shared/mail'
 import { createSerialQueue } from './serial-queue'
 
 type Sock = { userId: string; user: PublicUser }
-type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean; canManageAgents: boolean }
+type Authz = { workspaceId: string; perms: number; ownerId: string; type: string; frozen: boolean; canManageAgents: boolean; mailbox: boolean }
 
 const createSchema = z.object({
   t: z.literal('message.create'),
@@ -59,19 +79,9 @@ const agentReactionSchema = z.object({
   emoji: z.enum(AGENT_REACTION_EMOJIS),
 })
 
-const emptyHuddle = (): HuddleState => ({
-  active: false,
-  huddleId: null,
-  meetingId: null,
-  participantIds: [],
-  startedBy: null,
-  startedAt: null,
-  kind: 'huddle',
-  title: null,
-})
-
 export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
   private readonly inOrder = createSerialQueue()
+  private readonly liveInOrder = createSerialQueue()
 
   constructor(ctx: DurableObjectState, env: DiscoflareEnv) {
     super(ctx, env)
@@ -138,39 +148,12 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   override async webSocketClose(_ws: WebSocket): Promise<void> {
-    // Chat navigation closes this socket while RealtimeKit media remains joined.
-    // Huddle presence is changed only by the join/leave APIs.
+    // Chat navigation closes this socket while RealtimeKit media stays joined.
+    // Live presence changes only through the Live API and its heartbeats.
   }
 
   override async alarm(): Promise<void> {
-    const now = Date.now()
-    const huddle = await this.getHuddle()
-    const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
-    if (cleanupAt && cleanupAt <= now) {
-      if (huddle.active && huddle.participantIds.length === 0) {
-        if (huddle.meetingId) {
-          try {
-            await endMeeting(await loadRealtimeKitConfig(this.env), huddle.meetingId)
-          }
-          catch {
-            await this.scheduleCleanup(60_000)
-            await this.refreshAlarm()
-            return
-          }
-        }
-        await this.ctx.storage.delete('huddleCleanupAt')
-        await this.setHuddle(emptyHuddle())
-        await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
-        this.broadcast({ t: 'huddle', huddle: emptyHuddle() })
-        this.broadcast({ t: 'voice', voice: emptyHuddle() })
-        this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), emptyHuddle()))
-      }
-      else {
-        await this.ctx.storage.delete('huddleCleanupAt')
-      }
-    }
-    await this.expireHuddleParticipants(now)
-    await this.refreshAlarm()
+    await this.liveInOrder(() => this.liveAlarm())
   }
 
   async fanout(msg: ServerMsg): Promise<void> {
@@ -297,63 +280,102 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
   }
 
-  async getHuddle(): Promise<HuddleState> {
-    return { ...emptyHuddle(), ...(await this.ctx.storage.get<Partial<HuddleState>>('huddle')) }
+  // The conversation's Live room. Every change runs through `liveInOrder`, so
+  // two people starting at once share one meeting. Storage keys keep their
+  // pre-Live names: 'huddle' is the room, 'huddlePresence' the heartbeat
+  // deadlines, and 'huddleCleanupAt' when an empty room closes.
+
+  async getLive(): Promise<LiveState> {
+    return normalizeLive(await this.ctx.storage.get('huddle'))
   }
 
-  async joinHuddle(userId: string): Promise<HuddleState> {
-    const huddle = await this.getHuddle()
-    if (!huddle.active) throw new Error('No active huddle')
-    if (!huddle.participantIds.includes(userId)) huddle.participantIds.push(userId)
-    const presence = await this.huddlePresence()
-    presence[userId] = Date.now() + 45_000
-    await this.ctx.storage.put('huddlePresence', presence)
-    await this.ctx.storage.delete('huddleCleanupAt')
-    await this.setHuddle(huddle)
-    await this.refreshAlarm()
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
-    return huddle
+  /** Join the room, starting it first when it is idle and the member may start one. */
+  async joinLive(user: PublicUser): Promise<LiveJoinResult> {
+    return this.liveInOrder(() => this.joinLiveNow(user))
   }
 
-  async leaveHuddle(userId: string): Promise<HuddleState> {
-    const huddle = await this.getHuddle()
-    huddle.participantIds = huddle.participantIds.filter(id => id !== userId)
-    const presence = await this.huddlePresence()
-    const { [userId]: _removed, ...remainingPresence } = presence
-    await this.ctx.storage.put('huddlePresence', remainingPresence)
-    await this.setHuddle(huddle)
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
-    if (huddle.active && huddle.participantIds.length === 0) {
+  async leaveLive(userId: string): Promise<LiveState> {
+    return this.liveInOrder(() => this.leaveLiveNow(userId))
+  }
+
+  /** The other person turns down a ringing Call. */
+  async declineLive(userId: string): Promise<LiveState> {
+    return this.liveInOrder(async () => {
+      const live = await this.getLive()
+      if (!live.active || live.kind !== 'call' || !live.ringing || live.startedBy === userId) return live
+      return this.endLiveNow({ outcome: 'declined' })
+    })
+  }
+
+  /** End the room for everyone. Only hosts may. */
+  async endLive(userId: string): Promise<LiveEndResult> {
+    return this.liveInOrder(async () => {
+      const live = await this.getLive()
+      if (!live.active) return liveFailure('not_found', 'No live session to end')
       const authz = await this.loadAuthz(userId)
-      await this.scheduleCleanup(isDmType(authz?.type ?? '') ? 30_000 : 30 * 60 * 1000)
-    }
-    return huddle
+      if (!authz || !isLiveHost(live, userId, { directMessage: isDmType(authz.type), perms: authz.perms })) {
+        return liveFailure('forbidden', 'Only the person who started it or a channel manager can end this live session')
+      }
+      return { ok: true as const, live: await this.endLiveNow({}) }
+    })
   }
 
-  async pingHuddle(userId: string): Promise<void> {
-    const huddle = await this.getHuddle()
-    if (!huddle.active || !huddle.participantIds.includes(userId)) return
-    const presence = await this.huddlePresence()
-    presence[userId] = Date.now() + 45_000
-    await this.ctx.storage.put('huddlePresence', presence)
-    await this.refreshAlarm()
+  /** Keep a joined participant present. False when they are no longer in the room. */
+  async pingLive(userId: string): Promise<boolean> {
+    return this.liveInOrder(async () => {
+      const live = await this.getLive()
+      const seats = await this.liveSeats()
+      if (!live.active || !seats[userId]) return false
+      const presence = await this.livePresence()
+      presence[userId] = Date.now() + LIVE_PRESENCE_TTL_MS
+      await this.ctx.storage.put('huddlePresence', presence)
+      if (!live.participantIds.includes(userId)) {
+        // A slow heartbeat expired them without them leaving; they are still here.
+        live.participantIds.push(userId)
+        await this.ctx.storage.delete('huddleCleanupAt')
+        await this.setLive(live)
+        this.publishLive(live)
+      }
+      await this.refreshAlarm()
+      return true
+    })
   }
 
-  async endHuddle(actor?: PublicUser): Promise<HuddleState> {
-    const current = await this.getHuddle()
-    if (current.meetingId) await endMeeting(await loadRealtimeKitConfig(this.env), current.meetingId)
-    const huddle = emptyHuddle()
-    await this.setHuddle(huddle)
-    await this.ctx.storage.delete('huddleCleanupAt')
-    await this.ctx.storage.delete('huddlePresence')
-    await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
-    await this.refreshAlarm()
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
-    this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), huddle, actor))
-    return huddle
+  /**
+   * Re-check who may stay after access changed: a removed member, someone taken
+   * off a private Channel or group Direct Message, or a deleted conversation.
+   * Whoever lost access leaves the media session and their token is revoked.
+   */
+  async revalidateLive(): Promise<void> {
+    await this.liveInOrder(async () => {
+      const live = await this.getLive()
+      if (!live.active || !live.meetingId) return
+      const exists = await this.env.DB.prepare('SELECT id FROM channels WHERE id = ?').bind(this.channelId()).first()
+      if (!exists) {
+        await this.endLiveNow({})
+        return
+      }
+      const seats = await this.liveSeats()
+      const revoked: string[] = []
+      for (const userId of Object.keys(seats)) {
+        const authz = await this.loadAuthz(userId)
+        if (!authz || authz.frozen || authz.mailbox) revoked.push(userId)
+      }
+      if (!revoked.length) return
+      if (live.kind === 'call') {
+        await this.endLiveNow({})
+        return
+      }
+      await removeParticipants(await loadRealtimeKitConfig(this.env), live.meetingId, revoked.map(id => seats[id]!.participantId))
+      const keep = ([userId]: [string, unknown]) => !revoked.includes(userId)
+      const presence = Object.fromEntries(Object.entries(await this.livePresence()).filter(keep))
+      live.participantIds = live.participantIds.filter(id => !revoked.includes(id))
+      await this.ctx.storage.put({ huddlePresence: presence, liveSeats: Object.fromEntries(Object.entries(seats).filter(keep)) })
+      if (!live.participantIds.length) await this.scheduleCleanup(liveGraceMs(live.kind, await this.isDirectMessage()))
+      await this.setLive(live)
+      await this.refreshAlarm()
+      this.publishLive(live)
+    })
   }
 
   private async handle(ws: WebSocket, sock: Sock, raw: string) {
@@ -386,17 +408,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         break
       case 'read':
         await this.onRead(sock, authz, (JSON.parse(raw) as { messageId: string }).messageId)
-        break
-      case 'huddle.start':
-      case 'voice.join':
-        await this.onHuddleStart(ws, sock, authz)
-        break
-      case 'huddle.join':
-        await this.onHuddleJoin(ws, sock, authz)
-        break
-      case 'huddle.leave':
-      case 'voice.leave':
-        await this.onHuddleLeave(sock)
         break
       default:
         this.send(ws, { t: 'error', code: 'unknown', message: `Unknown type ${parsed.t}` })
@@ -646,76 +657,150 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     this.ctx.waitUntil(signalChannelRead(this.env, sock.userId, this.channelId(), cursor))
   }
 
-  private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz) {
-    if (authz.type === 'thread') {
-      this.send(ws, { t: 'error', code: 'forbidden', message: 'Start the huddle in the parent conversation' })
-      return
+  private async joinLiveNow(user: PublicUser): Promise<LiveJoinResult> {
+    const authz = await this.loadAuthz(user.id)
+    if (!authz) return liveFailure('not_found', 'Conversation not found')
+    if (authz.mailbox) return liveFailure('forbidden', 'Live sessions are unavailable for mailboxes')
+    if (authz.type === 'thread') return liveFailure('forbidden', 'Join the live session in the parent conversation')
+    if (authz.frozen) return liveFailure('frozen', 'You can no longer call in this Direct Message')
+    const config = await loadRealtimeKitConfig(this.env)
+    if (!realtimekitConfigured(config)) return liveFailure('realtimekit_unconfigured', 'Live needs RealtimeKit')
+
+    const directMessage = isDmType(authz.type)
+    let live = await this.getLive()
+    const starting = !live.active || !live.meetingId
+    if (starting) {
+      if (!hasPermission(authz.perms, Permission.startLive)) {
+        return liveFailure('forbidden', 'Your role cannot start live sessions here. You can join once someone else starts one.')
+      }
+      const limiter = asRpc<{ take: (n: number, w: number) => Promise<boolean> }>(this.env.RATE_LIMIT_DO.getByName(`user:${user.id}:live`))
+      if (!await limiter.take(10, 60 * 60 * 1000)) return liveFailure('rate_limited', 'Too many live sessions started. Try again later.')
+      const kind = liveKindFor(directMessage && await this.directMessageSize() === 2)
+      try {
+        const meeting = await createMeeting(config, `${kind}:${this.channelId()}`)
+        live = { active: true, meetingId: meeting.id, participantIds: [], startedBy: user.id, startedAt: nowIso(), kind, ringing: kind === 'call' }
+      }
+      catch {
+        return liveFailure('realtimekit_failed', 'RealtimeKit could not start the live session')
+      }
     }
-    if (authz.frozen) {
-      this.send(ws, { t: 'error', code: 'frozen', message: 'You can no longer start a call in this Direct Message' })
-      return
+    const meetingId = live.meetingId!
+    const seats = starting ? {} : await this.liveSeats()
+    const host = isLiveHost(live, user.id, { directMessage, perms: authz.perms })
+    let participant: RealtimeKitParticipant
+    try {
+      participant = await addParticipant(config, meetingId, {
+        name: user.displayName,
+        customId: user.id,
+        preset: host ? config.hostPreset : config.participantPreset,
+      })
     }
-    if (!isDmType(authz.type) && !hasPermission(authz.perms, Permission.startHuddle)) {
-      this.send(ws, { t: 'error', code: 'forbidden', message: 'Cannot start huddle' })
-      return
-    }
-    const realtimekit = await loadRealtimeKitConfig(this.env)
-    if (!realtimekitConfigured(realtimekit)) {
-      this.send(ws, { t: 'error', code: 'realtimekit_unconfigured', message: 'RealtimeKit secrets missing' })
-      return
-    }
-    const limiter = asRpc<{ take: (n: number, w: number) => Promise<boolean> }>(this.env.RATE_LIMIT_DO.getByName(`user:${sock.userId}:huddle`))
-    const ok = await limiter.take(10, 60 * 60 * 1000)
-    if (!ok) {
-      this.send(ws, { t: 'error', code: 'rate_limited', message: 'Huddle start limit' })
-      return
-    }
-    let huddle = await this.getHuddle()
-    if (huddle.active && huddle.meetingId) {
-      await this.joinHuddle(sock.userId)
-      return
+    catch {
+      if (starting) this.ctx.waitUntil(endMeeting(config, meetingId).catch(() => {}))
+      return liveFailure('realtimekit_failed', 'RealtimeKit could not add you to the live session')
     }
 
-    const participantCount = isDmType(authz.type)
-      ? (await this.env.DB.prepare('SELECT count(*) AS count FROM channel_members WHERE channel_id = ?').bind(this.channelId()).first<{ count: number }>())?.count ?? 0
-      : 0
-    const kind = isDmType(authz.type) && participantCount === 2 ? 'call' : 'huddle'
-    const meeting = await createMeeting(realtimekit, `${kind}:${this.channelId()}`)
-    huddle = {
-      active: true,
-      huddleId: meeting.id,
-      meetingId: meeting.id,
-      participantIds: [sock.userId],
-      startedBy: sock.userId,
-      startedAt: nowIso(),
-      kind,
-      title: null,
+    // One seat per person: joining again, say from another tab, replaces the older seat.
+    const previous = seats[user.id]
+    if (previous) this.ctx.waitUntil(removeParticipants(config, meetingId, [previous.participantId]).catch(() => {}))
+    seats[user.id] = { participantId: participant.id }
+    if (!live.participantIds.includes(user.id)) live.participantIds.push(user.id)
+    if (live.ringing && user.id !== live.startedBy) {
+      live.ringing = false
+      await this.ctx.storage.delete('liveRingUntil')
     }
-    await this.setHuddle(huddle)
-    await this.ctx.storage.put('huddlePresence', { [sock.userId]: Date.now() + 45_000 })
+    const presence = starting ? {} : await this.livePresence()
+    presence[user.id] = Date.now() + LIVE_PRESENCE_TTL_MS
+    await this.ctx.storage.put({ huddlePresence: presence, liveSeats: seats })
     await this.ctx.storage.delete('huddleCleanupAt')
-    const notification = await huddleNotificationStatement(this.env, this.channelId(), meeting.id, sock.user, { kind, title: null })
-    await this.env.DB.batch([
-      this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = ? WHERE id = ?').bind(meeting.id, this.channelId()),
-      this.env.DB.prepare(
-        'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ).bind(newId(), sock.userId, 'huddle.start', 'channel', this.channelId(), '{}', nowIso()),
-      ...(notification ? [notification] : []),
-    ])
-    this.ctx.waitUntil(signalNotificationOutbox(this.env))
-    this.ctx.waitUntil(signalHuddleChanged(this.env, this.channelId(), huddle, sock.user))
+    if (starting && live.ringing) await this.ctx.storage.put('liveRingUntil', Date.now() + LIVE_RING_TIMEOUT_MS)
+    await this.setLive(live)
+
+    if (starting) {
+      const notification = await liveNotificationStatement(this.env, this.channelId(), meetingId, user, live.kind)
+      await this.env.DB.batch([
+        this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = ? WHERE id = ?').bind(meetingId, this.channelId()),
+        this.env.DB.prepare(
+          'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        ).bind(newId(), user.id, 'live.start', 'channel', this.channelId(), JSON.stringify({ kind: live.kind }), nowIso()),
+        ...(notification ? [notification] : []),
+      ])
+      this.ctx.waitUntil(signalNotificationOutbox(this.env))
+    }
     await this.refreshAlarm()
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
+    this.publishLive(live, starting ? { started: user } : {})
+    return { ok: true, token: participant.token, meetingId, live }
   }
 
-  private async onHuddleJoin(ws: WebSocket, sock: Sock, _authz: Authz) {
-    try { await this.joinHuddle(sock.userId) }
-    catch { this.send(ws, { t: 'error', code: 'not_found', message: 'No active huddle' }) }
+  private async leaveLiveNow(userId: string): Promise<LiveState> {
+    const live = await this.getLive()
+    if (!live.active || !live.meetingId) return live
+    const seats = await this.liveSeats()
+    const seat = seats[userId]
+    // Hanging up ends a Call for both people.
+    if (live.kind === 'call' && seat) return this.endLiveNow({})
+    const { [userId]: _seat, ...remainingSeats } = seats
+    const { [userId]: _presence, ...presence } = await this.livePresence()
+    live.participantIds = live.participantIds.filter(id => id !== userId)
+    await this.ctx.storage.put({ huddlePresence: presence, liveSeats: remainingSeats })
+    if (seat) {
+      const config = await loadRealtimeKitConfig(this.env)
+      this.ctx.waitUntil(removeParticipants(config, live.meetingId, [seat.participantId]).catch(() => {}))
+    }
+    if (!live.participantIds.length) await this.scheduleCleanup(liveGraceMs(live.kind, await this.isDirectMessage()))
+    await this.setLive(live)
+    await this.refreshAlarm()
+    this.publishLive(live)
+    return live
   }
 
-  private async onHuddleLeave(sock: Sock) {
-    await this.leaveHuddle(sock.userId)
+  private async endLiveNow(opts: { outcome?: 'declined' | 'unanswered' }): Promise<LiveState> {
+    const current = await this.getLive()
+    const config = await loadRealtimeKitConfig(this.env)
+    if (current.meetingId && realtimekitConfigured(config)) await endMeeting(config, current.meetingId)
+    const live: LiveState = { ...emptyLive(), kind: current.kind }
+    await this.setLive(live)
+    await this.ctx.storage.delete(['huddlePresence', 'huddleCleanupAt', 'liveSeats', 'liveRingUntil'])
+    await this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = NULL WHERE id = ?').bind(this.channelId()).run()
+    await this.refreshAlarm()
+    this.publishLive(live, opts)
+    return live
+  }
+
+  private async liveAlarm() {
+    const now = Date.now()
+    const live = await this.getLive()
+    const ringUntil = await this.ctx.storage.get<number>('liveRingUntil')
+    if (live.active && live.ringing && ringUntil && ringUntil <= now) {
+      try {
+        await this.endLiveNow({ outcome: 'unanswered' })
+      }
+      catch {
+        await this.ctx.storage.put('liveRingUntil', now + 60_000)
+        await this.refreshAlarm()
+      }
+      return
+    }
+    const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
+    if (cleanupAt && cleanupAt <= now) {
+      if (live.active && !live.participantIds.length) {
+        try {
+          await this.endLiveNow({})
+        }
+        catch {
+          await this.scheduleCleanup(60_000)
+        }
+        return
+      }
+      await this.ctx.storage.delete('huddleCleanupAt')
+    }
+    await this.expireLiveParticipants(now)
+    await this.refreshAlarm()
+  }
+
+  private publishLive(live: LiveState, opts: { started?: PublicUser, outcome?: 'declined' | 'unanswered' } = {}) {
+    this.broadcast({ t: 'live', live })
+    this.ctx.waitUntil(signalLiveChanged(this.env, this.channelId(), live, opts).catch(() => {}))
   }
 
   private async hello(ws: WebSocket, user: PublicUser) {
@@ -726,13 +811,13 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       return
     }
     ws.serializeAttachment({ userId: user.id, user } satisfies Sock)
-    const huddle = await this.getHuddle()
+    const live = await this.getLive()
     let participants: PublicUser[] | undefined
     if (isDmType(authz.type) || (authz.type === 'thread')) {
       participants = await this.loadDmParticipants()
     }
     const agentTurns = authz.canManageAgents ? await listAgentTurns(this.env, this.channelId()) : []
-    this.send(ws, { t: 'hello', channelId: this.channelId(), you: user, huddle, frozen: authz.frozen, participants, agentTurns })
+    this.send(ws, { t: 'hello', channelId: this.channelId(), you: user, live, frozen: authz.frozen, participants, agentTurns })
   }
 
   private async authTimeout(ws: WebSocket) {
@@ -791,8 +876,8 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         ).bind(...ids).all<{ id: string }>()
         frozen = (still.results ?? []).length !== ids.length
       }
-      const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
-      return { workspaceId: WORKSPACE_ID, type: accessRoot.id === ch.id ? 'dm' : type, perms, ownerId: membership.ownerId, frozen, canManageAgents }
+      const perms = directMessagePermissions(membership.perms, membership.ownerId === userId, frozen)
+      return { workspaceId: WORKSPACE_ID, type: accessRoot.id === ch.id ? 'dm' : type, perms, ownerId: membership.ownerId, frozen, canManageAgents, mailbox: false }
     }
     let perms = membership.ownerId === userId ? ALL_PERMISSIONS : membership.perms
     if (membership.ownerId !== userId) {
@@ -809,12 +894,12 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     ).bind(userId, accessRoot.id).first<{ enabled: number; permission: 'read' | 'send' | 'manage' | null }>()
     if (mailbox) {
       if (!mailbox.enabled || !mailbox.permission) return null
-      perms &= ~Permission.startHuddle
+      perms &= ~Permission.startLive
       if (!mailPermissionAllows(mailbox.permission, 'send')) {
         perms &= ~(Permission.sendMessages | Permission.attachFiles)
       }
     }
-    return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false, canManageAgents }
+    return { workspaceId: WORKSPACE_ID, type, perms, ownerId: membership.ownerId, frozen: false, canManageAgents, mailbox: Boolean(mailbox) }
   }
 
   private async loadDmParticipants(): Promise<PublicUser[]> {
@@ -977,43 +1062,55 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     await this.refreshAlarm()
   }
 
-  private async huddlePresence(): Promise<Record<string, number>> {
+  private async livePresence(): Promise<Record<string, number>> {
     return await this.ctx.storage.get<Record<string, number>>('huddlePresence') ?? {}
   }
 
-  private async expireHuddleParticipants(now: number) {
-    const huddle = await this.getHuddle()
-    if (!huddle.active || !huddle.participantIds.length) return
-    const presence = await this.huddlePresence()
-    const alive = huddle.participantIds.filter(userId => (presence[userId] ?? 0) > now)
-    if (alive.length === huddle.participantIds.length) return
-    huddle.participantIds = alive
+  /** RealtimeKit participant records of everyone who joined and has not left. */
+  private async liveSeats(): Promise<Record<string, { participantId: string }>> {
+    return await this.ctx.storage.get<Record<string, { participantId: string }>>('liveSeats') ?? {}
+  }
+
+  private async expireLiveParticipants(now: number) {
+    const live = await this.getLive()
+    if (!live.active || !live.participantIds.length) return
+    const presence = await this.livePresence()
+    const alive = live.participantIds.filter(userId => (presence[userId] ?? 0) > now)
+    if (alive.length === live.participantIds.length) return
+    live.participantIds = alive
     const aliveSet = new Set(alive)
     const remainingPresence = Object.fromEntries(Object.entries(presence).filter(([userId]) => aliveSet.has(userId)))
     await this.ctx.storage.put('huddlePresence', remainingPresence)
-    await this.setHuddle(huddle)
-    this.broadcast({ t: 'huddle', huddle })
-    this.broadcast({ t: 'voice', voice: huddle })
-    if (!alive.length) {
-      const authz = await this.loadAuthz(huddle.startedBy ?? '')
-      await this.scheduleCleanup(isDmType(authz?.type ?? '') ? 30_000 : 30 * 60 * 1000)
-    }
+    await this.setLive(live)
+    this.publishLive(live)
+    if (!alive.length) await this.scheduleCleanup(liveGraceMs(live.kind, await this.isDirectMessage()))
   }
 
   private async refreshAlarm() {
     const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
-    const presence = await this.huddlePresence()
-    const presenceAt = Object.values(presence).length ? Math.min(...Object.values(presence)) : undefined
-    const candidates = [cleanupAt, presenceAt]
+    const ringUntil = await this.ctx.storage.get<number>('liveRingUntil')
+    const presence = Object.values(await this.livePresence())
+    const presenceAt = presence.length ? Math.min(...presence) : undefined
+    const candidates = [cleanupAt, ringUntil, presenceAt]
       .filter((value): value is number => typeof value === 'number')
     if (candidates.length) await this.ctx.storage.setAlarm(Math.max(Date.now(), Math.min(...candidates)))
     else await this.ctx.storage.deleteAlarm()
   }
 
-  private async setHuddle(huddle: HuddleState) {
-    await this.ctx.storage.put('huddle', huddle)
+  private async setLive(live: LiveState) {
+    await this.ctx.storage.put('huddle', live)
   }
 
+  private async isDirectMessage(): Promise<boolean> {
+    const row = await this.env.DB.prepare('SELECT type FROM channels WHERE id = ?').bind(this.channelId()).first<{ type: string }>()
+    return isDmType(row?.type ?? '')
+  }
+
+  private async directMessageSize(): Promise<number> {
+    const row = await this.env.DB.prepare('SELECT count(*) AS count FROM channel_members WHERE channel_id = ?')
+      .bind(this.channelId()).first<{ count: number }>()
+    return row?.count ?? 0
+  }
   private channelId(): string {
     return (this.ctx.id.name ?? '').replace(/^channel:/, '')
   }

@@ -1,6 +1,7 @@
 import type { TelemetryHeartbeat } from '../../shared/telemetry'
 import { agentRuntimeConfigured, type DiscoflareEnv } from '../../workers/env'
 import { workspaceEmailAvailable } from '../../workers/mail-transport'
+import { liveAvailable } from '../../workers/realtimekit'
 import { workspaceMailDomains } from './workspace-mail'
 
 const DEFAULT_ENDPOINT = 'https://discoflare.com/api/telemetry/heartbeat'
@@ -16,7 +17,7 @@ export async function telemetryEnabled(db: D1Database): Promise<boolean> {
   }
 }
 
-export function telemetryHeartbeat(env: DiscoflareEnv, sentAt = new Date().toISOString()): TelemetryHeartbeat | null {
+export function telemetryHeartbeat(env: DiscoflareEnv, sentAt = new Date().toISOString(), live = false): TelemetryHeartbeat | null {
   const installationId = env.DISCOFLARE_TELEMETRY_ID?.trim()
   const version = env.DISCOFLARE_VERSION?.trim()
   if (!installationId || !version || !env.DISCOFLARE_TELEMETRY_TOKEN) return null
@@ -33,7 +34,8 @@ export function telemetryHeartbeat(env: DiscoflareEnv, sentAt = new Date().toISO
       customDomain: env.DISCOFLARE_CUSTOM_DOMAIN === 'true',
       email: Boolean(workspaceMailDomains(env).length && (workspaceEmailAvailable(env) || env.EMAIL)),
       agents: agentRuntimeConfigured(env),
-      huddles: Boolean(env.REALTIMEKIT_ACCOUNT_ID && env.REALTIMEKIT_APP_ID && env.REALTIMEKIT_API_KEY),
+      // The heartbeat schema keeps its pre-Live field name.
+      huddles: live,
     },
   }
 }
@@ -42,7 +44,7 @@ export async function sendTelemetryHeartbeat(
   env: DiscoflareEnv,
   fetcher: typeof fetch = fetch,
 ): Promise<'sent' | 'disabled' | 'unavailable'> {
-  const heartbeat = telemetryHeartbeat(env)
+  const heartbeat = telemetryHeartbeat(env, undefined, await liveAvailable(env).catch(() => false))
   if (!heartbeat) return 'unavailable'
   if (!await telemetryEnabled(env.DB)) return 'disabled'
 

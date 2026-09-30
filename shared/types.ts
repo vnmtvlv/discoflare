@@ -4,7 +4,7 @@ import type { DatabaseFieldType, DatabaseValue, DatabaseViewConfig, DatabaseView
 export type PresenceStatus = 'online' | 'idle' | 'offline'
 export type UserStatus = 'pending' | 'active' | 'removed'
 export type UserKind = 'human' | 'agent'
-export type ChannelType = 'text' | 'voice' | 'thread' | 'dm'
+export type ChannelType = 'text' | 'thread' | 'dm'
 export type ChannelVisibility = 'workspace' | 'private'
 
 export type PublicUser = {
@@ -384,8 +384,10 @@ export type RealtimeKitSettingsAdminDTO = {
   appId: string | null
   apiTokenConfigured: boolean
   secretReadable: boolean
-  voicePreset: string
-  avPreset: string
+  hostPreset: string
+  participantPreset: string
+  /** Settings saved before hosts and participants had separate presets; reconnecting splits them. */
+  sharedPreset: boolean
 }
 
 export type AttachmentDTO = {
@@ -466,15 +468,21 @@ export type MessageContextResponse = {
   hasNewer: boolean
 }
 
-export type HuddleState = {
+export type LiveKind = 'call' | 'live'
+
+/**
+ * The Live room of one Channel or Direct Message. A 1:1 Direct Message presents
+ * it as a `call`; every other conversation as `live`.
+ */
+export type LiveState = {
   active: boolean
-  huddleId: string | null
   meetingId: string | null
   participantIds: string[]
   startedBy: string | null
   startedAt: string | null
-  kind: 'call' | 'huddle'
-  title: string | null
+  kind: LiveKind
+  /** A Call the other person has not answered or declined yet. */
+  ringing: boolean
 }
 
 export type WorkspaceDTO = {
@@ -527,13 +535,13 @@ export type ChannelDTO = {
   visibility: ChannelVisibility
   categoryId: string | null
   position: number
-  huddleMeetingId: string | null
+  liveMeetingId: string | null
   parentId: string | null
   parentMessageId: string | null
   unread: boolean
   unreadCount?: number
   permissions?: number
-  huddle: HuddleState | null
+  live: LiveState | null
   createdAt: string
   title?: string
   participants?: PublicUser[]
@@ -628,17 +636,12 @@ export type ClientMsg =
   | { t: 'message.delete'; id: string }
   | { t: 'typing'; active: boolean }
   | { t: 'read'; messageId: string }
-  | { t: 'huddle.start' }
-  | { t: 'huddle.join' }
-  | { t: 'huddle.leave' }
-  | { t: 'voice.join' }
-  | { t: 'voice.leave' }
   | { t: 'reaction.add'; messageId: string; emoji: string }
   | { t: 'reaction.remove'; messageId: string; emoji: string }
   | { t: 'agent.control'; agentId: string; action: 'stop' | 'approve' | 'reject'; executionId?: string }
 
 export type ServerMsg =
-  | { t: 'hello'; channelId: string; you: PublicUser; huddle?: HuddleState; frozen?: boolean; participants?: PublicUser[]; agentTurns?: AgentTurnDTO[] }
+  | { t: 'hello'; channelId: string; you: PublicUser; live?: LiveState; frozen?: boolean; participants?: PublicUser[]; agentTurns?: AgentTurnDTO[] }
   | { t: 'message'; message: MessageDTO }
   | { t: 'message.update'; message: MessageDTO; streaming?: boolean }
   | { t: 'thread.created'; messageId: string; threadId: string }
@@ -646,8 +649,7 @@ export type ServerMsg =
   | { t: 'typing'; userId: string; active: boolean }
   | { t: 'agent.state'; agentId: string; runs: AgentTurnDTO[] }
   | { t: 'presence'; users: Array<{ userId: string; status: PresenceStatus }> }
-  | { t: 'huddle'; huddle: HuddleState }
-  | { t: 'voice'; voice: HuddleState }
+  | { t: 'live'; live: LiveState }
   | { t: 'dm.participants'; participants: PublicUser[] }
   | { t: 'dm.update'; name: string | null }
   | { t: 'reaction'; messageId: string; emoji: string; userId: string; op: 'add' | 'remove' }

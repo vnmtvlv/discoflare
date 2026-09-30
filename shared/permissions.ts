@@ -5,7 +5,7 @@ export const Permission = {
   invite: 1 << 3,
   sendMessages: 1 << 4,
   attachFiles: 1 << 5,
-  startHuddle: 1 << 6,
+  startLive: 1 << 6,
   kick: 1 << 7,
   manageTasks: 1 << 8,
   manageDatabases: 1 << 9,
@@ -22,7 +22,7 @@ export const ALL_PERMISSIONS =
   | Permission.invite
   | Permission.sendMessages
   | Permission.attachFiles
-  | Permission.startHuddle
+  | Permission.startLive
   | Permission.kick
   | Permission.manageTasks
   | Permission.manageDatabases
@@ -30,7 +30,7 @@ export const ALL_PERMISSIONS =
   | Permission.manageGadgets
 
 export const MemberPermissions =
-  Permission.sendMessages | Permission.attachFiles | Permission.startHuddle
+  Permission.sendMessages | Permission.attachFiles | Permission.startLive
 
 export const PermissionGrants = [
   { key: 'manageWorkspace', flag: Permission.manageWorkspace, label: 'Manage workspace', description: 'Change workspace name and settings.' },
@@ -39,7 +39,7 @@ export const PermissionGrants = [
   { key: 'invite', flag: Permission.invite, label: 'Create invites', description: 'Invite new members to the workspace.' },
   { key: 'sendMessages', flag: Permission.sendMessages, label: 'Send messages', description: 'Post and reply in accessible channels.' },
   { key: 'attachFiles', flag: Permission.attachFiles, label: 'Attach files', description: 'Upload attachments to messages.' },
-  { key: 'startHuddle', flag: Permission.startHuddle, label: 'Start huddles', description: 'Start voice huddles in channels and direct messages.' },
+  { key: 'startLive', flag: Permission.startLive, label: 'Start live sessions', description: 'Start a live session or call in channels and direct messages they can access. Anyone with access can join.' },
   { key: 'kick', flag: Permission.kick, label: 'Remove members', description: 'Remove members from the workspace.' },
   { key: 'manageTasks', flag: Permission.manageTasks, label: 'Manage tasks', description: 'Create, edit, assign, archive, and remove task boards and tasks.' },
   { key: 'manageDatabases', flag: Permission.manageDatabases, label: 'Manage data', description: 'Create databases, documents, canvases, fields, and records.' },
@@ -56,6 +56,17 @@ export function permissionBitmask(enabled: Iterable<PermissionGrantKey>): number
 
 export function hasPermission(bitmask: number, flag: PermissionFlag): boolean {
   return (bitmask & flag) === flag
+}
+
+/**
+ * Direct Message participants can always talk, but starting a Live room still
+ * follows the member's role, so an owner can make a role that joins calls but
+ * never starts them. A frozen Direct Message grants nothing.
+ */
+export function directMessagePermissions(rolePermissions: number, isOwner: boolean, frozen: boolean): number {
+  if (frozen) return 0
+  const canStartLive = isOwner || hasPermission(rolePermissions, Permission.startLive)
+  return (MemberPermissions & ~Permission.startLive) | (canStartLive ? Permission.startLive : 0)
 }
 
 export function rolePermissions(name: string): number {

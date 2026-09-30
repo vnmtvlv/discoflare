@@ -3,12 +3,12 @@ import { hasPermission, Permission, type PermissionFlag } from './permissions'
 export const CHANNEL_PERMISSION_MASK =
   Permission.sendMessages
   | Permission.attachFiles
-  | Permission.startHuddle
+  | Permission.startLive
 
 export const ChannelPermissionGrants = [
   { key: 'sendMessages', flag: Permission.sendMessages, label: 'Send messages' },
   { key: 'attachFiles', flag: Permission.attachFiles, label: 'Attach files' },
-  { key: 'startHuddle', flag: Permission.startHuddle, label: 'Start huddles' },
+  { key: 'startLive', flag: Permission.startLive, label: 'Start live sessions' },
 ] as const
 
 export type ChannelPermissionGrantKey = (typeof ChannelPermissionGrants)[number]['key']

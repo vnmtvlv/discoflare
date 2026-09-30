@@ -11,7 +11,6 @@ import { writeAudit } from '../../../utils/messages'
 
 const bodySchema = z.object({
   name: z.string().min(1).max(80).regex(/^[a-z0-9-_]+$/i),
-  type: z.enum(['text', 'voice']).default('text'),
   topic: z.string().max(200).optional(),
   visibility: z.enum(['workspace', 'private']).default('workspace'),
   categoryId: z.string().min(8).nullable().optional(),
@@ -27,7 +26,7 @@ export default defineEventHandler(async (event) => {
   const id = newId()
   const created = nowIso()
   const name = body.name.toLowerCase()
-  const type = body.type
+  const type = 'text'
   const categoryId = body.categoryId ?? null
   if (categoryId) {
     const category = await db.select({ id: channelCategories.id }).from(channelCategories)
@@ -43,7 +42,7 @@ export default defineEventHandler(async (event) => {
     visibility: body.visibility,
     categoryId,
     position,
-    huddleMeetingId: null,
+    liveMeetingId: null,
     parentId: null,
     parentMessageId: null,
     createdAt: created,
@@ -73,11 +72,11 @@ export default defineEventHandler(async (event) => {
       visibility: body.visibility,
       categoryId,
       position,
-      huddleMeetingId: null,
+      liveMeetingId: null,
       parentId: null,
       parentMessageId: null,
       unread: false,
-      huddle: null,
+      live: null,
       createdAt: created,
     },
   }

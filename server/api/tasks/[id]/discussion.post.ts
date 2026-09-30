@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => {
     visibility: 'workspace',
     categoryId: null,
     position: 0,
-    huddleMeetingId: null,
+    liveMeetingId: null,
     parentId: null,
     parentMessageId: null,
     createdAt: created,

@@ -12,12 +12,12 @@ describe('channel permission overrides', () => {
   it('applies an allow and deny after the role permissions', () => {
     const result = resolveChannelPermissions(
       Permission.sendMessages | Permission.attachFiles | Permission.invite,
-      { allow: Permission.startHuddle, deny: Permission.attachFiles },
+      { allow: Permission.startLive, deny: Permission.attachFiles },
     )
 
     expect(hasPermission(result, Permission.sendMessages)).toBe(true)
     expect(hasPermission(result, Permission.attachFiles)).toBe(false)
-    expect(hasPermission(result, Permission.startHuddle)).toBe(true)
+    expect(hasPermission(result, Permission.startLive)).toBe(true)
     expect(hasPermission(result, Permission.invite)).toBe(true)
   })
 
@@ -33,12 +33,12 @@ describe('channel permission overrides', () => {
     const masks = channelPermissionMasks({
       sendMessages: 'deny',
       attachFiles: 'inherit',
-      startHuddle: 'allow',
+      startLive: 'allow',
     })
 
     expect(channelPermissionMode(masks.allow, masks.deny, Permission.sendMessages)).toBe('deny')
     expect(channelPermissionMode(masks.allow, masks.deny, Permission.attachFiles)).toBe('inherit')
-    expect(channelPermissionMode(masks.allow, masks.deny, Permission.startHuddle)).toBe('allow')
+    expect(channelPermissionMode(masks.allow, masks.deny, Permission.startLive)).toBe('allow')
     expect(masks.allow & masks.deny).toBe(0)
   })
 })

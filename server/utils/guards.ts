@@ -3,7 +3,7 @@ import type { H3Event } from 'h3'
 import { channelRoleOverrides, channels, channelMembers, emailMailboxAccess, emailMailboxes, roles, tasks, users, workspace } from '../../drizzle/schema'
 import { resolveChannelPermissions } from '../../shared/channel-permissions'
 import { WORKSPACE_ID } from '../../shared/ids'
-import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission, type PermissionFlag } from '../../shared/permissions'
+import { ALL_PERMISSIONS, directMessagePermissions, hasPermission, Permission, type PermissionFlag } from '../../shared/permissions'
 import { mailPermissionAllows } from '../../shared/mail'
 import type { ChannelType, MailboxPermission, PublicUser } from '../../shared/types'
 import type { AuthorizationContext } from '../../shared/authorization'
@@ -136,7 +136,7 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     const grant = grants[0]
     if (!grant) fail(404, 'not_found', 'Channel not found')
     if (flag === Permission.manageChannels) fail(403, 'forbidden', 'Manage mailboxes in email settings')
-    if (flag === Permission.startHuddle) fail(403, 'forbidden', 'Live sessions are unavailable for mailboxes')
+    if (flag === Permission.startLive) fail(403, 'forbidden', 'Live sessions are unavailable for mailboxes')
     const mutationWithoutFlag = !['GET', 'HEAD'].includes(event.method.toUpperCase()) && flag === undefined
     if ((mutationWithoutFlag || flag === Permission.sendMessages || flag === Permission.attachFiles) && !mailPermissionAllows(grant.permission, 'send')) {
       fail(403, 'forbidden', 'Mailbox is read only')
@@ -153,8 +153,8 @@ export async function requireChannelAccess(event: H3Event, channelId: string, fl
     }
     const stillIn = new Set(userRows.filter(row => row.status === 'active').map(row => row.id))
     const frozen = parts.some((p) => !stillIn.has(p.userId))
-    const perms = frozen ? 0 : (MemberPermissions | Permission.startHuddle)
-    if (flag === Permission.startHuddle && frozen) fail(403, 'forbidden', 'This direct message can no longer start calls')
+    const perms = directMessagePermissions(baseMember.perms, baseMember.isOwner, frozen)
+    if (flag === Permission.startLive && frozen) fail(403, 'forbidden', 'This direct message can no longer start calls')
     if (flag !== undefined && !frozen && !hasPermission(perms, flag) && flag !== Permission.sendMessages) {
       fail(403, 'forbidden', 'Missing permission')
     }
