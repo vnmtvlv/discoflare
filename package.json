@@ -1,6 +1,6 @@
 {
   "name": "discoflare",
-  "version": "0.1.9",
+  "version": "0.2.0",
   "type": "module",
   "private": true,
   "packageManager": "pnpm@10.30.3",
@@ -20,7 +20,7 @@
     "preview:sweep": "node scripts/preview-resources.mjs sweep",
     "deploy": "pnpm build && pnpm deploy:built",
     "deploy:built": "pnpm db:migrate && wrangler deploy",
-    "release:installer": "pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .installer/bundle && pnpm --filter @discoflare/admin bundle && node scripts/build-installer-release.mjs && pnpm --filter @discoflare/admin-core pack --pack-destination ../../.installer/release",
+    "release:installer": "pnpm build && wrangler deploy --dry-run --config wrangler.installer.jsonc --outdir .installer/bundle && pnpm --filter @discoflare/admin bundle && node scripts/build-installer-release.mjs && pnpm --filter @discoflare/admin-core pack --pack-destination .installer/release",
     "env:init": "node scripts/init-env.mjs",
     "vapid:generate": "node scripts/generate-vapid.mjs",
     "postinstall": "nuxt prepare",
