@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query'
 import { onKeyStroke } from '@vueuse/core'
-import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser, ScheduledHuddleDTO } from '~~/shared/types'
+import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser } from '~~/shared/types'
 import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
 import type { RealtimeConnection } from '../../composables/useChannelSocket'
 import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
@@ -122,20 +122,12 @@ watch(connection, (state) => {
 onBeforeUnmount(() => clearTimeout(connectionTimer))
 const { start, join, leave } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
 
-const scheduledQ = useQuery({
-  queryKey: computed(() => ['scheduled-huddles', channelId.value]),
-  queryFn: ({ queryKey }) => api<{ huddles: ScheduledHuddleDTO[] }>(`/api/channels/${String(queryKey[1])}/huddles`),
-  enabled: computed(() => Boolean(channelId.value) && isConversation.value),
-})
-const scheduled = computed(() => scheduledQ.data.value?.huddles ?? [])
-const scheduleOpen = ref(false)
 const prejoinOpen = ref(false)
 const prejoinAction = ref<'start' | 'join'>('start')
-const prejoinSchedule = ref<ScheduledHuddleDTO | null>(null)
 const pairDm = computed(() => isDm.value && !isGroup.value)
 const liveKind = computed<'call' | 'huddle'>(() => pairDm.value ? 'call' : 'huddle')
 const liveLabel = computed(() => liveKind.value === 'call' ? 'call' : 'live')
-const liveTitle = computed(() => huddle.state?.title || prejoinSchedule.value?.title || headerName.value)
+const liveTitle = computed(() => huddle.state?.title || headerName.value)
 const joinedHere = computed(() => huddle.connection === 'live' && huddle.currentChannelId === channelId.value)
 const showStage = computed(() => joinedHere.value && huddle.expanded)
 const canEndHuddle = computed(() => Boolean(
@@ -143,18 +135,16 @@ const canEndHuddle = computed(() => Boolean(
   && (huddle.state.startedBy === session.user?.id || canManageHuddles.value),
 ))
 
-function openPrejoin(action: 'start' | 'join', schedule: ScheduledHuddleDTO | null = null) {
+function openPrejoin(action: 'start' | 'join') {
   huddle.error = null
   prejoinAction.value = action
-  prejoinSchedule.value = schedule
   prejoinOpen.value = true
 }
 
 async function confirmPrejoin(options: HuddleJoinOptions) {
   const fullOptions: HuddleJoinOptions = {
     ...options,
-    scheduleId: prejoinSchedule.value?.id ?? huddle.state?.scheduleId,
-    title: prejoinSchedule.value?.title || huddle.state?.title || headerName.value,
+    title: huddle.state?.title || headerName.value,
     kind: huddle.state?.active ? huddle.state.kind : liveKind.value,
   }
   try {
@@ -163,11 +153,6 @@ async function confirmPrejoin(options: HuddleJoinOptions) {
     if (huddle.connection === 'live') prejoinOpen.value = false
   }
   catch { /* the prejoin modal renders the connection error */ }
-}
-
-async function cancelScheduled(item: ScheduledHuddleDTO) {
-  await api(`/api/channels/${channelId.value}/huddles/${item.id}`, { method: 'DELETE' })
-  await qc.invalidateQueries({ queryKey: ['scheduled-huddles', channelId.value] })
 }
 
 async function endHuddle() {
@@ -201,8 +186,7 @@ watch(channel, (next) => {
 
 watch([() => huddle.pendingJoin, channelId], ([pending]) => {
   if (!pending || pending.channelId !== channelId.value) return
-  const schedule = scheduled.value.find(item => item.id === pending.scheduleId) ?? null
-  openPrejoin(pending.start ? 'start' : 'join', schedule)
+  openPrejoin(pending.start ? 'start' : 'join')
   huddle.pendingJoin = null
 }, { immediate: true })
 
@@ -438,18 +422,6 @@ defineShortcuts({
               @click="openPrejoin(huddle.state?.active ? 'join' : 'start')"
             />
           </UTooltip>
-          <UTooltip v-if="isConversation" :text="`Schedule ${liveLabel}`">
-            <UButton
-              icon="i-ph-calendar-plus"
-              color="neutral"
-              variant="ghost"
-              size="sm"
-              square
-              :disabled="!canStartHuddle"
-              :aria-label="`Schedule ${liveLabel}`"
-              @click="scheduleOpen = true"
-            />
-          </UTooltip>
           <UTooltip v-if="isDm" text="Add friends to DM">
             <UButton color="neutral" variant="ghost" size="sm" square icon="i-ph-user-plus" aria-label="Add people" @click="addOpen = !addOpen" />
           </UTooltip>
@@ -495,14 +467,6 @@ defineShortcuts({
           @click="addPerson(m.id)"
         />
       </div>
-      <HuddleScheduleList
-        :huddles="scheduled"
-        :current-user-id="session.user?.id"
-        :can-manage="canManageHuddles"
-        :kind="liveKind"
-        @join="item => openPrejoin('start', item)"
-        @cancel="cancelScheduled"
-      />
       <HuddleStage
         v-if="showStage"
         :can-end="canEndHuddle"
@@ -592,13 +556,6 @@ defineShortcuts({
       :kind="huddle.state?.active ? huddle.state.kind : liveKind"
       :action="prejoinAction"
       @confirm="confirmPrejoin"
-    />
-    <HuddleScheduleModal
-      v-model:open="scheduleOpen"
-      :channel-id="channelId"
-      :conversation-name="headerName"
-      :kind="liveKind"
-      @created="qc.invalidateQueries({ queryKey: ['scheduled-huddles', channelId] })"
     />
     <HuddleSetupModal />
   </div>

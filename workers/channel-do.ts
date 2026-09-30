@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import { z } from 'zod'
-import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ScheduledHuddleDTO, ServerMsg } from '../shared/types'
+import type { AttachmentDTO, HuddleState, MessageDTO, PublicUser, ServerMsg } from '../shared/types'
 import { extractMentionIds } from '../shared/mentions'
 import { canAccessAgentConversation, isDmType } from '../shared/dm'
 import { ALL_PERMISSIONS, hasPermission, MemberPermissions, Permission } from '../shared/permissions'
@@ -10,8 +10,8 @@ import { asRpc, type DiscoflareEnv } from './env'
 import { createMeeting, endMeeting, loadRealtimeKitConfig, realtimekitConfigured } from './realtimekit'
 import { userFromTicket } from './ticket'
 import { channelHasUnread } from './unread'
-import { huddleNotificationStatement, messageNotificationStatement, scheduledHuddleNotificationStatement, signalNotificationOutbox } from './notifications'
-import { signalHuddleChanged, signalScheduledHuddleReady } from './huddle-events'
+import { huddleNotificationStatement, messageNotificationStatement, signalNotificationOutbox } from './notifications'
+import { signalHuddleChanged } from './huddle-events'
 import { signalChannelActivity, signalChannelRead } from './channel-activity'
 import { signalAgentsForMessage } from './agent-ingress'
 import { listAgentTurns } from './agent-turns'
@@ -68,7 +68,6 @@ const emptyHuddle = (): HuddleState => ({
   startedAt: null,
   kind: 'huddle',
   title: null,
-  scheduleId: null,
 })
 
 export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
@@ -171,7 +170,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       }
     }
     await this.expireHuddleParticipants(now)
-    await this.markDueSchedulesReady(now)
     await this.refreshAlarm()
   }
 
@@ -303,10 +301,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     return { ...emptyHuddle(), ...(await this.ctx.storage.get<Partial<HuddleState>>('huddle')) }
   }
 
-  async refreshScheduleAlarm(): Promise<void> {
-    await this.refreshAlarm()
-  }
-
   async joinHuddle(userId: string): Promise<HuddleState> {
     const huddle = await this.getHuddle()
     if (!huddle.active) throw new Error('No active huddle')
@@ -395,7 +389,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
         break
       case 'huddle.start':
       case 'voice.join':
-        await this.onHuddleStart(ws, sock, authz, (JSON.parse(raw) as { scheduleId?: string }).scheduleId)
+        await this.onHuddleStart(ws, sock, authz)
         break
       case 'huddle.join':
         await this.onHuddleJoin(ws, sock, authz)
@@ -652,7 +646,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     this.ctx.waitUntil(signalChannelRead(this.env, sock.userId, this.channelId(), cursor))
   }
 
-  private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz, scheduleId?: string) {
+  private async onHuddleStart(ws: WebSocket, sock: Sock, authz: Authz) {
     if (authz.type === 'thread') {
       this.send(ws, { t: 'error', code: 'forbidden', message: 'Start the huddle in the parent conversation' })
       return
@@ -682,24 +676,11 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       return
     }
 
-    let schedule: { id: string; title: string } | null = null
-    if (scheduleId) {
-      schedule = await this.env.DB.prepare(
-        `SELECT id, title FROM scheduled_huddles
-         WHERE id = ? AND channel_id = ? AND status IN ('scheduled', 'ready')`,
-      ).bind(scheduleId, this.channelId()).first<{ id: string; title: string }>()
-      if (!schedule) {
-        this.send(ws, { t: 'error', code: 'not_found', message: 'Scheduled huddle not found' })
-        return
-      }
-    }
-
     const participantCount = isDmType(authz.type)
       ? (await this.env.DB.prepare('SELECT count(*) AS count FROM channel_members WHERE channel_id = ?').bind(this.channelId()).first<{ count: number }>())?.count ?? 0
       : 0
     const kind = isDmType(authz.type) && participantCount === 2 ? 'call' : 'huddle'
-    const title = schedule?.title || null
-    const meeting = await createMeeting(realtimekit, title || `${kind}:${this.channelId()}`)
+    const meeting = await createMeeting(realtimekit, `${kind}:${this.channelId()}`)
     huddle = {
       active: true,
       huddleId: meeting.id,
@@ -708,22 +689,14 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
       startedBy: sock.userId,
       startedAt: nowIso(),
       kind,
-      title,
-      scheduleId: schedule?.id ?? null,
+      title: null,
     }
     await this.setHuddle(huddle)
     await this.ctx.storage.put('huddlePresence', { [sock.userId]: Date.now() + 45_000 })
     await this.ctx.storage.delete('huddleCleanupAt')
-    const notification = await huddleNotificationStatement(this.env, this.channelId(), meeting.id, sock.user, { kind, title })
+    const notification = await huddleNotificationStatement(this.env, this.channelId(), meeting.id, sock.user, { kind, title: null })
     await this.env.DB.batch([
       this.env.DB.prepare('UPDATE channels SET huddle_meeting_id = ? WHERE id = ?').bind(meeting.id, this.channelId()),
-      ...(schedule
-        ? [this.env.DB.prepare(
-            `UPDATE scheduled_huddles
-             SET status = 'started', meeting_id = ?, updated_at = ?
-             WHERE id = ?`,
-          ).bind(meeting.id, nowIso(), schedule.id)]
-        : []),
       this.env.DB.prepare(
         'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
       ).bind(newId(), sock.userId, 'huddle.start', 'channel', this.channelId(), '{}', nowIso()),
@@ -734,7 +707,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     await this.refreshAlarm()
     this.broadcast({ t: 'huddle', huddle })
     this.broadcast({ t: 'voice', voice: huddle })
-    if (schedule) this.broadcast({ t: 'huddle.schedule', channelId: this.channelId() })
   }
 
   private async onHuddleJoin(ws: WebSocket, sock: Sock, _authz: Authz) {
@@ -1000,65 +972,6 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     }
   }
 
-  private async markDueSchedulesReady(now: number) {
-    const at = new Date(now).toISOString()
-    const rows = await this.env.DB.prepare(
-      `SELECT sh.id, sh.channel_id, sh.title, sh.starts_at, sh.status, sh.created_by,
-              sh.meeting_id, sh.created_at, sh.updated_at,
-              u.kind, u.display_name, u.avatar_r2_key
-       FROM scheduled_huddles sh
-       JOIN users u ON u.id = sh.created_by
-       WHERE sh.channel_id = ? AND sh.status = 'scheduled' AND sh.starts_at <= ?
-       ORDER BY sh.starts_at, sh.id`,
-    ).bind(this.channelId(), at).all<{
-      id: string
-      channel_id: string
-      title: string
-      starts_at: string
-      status: 'scheduled'
-      created_by: string
-      meeting_id: string | null
-      created_at: string
-      updated_at: string
-      kind: 'human' | 'agent'
-      display_name: string
-      avatar_r2_key: string | null
-    }>()
-
-    for (const row of rows.results ?? []) {
-      const schedule: ScheduledHuddleDTO = {
-        id: row.id,
-        channelId: row.channel_id,
-        title: row.title,
-        startsAt: row.starts_at,
-        status: 'ready',
-        createdBy: {
-          id: row.created_by,
-          kind: row.kind,
-          displayName: row.display_name,
-          avatarR2Key: row.avatar_r2_key,
-        },
-        meetingId: row.meeting_id,
-        createdAt: row.created_at,
-        updatedAt: at,
-      }
-      const notification = await scheduledHuddleNotificationStatement(this.env, schedule)
-      await this.env.DB.batch([
-        this.env.DB.prepare(
-          `UPDATE scheduled_huddles SET status = 'ready', updated_at = ?
-           WHERE id = ? AND status = 'scheduled'`,
-        ).bind(at, row.id),
-        this.env.DB.prepare(
-          'INSERT INTO audit_log (id, actor_id, action, target_type, target_id, meta_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        ).bind(newId(), row.created_by, 'huddle.schedule.ready', 'scheduled_huddle', row.id, JSON.stringify({ channelId: this.channelId() }), at),
-        ...(notification ? [notification] : []),
-      ])
-      this.broadcast({ t: 'huddle.schedule', channelId: this.channelId() })
-      this.ctx.waitUntil(signalScheduledHuddleReady(this.env, schedule))
-      this.ctx.waitUntil(signalNotificationOutbox(this.env))
-    }
-  }
-
   private async scheduleCleanup(delayMs: number) {
     await this.ctx.storage.put('huddleCleanupAt', Date.now() + delayMs)
     await this.refreshAlarm()
@@ -1091,13 +1004,7 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     const cleanupAt = await this.ctx.storage.get<number>('huddleCleanupAt')
     const presence = await this.huddlePresence()
     const presenceAt = Object.values(presence).length ? Math.min(...Object.values(presence)) : undefined
-    const next = await this.env.DB.prepare(
-      `SELECT starts_at FROM scheduled_huddles
-       WHERE channel_id = ? AND status = 'scheduled'
-       ORDER BY starts_at LIMIT 1`,
-    ).bind(this.channelId()).first<{ starts_at: string }>()
-    const scheduleAt = next ? Date.parse(next.starts_at) : Number.NaN
-    const candidates = [cleanupAt, presenceAt, Number.isFinite(scheduleAt) ? scheduleAt : undefined]
+    const candidates = [cleanupAt, presenceAt]
       .filter((value): value is number => typeof value === 'number')
     if (candidates.length) await this.ctx.storage.setAlarm(Math.max(Date.now(), Math.min(...candidates)))
     else await this.ctx.storage.deleteAlarm()

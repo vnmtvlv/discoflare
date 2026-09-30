@@ -7,7 +7,6 @@ export type HuddleJoinOptions = {
   audioInputId?: string
   videoInputId?: string
   audioOutputId?: string
-  scheduleId?: string | null
   title?: string
   kind?: 'call' | 'huddle'
 }
@@ -110,7 +109,7 @@ export function useHuddleSession(
       ui.huddleSetupOpen = true
       return
     }
-    send({ t: 'huddle.start', ...(options.scheduleId ? { scheduleId: options.scheduleId } : {}) })
+    send({ t: 'huddle.start' })
     await join(options)
   }
 

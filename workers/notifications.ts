@@ -1,4 +1,4 @@
-import type { PublicUser, ScheduledHuddleDTO } from '../shared/types'
+import type { PublicUser } from '../shared/types'
 import { channelPath } from '../shared/paths'
 import { notificationPreview, type NotificationKind, type PushNotificationPayload } from '../shared/notifications'
 import type { DiscoflareEnv } from './env'
@@ -165,29 +165,6 @@ export async function huddleNotificationStatement(
       body: details.title || 'Tap to join',
       tag: `huddle:${meetingId}`,
       url: channelPath(channelId),
-      icon: '/android-chrome-192x192.png',
-      badge: '/favicon-32x32.png',
-    },
-  })
-}
-
-export async function scheduledHuddleNotificationStatement(
-  env: DiscoflareEnv,
-  schedule: ScheduledHuddleDTO,
-): Promise<D1PreparedStatement | null> {
-  const channels = await channelAndRoot(env, schedule.channelId)
-  if (!channels || channels.channel.type === 'thread') return null
-  const recipientIds = await huddleRecipients(env, channels.channel)
-  return outboxStatement(env, {
-    eventId: `huddle-schedule:${schedule.id}`,
-    kind: 'huddle_started',
-    channelId: schedule.channelId,
-    recipientIds,
-    payload: {
-      title: 'Scheduled huddle is ready',
-      body: schedule.title || channels.channel.name,
-      tag: `huddle-schedule:${schedule.id}`,
-      url: channelPath(schedule.channelId),
       icon: '/android-chrome-192x192.png',
       badge: '/favicon-32x32.png',
     },

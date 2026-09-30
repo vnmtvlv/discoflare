@@ -40,9 +40,6 @@ _Avoid_: Huddle, permanent audio room, meeting as a second conversation entity
 The 1:1 Direct Message presentation of a live session. A Call rings the other participant; it uses the same lifecycle and RealtimeKit media plane as a Live session.
 _Avoid_: Separate call store, separate call permissions
 
-**Scheduled Live**:
-A D1-backed event attached to a Channel or Direct Message. At its start time it becomes ready and notifies eligible participants; the first participant starts the live session.
-_Avoid_: Calendar as a separate product, scheduled RealtimeKit meeting as source of truth
 
 **Voice channel**:
 A legacy workspace Channel type retained for existing installations. New Channels are ordinary text Channels because every Channel can host a Live session.

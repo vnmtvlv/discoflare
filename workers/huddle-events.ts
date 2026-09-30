@@ -1,6 +1,6 @@
 import { channelPath } from '../shared/paths'
-import type { HuddleState, PublicUser, ScheduledHuddleDTO } from '../shared/types'
-import type { WorkspaceHuddleChangedEvent, WorkspaceHuddleScheduleEvent } from '../shared/workspace-realtime'
+import type { HuddleState, PublicUser } from '../shared/types'
+import type { WorkspaceHuddleChangedEvent } from '../shared/workspace-realtime'
 import { WORKSPACE_ID } from '../shared/ids'
 import { asRpc, type DiscoflareEnv } from './env'
 
@@ -64,27 +64,4 @@ export async function signalHuddleChanged(
     notifyHuddleChanged: (event: WorkspaceHuddleChangedEvent, recipientIds: string[]) => Promise<void>
   }>(env.WORKSPACE_DO.getByName(`workspace:${WORKSPACE_ID}`))
   await stub.notifyHuddleChanged(event, target.recipientIds)
-}
-
-export async function signalScheduledHuddleReady(
-  env: DiscoflareEnv,
-  schedule: ScheduledHuddleDTO,
-): Promise<void> {
-  const target = await audience(env, schedule.channelId)
-  if (!target?.recipientIds.length) return
-  const event: WorkspaceHuddleScheduleEvent = {
-    t: 'huddle.schedule',
-    channelId: schedule.channelId,
-    schedule,
-    ring: target.pairDm,
-    notification: {
-      title: target.pairDm ? 'Scheduled call is ready' : 'Scheduled huddle is ready',
-      body: schedule.title || target.channel.name,
-      url: channelPath(schedule.channelId),
-    },
-  }
-  const stub = asRpc<{
-    notifyHuddleSchedule: (event: WorkspaceHuddleScheduleEvent, recipientIds: string[]) => Promise<void>
-  }>(env.WORKSPACE_DO.getByName(`workspace:${WORKSPACE_ID}`))
-  await stub.notifyHuddleSchedule(event, target.recipientIds)
 }

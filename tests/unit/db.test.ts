@@ -11,6 +11,7 @@ import realtimeV1Sql from '../../drizzle/migrations/0021_realtime_v1.sql?raw'
 import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_principals_and_approvals.sql?raw'
 import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 import retireTaskExecutionSql from '../../drizzle/migrations/0026_retire_task_execution.sql?raw'
+import retireScheduledHuddlesSql from '../../drizzle/migrations/0029_retire_scheduled_huddles.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -90,6 +91,28 @@ describe('D1 bootstrap schema', () => {
       meeting_id: null,
     })
     expect(realtimeV1Sql).toContain('REFERENCES `channels`(`id`) ON UPDATE no action ON DELETE cascade')
+    sqlite.close()
+  })
+
+  it('cancels schedules that had not started when scheduling is retired', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(INIT_SQL)
+    sqlite.exec("INSERT INTO roles (id, key, name, permissions_bitmask) VALUES ('role', 'member', 'Member', 0)")
+    sqlite.exec("INSERT INTO identity_keys (id, name, email) VALUES ('user', 'User', 'user@example.com')")
+    sqlite.exec("INSERT INTO users (id, kind, display_name, status, role_id, joined_at) VALUES ('user', 'human', 'User', 'active', 'role', '2026-09-08T10:00:00.000Z')")
+    sqlite.exec("INSERT INTO channels (id, name, type, visibility) VALUES ('channel', 'General', 'text', 'workspace')")
+    for (const [id, status] of [['pending', 'scheduled'], ['due', 'ready'], ['held', 'started'], ['dropped', 'cancelled']]) {
+      sqlite.exec(`INSERT INTO scheduled_huddles (id, channel_id, starts_at, status, created_by) VALUES ('${id}', 'channel', '2026-09-09T10:00:00.000Z', '${status}', 'user')`)
+    }
+
+    sqlite.exec(d1ExecSql(retireScheduledHuddlesSql))
+
+    expect(sqlite.prepare('SELECT id, status FROM scheduled_huddles ORDER BY id').all()).toEqual([
+      { id: 'dropped', status: 'cancelled' },
+      { id: 'due', status: 'cancelled' },
+      { id: 'held', status: 'started' },
+      { id: 'pending', status: 'cancelled' },
+    ])
     sqlite.close()
   })
 

@@ -1,6 +1,6 @@
 import { DurableObject } from 'cloudflare:workers'
 import type { PresenceStatus, PublicUser } from '../shared/types'
-import type { WorkspaceChannelActivityEvent, WorkspaceChannelReadEvent, WorkspaceHuddleChangedEvent, WorkspaceHuddleScheduleEvent, WorkspaceMailChangedEvent, WorkspaceMembersChangedEvent, WorkspaceTasksChangedEvent } from '../shared/workspace-realtime'
+import type { WorkspaceChannelActivityEvent, WorkspaceChannelReadEvent, WorkspaceHuddleChangedEvent, WorkspaceMailChangedEvent, WorkspaceMembersChangedEvent, WorkspaceTasksChangedEvent } from '../shared/workspace-realtime'
 import type { DiscoflareEnv } from './env'
 import { userFromTicket } from './ticket'
 import { sendWorkspaceEvent, type WorkspaceSocketAttachment } from './workspace-events'
@@ -86,10 +86,6 @@ export class WorkspaceDurableObject extends DurableObject<DiscoflareEnv> {
   }
 
   async notifyHuddleChanged(event: WorkspaceHuddleChangedEvent, recipientIds: string[]): Promise<void> {
-    sendWorkspaceEvent(this.ctx.getWebSockets(), new Set(recipientIds), event)
-  }
-
-  async notifyHuddleSchedule(event: WorkspaceHuddleScheduleEvent, recipientIds: string[]): Promise<void> {
     sendWorkspaceEvent(this.ctx.getWebSockets(), new Set(recipientIds), event)
   }
 
