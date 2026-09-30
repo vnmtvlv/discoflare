@@ -111,7 +111,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 - **Login and signup protection** — Guided installs use Discoflare-owned accounts by default. The Owner can invite members immediately and configure auth email, OAuth, and Turnstile later without redeploying. Cloudflare Access remains an advanced installation option.
 - **Verification and password-reset email** — Configure a Cloudflare Email Service binding and verified sender domain. See the [email setup guide](docs/deployment.md#verification-and-password-reset-email).
-- **Calls and Live** — Connect RealtimeKit in **Workspace Settings → Live**. Deployment secrets remain available as an override. Every Channel and Direct Message can host one live session; 1:1 DMs ring as calls, while groups and Channels expose joinable Live sessions. V1 does not record or transcribe live sessions. Text chat works without RealtimeKit, and the app explains when credentials are missing.
+- **Calls and Live** — Connect RealtimeKit in **Workspace Settings → Live** by pasting one Cloudflare API token; Discoflare creates its RealtimeKit app and presets. Deployment variables remain available as an override. Every Channel and Direct Message has one Live room; 1:1 DMs ring as Calls, while groups and Channels let people drop in. Live sessions are never recorded or transcribed. Text chat works without RealtimeKit, and the app explains when it is not connected.
 - **Web Push** — Generate a stable VAPID key pair with `pnpm vapid:generate`, configure the three printed values, then enable notifications per browser in User Settings. Push requires HTTPS and access to the browser vendor's push service; it does not work on an air-gapped network.
 
 ## Manage your installation

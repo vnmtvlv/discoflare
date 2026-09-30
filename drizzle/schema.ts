@@ -137,8 +137,8 @@ export const realtimekitSettings = sqliteTable('realtimekit_settings', {
   apiTokenCiphertext: text('api_token_ciphertext').notNull(),
   apiTokenIv: text('api_token_iv').notNull(),
   apiTokenVersion: integer('api_token_version').notNull().default(1),
-  voicePreset: text('voice_preset').notNull().default('voice'),
-  avPreset: text('av_preset').notNull().default('group_call_host'),
+  hostPreset: text('host_preset').notNull(),
+  participantPreset: text('participant_preset').notNull(),
   ...isoTimestamps(),
 }, table => [
   check('realtimekit_settings_singleton_check', sql`${table.id} = 'main'`),
@@ -281,11 +281,12 @@ export const channels = sqliteTable('channels', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   topic: text('topic').notNull().default(''),
-  type: text('type', { enum: ['text', 'voice', 'thread', 'dm'] }).notNull(),
+  type: text('type', { enum: ['text', 'thread', 'dm'] }).notNull(),
   visibility: text('visibility', { enum: ['workspace', 'private'] }).notNull().default('workspace'),
   categoryId: text('category_id').references(() => channelCategories.id, { onDelete: 'set null' }),
   position: integer('position').notNull().default(0),
-  huddleMeetingId: text('huddle_meeting_id'),
+  /** The active Live room's RealtimeKit meeting; the column keeps its pre-Live name. */
+  liveMeetingId: text('huddle_meeting_id'),
   parentId: text('parent_id').references((): AnySQLiteColumn => channels.id, { onDelete: 'cascade' }),
   parentMessageId: text('parent_message_id').references((): AnySQLiteColumn => messages.id, { onDelete: 'cascade' }),
   ...isoTimestamps(),
@@ -295,6 +296,7 @@ export const channels = sqliteTable('channels', {
   index('channels_category_id_idx').on(table.categoryId),
   index('channels_parent_id_idx').on(table.parentId),
   uniqueIndex('channels_thread_root_unique').on(table.parentMessageId).where(sql`${table.type} = 'thread'`),
+  // Retired 'voice' Channels were converted to text; the stored constraint still allows the old value.
   check('channels_type_check', sql`${table.type} in ('text', 'voice', 'thread', 'dm')`),
   check('channels_visibility_check', sql`${table.visibility} in ('workspace', 'private')`),
   check('channels_dm_private_check', sql`${table.type} <> 'dm' or ${table.visibility} = 'private'`),
@@ -323,7 +325,7 @@ export const scheduledHuddles = sqliteTable('scheduled_huddles', {
   check('scheduled_huddles_status_check', sql`${table.status} in ('scheduled', 'ready', 'started', 'cancelled')`),
 ])
 
-/** Per-role send/attach/huddle exceptions for workspace channels. Threads inherit their parent. */
+/** Per-role send/attach/start-live exceptions for workspace channels. Threads inherit their parent. */
 export const channelRoleOverrides = sqliteTable('channel_role_overrides', {
   channelId: text('channel_id').notNull().references(() => channels.id, { onDelete: 'cascade' }),
   roleId: text('role_id').notNull().references(() => roles.id, { onDelete: 'cascade' }),

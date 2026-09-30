@@ -23,7 +23,7 @@ export type InstallationManagementStatusDTO = {
   hostname: string | null
   primary: boolean
   customDomainEnabled: boolean
-  huddlesEnabled: boolean
+  liveEnabled: boolean
   emailEnabled: boolean
   emailDomains: string[]
   emailEligible: boolean

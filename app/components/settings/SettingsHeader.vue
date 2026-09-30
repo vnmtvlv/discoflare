@@ -1,11 +1,20 @@
 <script setup lang="ts">
 /** Title row for a settings pane; `back` turns it into a detail view header. */
-defineProps<{
+const props = defineProps<{
   title: string
   description?: string
   back?: string
 }>()
-defineEmits<{ back: [] }>()
+const emit = defineEmits<{ back: [] }>()
+
+// Inside the settings overlay, its mobile header takes over this back button.
+const overlayBack = inject(settingsDetailBackKey, null)
+watchEffect(() => {
+  if (overlayBack && props.back) overlayBack.value = { label: props.back, go: () => emit('back') }
+})
+onBeforeUnmount(() => {
+  if (overlayBack && props.back) overlayBack.value = null
+})
 </script>
 
 <template>
@@ -13,8 +22,9 @@ defineEmits<{ back: [] }>()
     <button
       v-if="back"
       type="button"
-      class="mb-3 inline-flex items-center gap-1 rounded text-sm text-muted hover:text-highlighted focus-visible:outline-2 focus-visible:outline-primary"
-      @click="$emit('back')"
+      class="mb-3 items-center gap-1 rounded text-sm text-muted hover:text-highlighted focus-visible:outline-2 focus-visible:outline-primary"
+      :class="overlayBack ? 'hidden md:inline-flex' : 'inline-flex'"
+      @click="emit('back')"
     >
       <UIcon name="i-ph-caret-left" class="size-4" />
       {{ back }}

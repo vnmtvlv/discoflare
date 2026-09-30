@@ -14,7 +14,7 @@ const qc = useQueryClient()
 const toast = useToast()
 const ui = useUiStore()
 const session = useSessionStore()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 const nav = useNavActions()
 const { copy } = useClipboard()
 const { api, serverUrl } = useApi()
@@ -51,7 +51,7 @@ const channels = computed(() => channelsQ.data.value?.channels ?? [])
 const categories = computed(() => channelsQ.data.value?.categories ?? [])
 const mailboxes = computed(() => mailboxesQ.data.value?.mailboxes ?? [])
 const connectedPath = computed(() => {
-  const id = huddle.currentChannelId
+  const id = live.currentChannelId
   if (!id) return '/channels'
   const conversation = [...channels.value, ...(dmsQ.data.value?.channels ?? [])].find(item => item.id === id)
   return conversation ? channelPath(conversation) : `/channels/${id}`
@@ -111,16 +111,22 @@ function clearCommandHeld() {
   commandHeld.value = false
 }
 
-function leaveHuddleOnPageExit() {
-  if (!huddle.currentChannelId || huddle.connection !== 'live') return
-  navigator.sendBeacon?.(`/api/huddles/${huddle.currentChannelId}/leave`)
+function leaveLiveOnPageExit() {
+  if (!live.currentChannelId || live.connection !== 'connected') return
+  navigator.sendBeacon?.(`/api/channels/${live.currentChannelId}/live/leave`)
 }
+
+watch(() => live.notice, (message) => {
+  if (!message) return
+  toast.add({ title: message, icon: live.currentKind === 'call' ? 'i-ph-phone-disconnect' : 'i-ph-waveform' })
+  live.notice = null
+})
 
 onMounted(() => {
   window.addEventListener('keydown', onAppShortcutKeydown)
   window.addEventListener('keyup', onAppShortcutKeyup)
   window.addEventListener('blur', clearCommandHeld)
-  window.addEventListener('pagehide', leaveHuddleOnPageExit)
+  window.addEventListener('pagehide', leaveLiveOnPageExit)
 })
 
 onBeforeUnmount(() => {
@@ -128,7 +134,7 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', onAppShortcutKeydown)
   window.removeEventListener('keyup', onAppShortcutKeyup)
   window.removeEventListener('blur', clearCommandHeld)
-  window.removeEventListener('pagehide', leaveHuddleOnPageExit)
+  window.removeEventListener('pagehide', leaveLiveOnPageExit)
 })
 
 const newName = ref('')
@@ -321,19 +327,19 @@ watch(nav.inviteOpen, (open) => {
     </div>
 
     <button
-      v-if="huddle.connection === 'live' && huddle.currentChannelId"
+      v-if="live.connection === 'connected' && live.currentChannelId"
       type="button"
       class="mx-2 mb-0 rounded-lg bg-success/10 px-3 py-2 text-start hover:bg-success/15"
       @click="navigateTo(connectedPath)"
     >
       <p class="flex items-center gap-1.5 text-xs font-semibold text-success">
-        <UIcon :name="huddle.currentKind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" class="size-3.5" />
+        <UIcon :name="live.currentKind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" class="size-3.5" />
         Connected
       </p>
-      <p class="truncate text-[11px] text-muted">{{ huddle.currentTitle || 'Live' }}</p>
+      <p class="truncate text-[11px] text-muted">{{ live.currentTitle || 'Live' }}</p>
     </button>
     <LayoutUserPanel />
-    <SettingsWorkspaceSettings v-if="canOpenWorkspaceSettings" v-model:open="nav.workspaceSettingsOpen.value" :workspace-id="workspaceId" />
+    <SettingsWorkspaceSettings v-if="canOpenWorkspaceSettings" v-model:open="nav.workspaceSettingsOpen.value" v-model:section="nav.workspaceSettingsSection.value" :workspace-id="workspaceId" />
 
     <UModal v-model:open="nav.createChannelOpen.value" title="Create Channel">
       <template #body>
@@ -388,6 +394,6 @@ watch(nav.inviteOpen, (open) => {
         </UInput>
       </template>
     </UModal>
-    <HuddleIncomingCall />
+    <LiveIncomingCall />
   </div>
 </template>

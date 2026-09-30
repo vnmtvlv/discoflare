@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
+import type { LiveKind } from '~~/shared/types'
+import { liveJoinLabel, liveStartLabel } from '~~/shared/live'
+import type { LiveJoinOptions } from '../../composables/useLiveSession'
 
 const props = defineProps<{
   open: boolean
   title: string
-  kind: 'call' | 'huddle'
+  kind: LiveKind
   action: 'start' | 'join'
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  'confirm': [options: HuddleJoinOptions]
+  'confirm': [options: LiveJoinOptions]
 }>()
 
-const huddle = useHuddleStore()
+const live = useLiveStore()
+const actionLabel = computed(() => props.action === 'start' ? liveStartLabel(props.kind) : liveJoinLabel(props.kind))
 const preview = useTemplateRef<HTMLVideoElement>('preview')
 // Start from the mute preference set in the user panel.
-const audio = ref(!huddle.muted)
+const audio = ref(!live.muted)
 const video = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -83,7 +86,7 @@ async function startPreview() {
 
 watch(() => props.open, (open) => {
   if (open) {
-    audio.value = !huddle.muted
+    audio.value = !live.muted
     void startPreview()
   }
   else stopPreview()
@@ -109,7 +112,7 @@ function confirm() {
 <template>
   <UModal
     :open="open"
-    :title="action === 'start' ? `Start ${kind}` : `Join ${kind}`"
+    :title="actionLabel"
     :description="title"
     :ui="{ content: 'sm:max-w-2xl' }"
     @update:open="emit('update:open', $event)"
@@ -154,14 +157,14 @@ function confirm() {
         </div>
       </div>
       <UAlert v-if="error" color="warning" variant="subtle" class="mt-4" title="Check browser permissions" :description="error" />
-      <UAlert v-if="huddle.error" color="error" variant="subtle" class="mt-4" title="Could not connect" :description="huddle.error" />
+      <UAlert v-if="live.error" color="error" variant="subtle" class="mt-4" title="Could not connect" :description="live.error" />
     </template>
     <template #footer>
       <UButton color="neutral" variant="ghost" label="Cancel" @click="emit('update:open', false)" />
       <UButton
         :icon="kind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'"
-        :label="action === 'start' ? `Start ${kind}` : `Join ${kind}`"
-        :loading="huddle.connection === 'connecting'"
+        :label="actionLabel"
+        :loading="live.connection === 'connecting'"
         @click="confirm"
       />
     </template>

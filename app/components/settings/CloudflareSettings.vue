@@ -120,7 +120,7 @@ async function disconnectApp() {
         </div>
         <div class="rounded-lg border border-default p-4">
           <p class="text-xs text-muted">Live</p>
-          <p class="mt-1 font-medium text-highlighted">{{ status.huddlesEnabled ? 'RealtimeKit connected' : 'Not connected' }}</p>
+          <p class="mt-1 font-medium text-highlighted">{{ status.liveEnabled ? 'RealtimeKit connected' : 'Not connected' }}</p>
         </div>
       </div>
       <p class="mt-6 flex items-start gap-2 text-sm text-muted">

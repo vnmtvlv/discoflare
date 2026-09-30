@@ -12,6 +12,7 @@ import agentPrincipalsAndApprovalsSql from '../../drizzle/migrations/0022_agent_
 import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 import retireTaskExecutionSql from '../../drizzle/migrations/0026_retire_task_execution.sql?raw'
 import retireScheduledHuddlesSql from '../../drizzle/migrations/0029_retire_scheduled_huddles.sql?raw'
+import liveRoomsSql from '../../drizzle/migrations/0030_live_rooms_replace_voice_channels.sql?raw'
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {
@@ -113,6 +114,24 @@ describe('D1 bootstrap schema', () => {
       { id: 'held', status: 'started' },
       { id: 'pending', status: 'cancelled' },
     ])
+    sqlite.close()
+  })
+
+  it('turns retired voice Channels into text Channels and splits RealtimeKit presets by role', () => {
+    const sqlite = new DatabaseSync(':memory:')
+    sqlite.exec(INIT_SQL)
+    sqlite.exec("INSERT INTO channels (id, name, type, visibility) VALUES ('voice', 'General', 'voice', 'workspace')")
+    sqlite.exec("INSERT INTO channels (id, name, type, visibility) VALUES ('text', 'general', 'text', 'workspace')")
+
+    sqlite.exec(liveRoomsSql.split('--> statement-breakpoint')[0]!)
+
+    expect(sqlite.prepare('SELECT id, type FROM channels ORDER BY id').all()).toEqual([
+      { id: 'text', type: 'text' },
+      { id: 'voice', type: 'text' },
+    ])
+    const columns = sqlite.prepare('PRAGMA table_info(realtimekit_settings)').all().map(column => (column as { name: string }).name)
+    expect(columns).toEqual(expect.arrayContaining(['host_preset', 'participant_preset']))
+    expect(columns).not.toContain('voice_preset')
     sqlite.close()
   })
 

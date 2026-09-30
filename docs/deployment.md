@@ -96,7 +96,7 @@ wrangler secret put VAPID_PUBLIC_KEY
 wrangler secret put VAPID_PRIVATE_KEY
 ```
 
-`VAPID_SUBJECT` is normally a contact URI such as `mailto:admin@example.com`. After deployment, each Member enables Push notifications for a browser in User Settings. Notifications are sent for mentions, Direct Messages, and newly started huddles. Rotating either VAPID key invalidates existing subscriptions, so Members must enable them again.
+`VAPID_SUBJECT` is normally a contact URI such as `mailto:admin@example.com`. After deployment, each Member enables Push notifications for a browser in User Settings. Notifications are sent for mentions, Direct Messages, Calls, and newly started Live sessions. Rotating either VAPID key invalidates existing subscriptions, so Members must enable them again.
 
 On iOS and iPadOS, install Discoflare on the Home Screen before enabling Push. Every browser requires the permission request to follow a direct user action.
 
@@ -166,9 +166,11 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 The first discoflare.com account release does not provision RealtimeKit. A later Control Plane flow may create its account resources for the Primary Installation, but its broad Cloudflare credential must never enter the workspace.
 
-Manual installations may enable Huddles by configuring RealtimeKit later in **Workspace Settings → Live**. Settings-supplied credentials are encrypted in D1 with `AUTH_SECRET` and take effect without a Worker redeploy.
+Any installation can connect Live later in **Workspace Settings → Live** with one Cloudflare API token that has **Realtime Admin** on the account. Discoflare finds the account, reuses or creates a RealtimeKit app named after the installation's hostname, and provisions two presets: `discoflare_live_host` for hosts (the person who started the room, and Channel managers) and `discoflare_live_participant` for everyone else. Neither preset records or transcribes. The token is encrypted in D1 with `AUTH_SECRET`, is never returned by the API, and takes effect without a Worker redeploy. **Test connection** checks the app and both presets with a read-only request. Installations connected before hosts and participants were split show a **Reconnect** action that provisions the presets with the saved token.
 
-The owner can instead configure RealtimeKit in **Workspace Settings → Live**. Its API token is encrypted in D1 with `AUTH_SECRET` and takes effect without a Worker redeploy. The normal settings API never returns the token; an explicit owner-only reveal action can decrypt it into the settings field and is recorded in the audit log. **Test connection** validates the account, app, token, and configured presets with a read-only RealtimeKit API request. Calls and huddles use the audio/video preset so participants can turn cameras on without replacing the live session; they enter audio-first. Discoflare does not enable RealtimeKit recording or transcription. Deployment values remain supported, override settings entered in Discoflare, and cannot be revealed in the workspace UI:
+Each installation should use its own RealtimeKit app, which Live creates for it. Being the Primary Installation matters only to future Control Plane provisioning; the workspace itself does not check it.
+
+Deployment variables remain supported and override everything saved in Discoflare, including presets. Set all three of `REALTIMEKIT_ACCOUNT_ID`, `REALTIMEKIT_APP_ID`, and `REALTIMEKIT_API_TOKEN`; the presets default to RealtimeKit's `group_call_host` and `group_call_participant`:
 
 ```
 wrangler secret put ADMIN_EMAIL
@@ -187,16 +189,13 @@ wrangler secret put VAPID_PUBLIC_KEY
 wrangler secret put VAPID_PRIVATE_KEY
 wrangler secret put REALTIMEKIT_ACCOUNT_ID
 wrangler secret put REALTIMEKIT_APP_ID
-wrangler secret put REALTIMEKIT_API_KEY
-wrangler secret put REALTIMEKIT_PRESET_VOICE
+wrangler secret put REALTIMEKIT_API_TOKEN
 # optional
-wrangler secret put REALTIMEKIT_API_SECRET
-wrangler secret put REALTIMEKIT_PRESET_AV
+wrangler secret put REALTIMEKIT_PRESET_HOST
+wrangler secret put REALTIMEKIT_PRESET_PARTICIPANT
 ```
 
-`REALTIMEKIT_API_SECRET` supports the Basic Auth API path. The current Cloudflare API-token path uses `REALTIMEKIT_ACCOUNT_ID`, `REALTIMEKIT_APP_ID`, and `REALTIMEKIT_API_KEY`. Never put RealtimeKit secrets in the client bundle.
-
-Repository deployments may configure RealtimeKit directly with `REALTIMEKIT_API_KEY`. Guided installations do not receive a Cloudflare management token or Admin service binding.
+`REALTIMEKIT_API_KEY` and `REALTIMEKIT_PRESET_AV` are still read as the older names of `REALTIMEKIT_API_TOKEN` and `REALTIMEKIT_PRESET_HOST`. The legacy Basic Auth API (`REALTIMEKIT_API_SECRET`) is no longer supported. Never put RealtimeKit secrets in the client bundle. Guided installations do not receive a Cloudflare management token or Admin service binding.
 
 ## Local
 

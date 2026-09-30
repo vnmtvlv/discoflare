@@ -2,13 +2,14 @@
 import { useQuery, useQueryClient, type InfiniteData } from '@tanstack/vue-query'
 import { onKeyStroke } from '@vueuse/core'
 import type { ChannelDTO, MemberDTO, MessageDTO, PublicUser } from '~~/shared/types'
-import type { HuddleJoinOptions } from '../../composables/useHuddleSession'
+import type { LiveJoinOptions } from '../../composables/useLiveSession'
 import type { RealtimeConnection } from '../../composables/useChannelSocket'
 import { workspaceConnectionKey } from '../../composables/useWorkspaceSocket'
-import { dmTitle, isDmType, isVoiceType } from '~~/shared/dm'
+import { dmTitle, isDmType } from '~~/shared/dm'
 import { channelPath } from '~~/shared/paths'
 import { hasPermission, Permission } from '~~/shared/permissions'
 import { isSearchShortcut } from '~~/shared/shortcuts'
+import { liveJoinLabel, liveKindFor, liveStartLabel } from '~~/shared/live'
 import { threadTitle } from '~~/shared/threads'
 import { PENDING_THREAD_PREFIX } from '~/stores/ui'
 
@@ -16,7 +17,7 @@ const route = useRoute()
 const ui = useUiStore()
 const session = useSessionStore()
 const presence = usePresenceStore()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 const qc = useQueryClient()
 const toast = useToast()
 const { workspaceId } = useWorkspace()
@@ -80,8 +81,8 @@ const canPin = computed(() => isDm.value ? !frozen.value : can(Permission.manage
 const effectivePermissions = computed(() => channel.value?.permissions ?? mine.value?.role.permissions ?? 0)
 const canSendMessages = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.sendMessages))
 const canAttachFiles = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.attachFiles))
-const canStartHuddle = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.startHuddle))
-const canManageHuddles = computed(() => hasPermission(mine.value?.role.permissions ?? 0, Permission.manageChannels))
+// Starting follows the role in Direct Messages too; anyone who can open the conversation can join.
+const canStartLive = computed(() => !frozen.value && hasPermission(effectivePermissions.value, Permission.startLive))
 const isConversation = computed(() => type.value !== 'thread')
 // Until the channel and the member's role arrive, permissions are unknown rather
 // than denied: keep the composer quietly disabled instead of claiming "cannot send".
@@ -120,50 +121,52 @@ watch(connection, (state) => {
   else connectionTimer = setTimeout(() => { showConnection.value = true }, state === 'connecting' ? 8000 : 3000)
 }, { immediate: true })
 onBeforeUnmount(() => clearTimeout(connectionTimer))
-const { start, join, leave } = useHuddleSession(channelId, send, { leaveOnUnmount: false })
+const { join, leave, end } = useLiveSession(channelId, { leaveOnUnmount: false })
 
 const prejoinOpen = ref(false)
-const prejoinAction = ref<'start' | 'join'>('start')
 const pairDm = computed(() => isDm.value && !isGroup.value)
-const liveKind = computed<'call' | 'huddle'>(() => pairDm.value ? 'call' : 'huddle')
-const liveLabel = computed(() => liveKind.value === 'call' ? 'call' : 'live')
-const liveTitle = computed(() => huddle.state?.title || headerName.value)
-const joinedHere = computed(() => huddle.connection === 'live' && huddle.currentChannelId === channelId.value)
-const showStage = computed(() => joinedHere.value && huddle.expanded)
-const canEndHuddle = computed(() => Boolean(
-  huddle.state?.active
-  && (huddle.state.startedBy === session.user?.id || canManageHuddles.value),
+const roomActive = computed(() => Boolean(live.state?.active))
+const liveKind = computed(() => roomActive.value ? live.state!.kind : liveKindFor(pairDm.value))
+const liveActionLabel = computed(() => roomActive.value ? liveJoinLabel(liveKind.value) : liveStartLabel(liveKind.value))
+const liveActionHint = computed(() => {
+  if (roomActive.value || canStartLive.value) return liveActionLabel.value
+  return frozen.value ? 'You can no longer call in this Direct Message' : 'Your role cannot start live sessions here'
+})
+const joinedHere = computed(() => live.connection === 'connected' && live.currentChannelId === channelId.value)
+const showStage = computed(() => joinedHere.value && live.expanded)
+// Mirrors the server's host rule: the starter, or someone who manages this Channel.
+const canEndLive = computed(() => Boolean(
+  live.state?.active
+  && (live.state.startedBy === session.user?.id
+    || (!isDm.value && hasPermission(effectivePermissions.value, Permission.manageChannels))),
 ))
 
-function openPrejoin(action: 'start' | 'join') {
-  huddle.error = null
-  prejoinAction.value = action
+function openPrejoin() {
+  live.error = null
+  // Say Live is not connected before asking for a camera and microphone.
+  if (session.health && !session.health.realtimekit) {
+    ui.liveSetupOpen = true
+    return
+  }
   prejoinOpen.value = true
 }
 
-async function confirmPrejoin(options: HuddleJoinOptions) {
-  const fullOptions: HuddleJoinOptions = {
-    ...options,
-    title: huddle.state?.title || headerName.value,
-    kind: huddle.state?.active ? huddle.state.kind : liveKind.value,
-  }
+async function confirmPrejoin(options: LiveJoinOptions) {
   try {
-    if (prejoinAction.value === 'start') await start(fullOptions)
-    else await join(fullOptions)
-    if (huddle.connection === 'live') prejoinOpen.value = false
+    await join({ ...options, title: headerName.value, kind: liveKind.value })
+    if (live.connection === 'connected') prejoinOpen.value = false
   }
   catch { /* the prejoin modal renders the connection error */ }
 }
 
-async function endHuddle() {
-  await api(`/api/huddles/${channelId.value}/end`, { method: 'POST' })
-  await leave()
-  huddle.setState(channelId.value, null)
+async function endLive() {
+  try { await end() }
+  catch (error) { toast.add({ title: errorMessage(error), color: 'error' }) }
 }
 
 watch([workspaceId, channelId], () => {
   ui.remember(workspaceId.value, channelId.value)
-  huddle.view(channelId.value)
+  live.view(channelId.value)
 }, { immediate: true })
 
 // The thread URL is a child of this page's route, and the page-level route does
@@ -181,13 +184,13 @@ watch([channelId, linkedThread], ([channel, thread]) => {
 }, { immediate: true })
 
 watch(channel, (next) => {
-  if (next?.huddle) huddle.setState(next.id, next.huddle)
+  if (next?.live) live.setState(next.id, next.live)
 }, { immediate: true })
 
-watch([() => huddle.pendingJoin, channelId], ([pending]) => {
+watch([() => live.pendingJoin, channelId], ([pending]) => {
   if (!pending || pending.channelId !== channelId.value) return
-  openPrejoin(pending.start ? 'start' : 'join')
-  huddle.pendingJoin = null
+  openPrejoin()
+  live.pendingJoin = null
 }, { immediate: true })
 
 watch(() => oneQ.data.value?.channel, (ch) => {
@@ -315,7 +318,7 @@ async function saveName() {
   await qc.invalidateQueries({ queryKey: ['channel', channelId.value] })
 }
 
-const huddleMembers = computed<MemberDTO[]>(() => {
+const liveMembers = computed<MemberDTO[]>(() => {
   if (!isDm.value) return members.value
   return (channel.value?.participants ?? []).map((u) => ({
     user: u,
@@ -328,7 +331,7 @@ const huddleMembers = computed<MemberDTO[]>(() => {
 defineShortcuts({
   escape: () => {
     ui.searchOpen = false
-    ui.huddleSetupOpen = false
+    ui.liveSetupOpen = false
     ui.cancelComposerIntent(channelId.value)
     if (ui.threadId) ui.cancelComposerIntent(ui.threadId)
     renaming.value = false
@@ -358,7 +361,7 @@ defineShortcuts({
       </div>
       <header class="@container relative h-12 ps-3 pe-2 md:ps-4 flex items-center gap-2 shadow-[0_1px_0_var(--ui-border)] shrink-0 z-10 bg-default">
         <LayoutMobileMenuButton />
-        <UIcon v-if="!isDm" :name="isVoiceType(type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 text-muted shrink-0" />
+        <UIcon v-if="!isDm" name="i-ph-hash" class="size-5 text-muted shrink-0" />
         <UserAvatar v-else-if="!isGroup && others[0]" :user="others[0]" size="2xs" />
         <UAvatar v-else-if="channel" size="2xs" :text="(others[0]?.displayName || headerName).slice(0, 1).toUpperCase()" />
         <USkeleton v-if="!channel" class="h-4 w-32" />
@@ -409,17 +412,17 @@ defineShortcuts({
           </button>
           <UTooltip
             v-if="isConversation"
-            :text="huddle.state?.active ? `Join ${liveLabel}` : `Start ${liveLabel}`"
+            :text="liveActionHint"
           >
             <UButton
               :icon="liveKind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'"
               color="neutral"
-              :variant="huddle.state?.active ? 'soft' : 'ghost'"
+              :variant="roomActive ? 'soft' : 'ghost'"
               size="sm"
               square
-              :disabled="!canStartHuddle"
-              :aria-label="huddle.state?.active ? `Join ${liveLabel}` : `Start ${liveLabel}`"
-              @click="openPrejoin(huddle.state?.active ? 'join' : 'start')"
+              :disabled="!roomActive && !canStartLive"
+              :aria-label="liveActionLabel"
+              @click="openPrejoin()"
             />
           </UTooltip>
           <UTooltip v-if="isDm" text="Add friends to DM">
@@ -467,11 +470,11 @@ defineShortcuts({
           @click="addPerson(m.id)"
         />
       </div>
-      <HuddleStage
+      <LiveStage
         v-if="showStage"
-        :can-end="canEndHuddle"
+        :can-end="canEndLive"
         @leave="leave"
-        @end="endHuddle"
+        @end="endLive"
       />
       <ChatMessageList
         v-else
@@ -493,13 +496,11 @@ defineShortcuts({
         :send="send"
         :can-approve="canApproveAgent"
       />
-      <HuddleBar
-        v-if="isConversation && (huddle.state?.active || joinedHere)"
+      <LiveBar
+        v-if="isConversation && (live.state?.active || joinedHere)"
         :channel-id="channelId"
-        :members="huddleMembers"
-        :send="send"
-        @start="openPrejoin('start')"
-        @join="openPrejoin('join')"
+        :members="liveMembers"
+        @join="openPrejoin()"
       />
       <div class="relative shrink-0">
         <ChatComposer
@@ -550,14 +551,14 @@ defineShortcuts({
         :can-pin="canPin"
       />
     </Transition>
-    <HuddlePrejoinModal
+    <LivePrejoinModal
       v-model:open="prejoinOpen"
-      :title="liveTitle"
-      :kind="huddle.state?.active ? huddle.state.kind : liveKind"
-      :action="prejoinAction"
+      :title="headerName"
+      :kind="liveKind"
+      :action="roomActive ? 'join' : 'start'"
       @confirm="confirmPrejoin"
     />
-    <HuddleSetupModal />
+    <LiveSetupModal />
   </div>
 </template>
 

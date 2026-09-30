@@ -7,6 +7,7 @@ import { cf, fail } from '../../../../utils/cf'
 import { getDb } from '../../../../utils/db'
 import { writeAudit } from '../../../../utils/messages'
 import { signalMembersChanged } from '../../../../../workers/member-events'
+import { revalidateLiveRooms } from '../../../../utils/live'
 
 export default defineEventHandler(async (event) => {
   const workspaceId = getRouterParam(event, 'id')!
@@ -29,5 +30,7 @@ export default defineEventHandler(async (event) => {
   ])
   await writeAudit(env, { workspaceId, actorId: actor.user.id, action: 'member.kick', targetType: 'user', targetId: userId })
   waitUntil(signalMembersChanged(env, workspaceId))
+  // A removed member leaves every Live room they are in, and their tokens stop working.
+  waitUntil(revalidateLiveRooms(env))
   return { ok: true }
 })

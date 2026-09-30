@@ -1,17 +1,18 @@
 import { defineStore } from 'pinia'
 import { markRaw } from 'vue'
 import type { RTKParticipant, RTKSelf } from '@cloudflare/realtimekit'
-import type { HuddleState } from '~~/shared/types'
-import type { WorkspaceHuddleChangedEvent } from '~~/shared/workspace-realtime'
+import type { LiveKind, LiveState } from '~~/shared/types'
+import { liveEndedTitle } from '~~/shared/live'
+import type { WorkspaceLiveChangedEvent } from '~~/shared/workspace-realtime'
 
-type Conn = 'idle' | 'connecting' | 'live' | 'error'
+type Conn = 'idle' | 'connecting' | 'connected' | 'error'
 
 type MeetingEventSource = {
   on: (event: string, callback: (...args: unknown[]) => void) => unknown
   off: (event: string, callback: (...args: unknown[]) => void) => unknown
 }
 
-export type HuddleMeeting = {
+export type LiveMeeting = {
   join: () => Promise<void>
   leave: () => Promise<void>
   self: RTKSelf
@@ -23,21 +24,19 @@ export type HuddleMeeting = {
   audio: { setSpeakerDevice: (deviceId: string) => void; play: () => Promise<void> }
 }
 
-export type IncomingHuddle = {
+export type IncomingLive = {
   channelId: string
   title: string
   body: string
-  kind: 'call' | 'huddle'
-  active: boolean
 }
 
-export const useHuddleStore = defineStore('huddle', () => {
-  const states = ref<Record<string, HuddleState>>({})
+export const useLiveStore = defineStore('live', () => {
+  const states = ref<Record<string, LiveState>>({})
   const viewingChannelId = ref('')
   const state = computed(() => states.value[viewingChannelId.value] ?? null)
   const currentChannelId = ref<string | null>(null)
   const currentTitle = ref<string | null>(null)
-  const currentKind = ref<'call' | 'huddle'>('huddle')
+  const currentKind = ref<LiveKind>('live')
   const muted = ref(false)
   const deafened = ref(false)
   const camera = ref(false)
@@ -45,13 +44,15 @@ export const useHuddleStore = defineStore('huddle', () => {
   const expanded = ref(true)
   const connection = ref<Conn>('idle')
   const error = ref<string | null>(null)
-  const meeting = shallowRef<HuddleMeeting | null>(null)
+  const meeting = shallowRef<LiveMeeting | null>(null)
   const selfParticipant = shallowRef<RTKSelf | null>(null)
   const remoteParticipants = shallowRef<RTKParticipant[]>([])
   const activeSpeakerId = ref<string | null>(null)
   const mediaRevision = ref(0)
-  const incoming = ref<IncomingHuddle | null>(null)
-  const pendingJoin = ref<{ channelId: string; start: boolean } | null>(null)
+  const incoming = ref<IncomingLive | null>(null)
+  const pendingJoin = ref<{ channelId: string } | null>(null)
+  /** A short message for the person when their room ends or they are removed. */
+  const notice = ref<string | null>(null)
   let cleanupMeetingEvents: (() => void) | null = null
   let cleanupParticipantEvents: (() => void) | null = null
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -60,11 +61,11 @@ export const useHuddleStore = defineStore('huddle', () => {
     viewingChannelId.value = channelId
   }
 
-  function stateFor(channelId: string): HuddleState | null {
+  function stateFor(channelId: string): LiveState | null {
     return states.value[channelId] ?? null
   }
 
-  function setState(channelId: string, next: HuddleState | null) {
+  function setState(channelId: string, next: LiveState | null) {
     if (!channelId) return
     if (next) states.value = { ...states.value, [channelId]: next }
     else {
@@ -72,6 +73,18 @@ export const useHuddleStore = defineStore('huddle', () => {
       states.value = rest
     }
     if (next && !next.active && incoming.value?.channelId === channelId) incoming.value = null
+    // The room ended for everyone: leave the media quietly instead of reporting a failure.
+    if (next && !next.active && currentChannelId.value === channelId && meeting.value) {
+      endLocal(liveEndedTitle(next.kind))
+    }
+  }
+
+  /** Drop out of the media session without asking the server, for rooms that ended or removed us. */
+  function endLocal(message: string | null) {
+    const active = meeting.value
+    clearMeeting()
+    void active?.leave().catch(() => { /* already disconnected */ })
+    if (message) notice.value = message
   }
 
   /** Deafen covers everyone in the call, including people who join or republish audio later. */
@@ -107,7 +120,7 @@ export const useHuddleStore = defineStore('huddle', () => {
     mediaRevision.value += 1
   }
 
-  function attachMeeting(next: HuddleMeeting, context: { channelId: string; title: string; kind: 'call' | 'huddle' }) {
+  function attachMeeting(next: LiveMeeting, context: { channelId: string; title: string; kind: LiveKind }) {
     cleanupMeetingEvents?.()
     meeting.value = markRaw(next)
     currentChannelId.value = context.channelId
@@ -121,10 +134,17 @@ export const useHuddleStore = defineStore('huddle', () => {
       const payload = args[0] as { peerId?: string } | undefined
       activeSpeakerId.value = payload?.peerId ?? null
     }
-    const onRoomLeft = () => {
+    const onRoomLeft = (...args: unknown[]) => {
       if (meeting.value !== next) return
+      const reason = (args[0] as { state?: string } | undefined)?.state
+      if (reason === 'left') return
+      // RealtimeKit removes everyone when the room ends and removes one person when they lose access.
+      if (reason === 'kicked' || reason === 'ended' || states.value[context.channelId]?.active === false) {
+        endLocal(reason === 'kicked' ? 'You were removed from the live session' : liveEndedTitle(context.kind))
+        return
+      }
       connection.value = 'error'
-      error.value = 'The live connection ended. Leave and join again to reconnect.'
+      error.value = 'The live connection dropped. Leave and join again to reconnect.'
     }
     const joinedEvents = ['participantJoined', 'participantLeft', 'participantsUpdate', 'participantsCleared']
     const selfEvents = ['videoUpdate', 'audioUpdate', 'screenShareUpdate', 'deviceUpdate', 'roomLeft']
@@ -165,9 +185,13 @@ export const useHuddleStore = defineStore('huddle', () => {
   function startHeartbeat() {
     if (heartbeatTimer) clearInterval(heartbeatTimer)
     const heartbeat = async () => {
-      if (!currentChannelId.value || connection.value !== 'live') return
-      try { await $fetch(`/api/huddles/${currentChannelId.value}/heartbeat`, { method: 'POST' }) }
-      catch { /* the DO expiry removes stale presence when connectivity does not recover */ }
+      const channelId = currentChannelId.value
+      if (!channelId || connection.value !== 'connected') return
+      try {
+        const { joined } = await $fetch<{ joined: boolean }>(`/api/channels/${channelId}/live/heartbeat`, { method: 'POST' })
+        if (!joined && currentChannelId.value === channelId) endLocal('You are no longer in this live session')
+      }
+      catch { /* the room expires stale presence when connectivity does not recover */ }
     }
     heartbeatTimer = setInterval(() => { void heartbeat() }, 15_000)
     void heartbeat()
@@ -247,27 +271,33 @@ export const useHuddleStore = defineStore('huddle', () => {
     if (device) await meeting.value.self.setDevice(device)
   }
 
-  function receiveHuddle(event: WorkspaceHuddleChangedEvent) {
-    setState(event.channelId, event.huddle)
-    if (!event.huddle.active || currentChannelId.value === event.channelId || !event.ring) return
+  function receiveLive(event: WorkspaceLiveChangedEvent) {
+    if (event.outcome && currentChannelId.value === event.channelId && meeting.value) {
+      endLocal(event.outcome === 'declined' ? 'Call declined' : 'No answer')
+    }
+    setState(event.channelId, event.live)
+    if (!event.live.active || currentChannelId.value === event.channelId || !event.ring || !event.notification) return
     incoming.value = {
       channelId: event.channelId,
       title: event.notification.title,
       body: event.notification.body,
-      kind: event.huddle.kind,
-      active: true,
     }
   }
 
   function answerIncoming() {
     if (!incoming.value) return
-    pendingJoin.value = {
-      channelId: incoming.value.channelId,
-      start: !incoming.value.active,
-    }
     const channelId = incoming.value.channelId
+    pendingJoin.value = { channelId }
     incoming.value = null
     void navigateTo(`/channels/${channelId}`)
+  }
+
+  async function declineIncoming() {
+    const call = incoming.value
+    incoming.value = null
+    if (!call) return
+    try { await $fetch(`/api/channels/${call.channelId}/live/decline`, { method: 'POST' }) }
+    catch { /* the call still stops ringing when it times out */ }
   }
 
   return {
@@ -291,6 +321,7 @@ export const useHuddleStore = defineStore('huddle', () => {
     mediaRevision,
     incoming,
     pendingJoin,
+    notice,
     view,
     stateFor,
     setState,
@@ -304,7 +335,9 @@ export const useHuddleStore = defineStore('huddle', () => {
     toggleCamera,
     toggleScreenShare,
     setDevice,
-    receiveHuddle,
+    receiveLive,
     answerIncoming,
+    declineIncoming,
+    endLocal,
   }
 })

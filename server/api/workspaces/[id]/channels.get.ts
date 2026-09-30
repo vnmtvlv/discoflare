@@ -4,7 +4,8 @@ import { channelUnreadCounts, recentThreads } from '../../../../workers/unread'
 import { requireMember } from '../../../utils/guards'
 import { cf } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
-import type { HuddleState, SidebarThreadDTO } from '../../../../shared/types'
+import type { LiveState, SidebarThreadDTO } from '../../../../shared/types'
+import { liveRoom } from '../../../utils/live'
 
 /** Threads stay in the navigation while active; older ones remain one tap away in the channel's Threads panel. */
 const THREAD_ACTIVE_DAYS = 7
@@ -40,11 +41,10 @@ export default defineEventHandler(async (event) => {
   const threads = [...threadsByParent.values()].flatMap(group => group
     .sort((a, b) => Number(b.unread) - Number(a.unread) || b.lastMessageAt.localeCompare(a.lastMessageAt))
     .slice(0, THREADS_PER_CHANNEL))
-  const activeHuddles = new Map<string, HuddleState>()
-  await Promise.all(list.filter(channel => channel.huddleMeetingId).map(async (channel) => {
-    const stub = asRpc<{ getHuddle: () => Promise<HuddleState> }>(env.CHANNEL_DO.getByName(`channel:${channel.id}`))
-    const huddle = await stub.getHuddle()
-    if (huddle.active) activeHuddles.set(channel.id, huddle)
+  const liveRooms = new Map<string, LiveState>()
+  await Promise.all(list.filter(channel => channel.liveMeetingId).map(async (channel) => {
+    const live = await liveRoom(env, channel.id).getLive()
+    if (live.active) liveRooms.set(channel.id, live)
   }))
 
   return {
@@ -64,12 +64,12 @@ export default defineEventHandler(async (event) => {
         visibility: ch.visibility,
         categoryId: ch.categoryId,
         position: ch.position,
-        huddleMeetingId: ch.huddleMeetingId,
+        liveMeetingId: ch.liveMeetingId,
         parentId: ch.parentId,
         parentMessageId: ch.parentMessageId,
         unread: (unread.get(ch.id) ?? 0) > 0,
         unreadCount: unread.get(ch.id) ?? 0,
-        huddle: activeHuddles.get(ch.id) ?? null,
+        live: liveRooms.get(ch.id) ?? null,
         createdAt: ch.createdAt,
       }
     }),

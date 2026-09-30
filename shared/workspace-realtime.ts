@@ -1,4 +1,4 @@
-import type { HuddleState } from './types'
+import type { LiveState } from './types'
 
 export type WorkspaceChannelActivityEvent = {
   t: 'channel.activity'
@@ -38,12 +38,16 @@ export type WorkspaceMembersChangedEvent = {
   workspaceId: string
 }
 
-export type WorkspaceHuddleChangedEvent = {
-  t: 'huddle.changed'
+export type WorkspaceLiveChangedEvent = {
+  t: 'live.changed'
   channelId: string
-  huddle: HuddleState
+  live: LiveState
+  /** Ring this recipient: a new 1:1 Call. */
   ring: boolean
-  notification: {
+  /** Why a Call ended before it was answered, for the caller. */
+  outcome?: 'declined' | 'unanswered'
+  /** Only when the room just started: announce it or ring for it. */
+  notification?: {
     title: string
     body: string
     url: string
@@ -56,4 +60,4 @@ export type WorkspaceRealtimeEvent =
   | WorkspaceTasksChangedEvent
   | WorkspaceMailChangedEvent
   | WorkspaceMembersChangedEvent
-  | WorkspaceHuddleChangedEvent
+  | WorkspaceLiveChangedEvent

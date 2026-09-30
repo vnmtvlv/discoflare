@@ -6,7 +6,7 @@ import {
   pushDeliveryDisposition,
   pushRetryDelayMs,
 } from '../../shared/notifications'
-import { huddleNotificationStatement, messageNotificationStatement } from '../../workers/notifications'
+import { liveNotificationStatement, messageNotificationStatement } from '../../workers/notifications'
 import { workerPushRequestInit } from '../../workers/push'
 
 type QueryResult = Record<string, unknown> | Array<Record<string, unknown>> | null
@@ -146,15 +146,31 @@ describe('notification recipients', () => {
     })
   })
 
-  it('notifies all other active members when a workspace huddle starts', async () => {
+  it('notifies the other active people in a workspace Channel when it goes live', async () => {
     const fake = env([
-      { id: 'voice', name: 'General', type: 'voice', visibility: 'workspace', parent_id: null },
+      { id: 'general', name: 'general', type: 'text', visibility: 'workspace', parent_id: null },
       [{ id: 'other' }],
     ])
-    const statement = await huddleNotificationStatement(fake.env, 'voice', 'meeting', actor) as unknown as FakeStatement
+    const statement = await liveNotificationStatement(fake.env, 'general', 'meeting', actor, 'live') as unknown as FakeStatement
 
+    expect(fake.db.statements[1]!.sql).toContain(`kind = 'human'`)
     expect(fake.db.statements[1]!.args).toEqual(['actor'])
     expect(statement.args.at(-1)).toBe('other')
-    expect(JSON.parse(String(statement.args[3]))).toMatchObject({ tag: 'huddle:meeting', url: '/channels/voice' })
+    expect(JSON.parse(String(statement.args[3]))).toMatchObject({
+      title: 'Alice is live in #general',
+      tag: 'live:meeting',
+      url: '/channels/general',
+    })
+  })
+
+  it('rings the other participant of a 1:1 Direct Message', async () => {
+    const fake = env([
+      { id: 'dm', name: 'dm', type: 'dm', visibility: 'private', parent_id: null },
+      [{ id: 'other' }],
+    ])
+    const statement = await liveNotificationStatement(fake.env, 'dm', 'meeting', actor, 'call') as unknown as FakeStatement
+
+    expect(fake.db.statements[1]!.args).toEqual(['dm', 'actor'])
+    expect(JSON.parse(String(statement.args[3]))).toMatchObject({ title: 'Alice is calling', body: 'Tap to answer' })
   })
 })

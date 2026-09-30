@@ -8,7 +8,7 @@ const section = defineModel<string>('section', { default: 'account' })
 
 const session = useSessionStore()
 const { api } = useApi()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 const prefs = usePrefsStore()
 const push = usePushNotifications()
 const presence = usePresenceStore()
@@ -83,7 +83,7 @@ const groups = [
     items: [
       { id: 'appearance', label: 'Appearance', icon: 'i-ph-paint-brush', keywords: ['theme', 'dark mode', 'light mode', 'compact'] },
       { id: 'notifications', label: 'Notifications', icon: 'i-ph-bell', keywords: ['push', 'sounds', 'alerts', 'mentions'] },
-      { id: 'voice', label: 'Voice & Video', icon: 'i-ph-microphone', keywords: ['mic', 'huddle', 'audio', 'camera', 'devices'] },
+      { id: 'voice', label: 'Voice & Video', icon: 'i-ph-microphone', keywords: ['mic', 'live', 'call', 'audio', 'camera', 'devices'] },
       { id: 'chat', label: 'Chat', icon: 'i-ph-chat-circle-text', keywords: ['markdown', 'shortcuts', 'send message'] },
     ],
   },
@@ -509,18 +509,18 @@ async function logout() {
       <div class="mt-8 space-y-6 max-w-md">
         <div class="flex gap-2">
           <UButton
-            :color="huddle.muted ? 'error' : 'neutral'"
-            :variant="huddle.muted ? 'soft' : 'outline'"
-            :icon="huddle.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
-            :label="huddle.muted ? 'Unmute' : 'Mute'"
-            @click="huddle.toggleMute()"
+            :color="live.muted ? 'error' : 'neutral'"
+            :variant="live.muted ? 'soft' : 'outline'"
+            :icon="live.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
+            :label="live.muted ? 'Unmute' : 'Mute'"
+            @click="live.toggleMute()"
           />
           <UButton
-            :color="huddle.deafened ? 'error' : 'neutral'"
-            :variant="huddle.deafened ? 'soft' : 'outline'"
-            :icon="huddle.deafened ? 'i-ph-speaker-slash' : 'i-ph-headphones'"
-            :label="huddle.deafened ? 'Undeafen' : 'Deafen'"
-            @click="huddle.toggleDeafen()"
+            :color="live.deafened ? 'error' : 'neutral'"
+            :variant="live.deafened ? 'soft' : 'outline'"
+            :icon="live.deafened ? 'i-ph-speaker-slash' : 'i-ph-headphones'"
+            :label="live.deafened ? 'Undeafen' : 'Deafen'"
+            @click="live.toggleDeafen()"
           />
         </div>
         <UFormField label="Input Device">

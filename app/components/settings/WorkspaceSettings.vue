@@ -30,7 +30,7 @@ const permissionRoleId = ref<string | null>(null)
 const permissionModes = reactive<Record<ChannelPermissionGrantKey, ChannelPermissionMode>>({
   sendMessages: 'inherit',
   attachFiles: 'inherit',
-  startHuddle: 'inherit',
+  startLive: 'inherit',
 })
 const permissionSaving = ref(false)
 
@@ -82,14 +82,14 @@ watch(() => workspaceQ.data.value?.workspace.name, (n) => { if (n) state.name = 
 
 const workspaceNav = computed(() => [
   ...(can(Permission.manageWorkspace) ? [{ id: 'overview' as const, label: 'Overview', icon: 'i-ph-house', keywords: ['name', 'icon', 'rename'] }] : []),
-  ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels', icon: 'i-ph-hash', keywords: ['categories', 'private', 'voice'] }] : []),
+  ...(can(Permission.manageChannels) ? [{ id: 'channels' as const, label: 'Channels', icon: 'i-ph-hash', keywords: ['categories', 'private'] }] : []),
   ...(can(Permission.manageRoles) ? [{ id: 'roles' as const, label: 'Roles', icon: 'i-ph-shield', keywords: ['permissions', 'admin', 'access'] }] : []),
   ...(can(Permission.manageRoles) || can(Permission.kick) ? [{ id: 'members' as const, label: 'Members', icon: 'i-ph-users', keywords: ['people', 'kick', 'assign role'] }] : []),
   ...(can(Permission.invite) && session.health?.authMode !== 'access' ? [{ id: 'invites' as const, label: 'Invites', icon: 'i-ph-user-plus', keywords: ['invite link', 'join', 'share'] }] : []),
 ])
 const featureNav = computed(() => [
   ...(can(Permission.manageWorkspace) ? [{ id: 'agents' as const, label: 'Agents', icon: 'i-ph-robot', keywords: ['bots', 'automation', 'tasks'] }] : []),
-  ...(isOwner.value ? [{ id: 'huddles' as const, label: 'Live', icon: 'i-ph-speaker-high', keywords: ['voice', 'video', 'realtimekit', 'calls', 'huddles'] }] : []),
+  ...(isOwner.value ? [{ id: 'live' as const, label: 'Live', icon: 'i-ph-waveform', keywords: ['calls', 'video', 'audio', 'screen share', 'realtimekit'] }] : []),
   ...(can(Permission.manageWorkspace) ? [{ id: 'email' as const, label: 'Email', icon: 'i-ph-envelope-simple', keywords: ['mail', 'mailbox', 'inbox', 'domain'] }] : []),
   ...(isOwner.value ? [{ id: 'mcp' as const, label: 'MCP', icon: 'i-ph-plugs-connected', keywords: ['agent', 'access token', 'api', 'codex'] }] : []),
 ])
@@ -562,7 +562,7 @@ function roleLabel(name: string) {
       <h2 class="mt-10 text-sm font-semibold text-highlighted">Channels</h2>
       <ul class="mt-2 divide-y divide-default">
         <li v-for="channel in workspaceChannels" :key="channel.id" class="flex items-center gap-3 py-3">
-          <UIcon :name="channel.type === 'voice' ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-5 shrink-0 text-muted" />
+          <UIcon name="i-ph-hash" class="size-5 shrink-0 text-muted" />
           <span class="min-w-0 flex-1 truncate text-sm text-highlighted">{{ channel.name }}</span>
           <UButton
             v-if="can(Permission.manageChannels)"
@@ -704,7 +704,7 @@ function roleLabel(name: string) {
       </ul>
     </template>
 
-    <template v-else-if="section === 'huddles'">
+    <template v-else-if="section === 'live'">
       <SettingsRealtimeKitSettings :workspace-id="workspaceId" />
     </template>
 

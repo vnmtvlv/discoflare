@@ -50,6 +50,10 @@ describe('anonymous telemetry', () => {
     }))
   })
 
+  it('reports Live when RealtimeKit is connected from settings or the deployment', () => {
+    expect(telemetryHeartbeat(env(), undefined, true)?.capabilities.huddles).toBe(true)
+  })
+
   it('reports Agents from Workers AI and the Agent Durable Object', () => {
     const heartbeat = telemetryHeartbeat(env())
     expect(heartbeat?.capabilities.agents).toBe(true)

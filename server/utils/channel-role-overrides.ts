@@ -8,7 +8,7 @@ import { requireChannelAccess } from './guards'
 
 export async function requireChannelOverrideManager(event: H3Event, channelId: string) {
   const access = await requireChannelAccess(event, channelId, Permission.manageChannels)
-  if (access.channel.type !== 'text' && access.channel.type !== 'voice') {
+  if (access.channel.type !== 'text') {
     fail(400, 'bad_request', 'Permission overrides are only available for workspace channels')
   }
   return access

@@ -8,7 +8,6 @@ describe('message pin authorization', () => {
   it('uses manageChannels for workspace channels and inherited threads', () => {
     expect(canManageMessagePins({ accessRootType: 'text', frozen: false, perms: Permission.manageChannels })).toBe(true)
     expect(canManageMessagePins({ accessRootType: 'text', frozen: false, perms: MemberPermissions })).toBe(false)
-    expect(canManageMessagePins({ accessRootType: 'voice', frozen: false, perms: Permission.manageChannels })).toBe(true)
   })
 
   it('allows writable DM participants and rejects frozen DMs', () => {

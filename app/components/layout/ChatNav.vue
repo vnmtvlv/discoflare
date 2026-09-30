@@ -3,10 +3,9 @@ import { useQuery } from '@tanstack/vue-query'
 import type { ChannelCategoryDTO as Category, ChannelDTO as Ch, MemberDTO as M, SidebarThreadDTO } from '~~/shared/types'
 import { Permission } from '~~/shared/permissions'
 import { channelPath } from '~~/shared/paths'
-import { isVoiceType } from '~~/shared/dm'
 
 const props = defineProps<{ workspaceId: string }>()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 const { api } = useApi()
 const nav = useNavActions()
 const warm = useMessagePrefetch()
@@ -66,8 +65,8 @@ function participantName(id: string) {
   return membersQ.data.value?.members.find(member => member.user.id === id)?.user.displayName || 'Member'
 }
 
-function huddleFor(ch: Ch) {
-  return huddle.stateFor(ch.id) ?? ch.huddle
+function liveFor(ch: Ch) {
+  return live.stateFor(ch.id) ?? ch.live
 }
 
 watch(() => channelsQ.data.value?.channels, (list) => {
@@ -105,12 +104,12 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               @focus="warm.prefetch(ch.id)"
             >
               <template #leading>
-                <UIcon :name="isVoiceType(ch.type) ? 'i-ph-speaker-high' : 'i-ph-hash'" class="size-[18px] shrink-0 text-dimmed" />
+                <UIcon name="i-ph-hash" class="size-[18px] shrink-0 text-dimmed" />
               </template>
               {{ ch.name }}
               <template #trailing>
                 <UIcon v-if="ch.visibility === 'private'" name="i-ph-lock" class="size-3.5 shrink-0 text-dimmed" />
-                <UIcon v-if="huddleFor(ch)?.active" name="i-ph-waveform" class="size-3.5 shrink-0 text-success" />
+                <UIcon v-if="liveFor(ch)?.active" name="i-ph-waveform" class="size-3.5 shrink-0 text-success" />
                 <UBadge
                   v-if="ch.unread && selected !== ch.id"
                   color="primary"
@@ -154,11 +153,11 @@ watch(() => channelsQ.data.value?.channels, (list) => {
               </li>
             </ul>
             <ul
-              v-if="huddleFor(ch)?.active"
+              v-if="liveFor(ch)?.active"
               class="space-y-0.5 pb-1 pl-8 pr-1"
             >
               <li
-                v-for="id in huddleFor(ch)?.participantIds ?? []"
+                v-for="id in liveFor(ch)?.participantIds ?? []"
                 :key="id"
                 class="flex h-7 items-center gap-2 text-sm text-default"
               >

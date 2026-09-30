@@ -1,21 +1,20 @@
 <script setup lang="ts">
-import type { ClientMsg, MemberDTO } from '~~/shared/types'
+import type { MemberDTO } from '~~/shared/types'
+import { liveInProgressLabel, liveJoinLabel } from '~~/shared/live'
 
 const props = defineProps<{
   channelId: string
   members: MemberDTO[]
-  send: (msg: ClientMsg) => void
 }>()
 
 const emit = defineEmits<{
-  start: []
   join: []
 }>()
 
-const huddle = useHuddleStore()
-const { leave } = useHuddleSession(() => props.channelId, props.send, { leaveOnUnmount: false })
-const state = computed(() => huddle.stateFor(props.channelId))
-const joinedHere = computed(() => huddle.connection === 'live' && huddle.currentChannelId === props.channelId)
+const live = useLiveStore()
+const { leave } = useLiveSession(() => props.channelId, { leaveOnUnmount: false })
+const state = computed(() => live.stateFor(props.channelId))
+const joinedHere = computed(() => live.connection === 'connected' && live.currentChannelId === props.channelId)
 const names = computed(() => Object.fromEntries(props.members.map(member => [member.user.id, member.nickname || member.user.displayName])))
 const users = computed(() => Object.fromEntries(props.members.map(member => [member.user.id, member.user])))
 const { serverUrl } = useApi()
@@ -31,9 +30,8 @@ function avatarOf(id: string) {
     <UIcon :name="state?.kind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" class="size-4 shrink-0 text-success" />
     <div class="min-w-0 flex-1">
       <p class="truncate text-xs font-semibold text-success">
-        {{ joinedHere ? 'Connected' : state?.kind === 'call' ? 'Call in progress' : 'Huddle in progress' }}
+        {{ joinedHere ? 'Connected' : state?.ringing ? 'Ringing…' : liveInProgressLabel(state?.kind ?? 'live') }}
       </p>
-      <p v-if="state?.title" class="truncate text-[11px] text-muted">{{ state.title }}</p>
       <UAvatarGroup v-if="state?.participantIds.length" size="3xs" class="mt-1">
         <UAvatar
           v-for="id in state.participantIds"
@@ -46,21 +44,20 @@ function avatarOf(id: string) {
     </div>
     <div class="flex items-center gap-1">
       <template v-if="joinedHere">
-        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-corners-out" aria-label="Open live session" @click="huddle.expanded = true" />
+        <UButton color="neutral" variant="ghost" size="xs" square icon="i-ph-corners-out" aria-label="Open live session" @click="live.expanded = true" />
         <UButton
           color="neutral"
           variant="ghost"
           size="xs"
           square
-          :icon="huddle.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
-          :aria-label="huddle.muted ? 'Unmute' : 'Mute'"
-          @click="huddle.toggleMute()"
+          :icon="live.muted ? 'i-ph-microphone-slash' : 'i-ph-microphone'"
+          :aria-label="live.muted ? 'Unmute' : 'Mute'"
+          @click="live.toggleMute()"
         />
-        <UButton color="error" variant="soft" size="xs" icon="i-ph-phone-disconnect" label="Leave" @click="leave" />
+        <UButton color="error" variant="soft" size="xs" icon="i-ph-phone-disconnect" :label="state?.kind === 'call' ? 'Hang up' : 'Leave'" @click="leave" />
       </template>
-      <UButton v-else-if="state?.active" size="xs" icon="i-ph-phone" label="Join" @click="emit('join')" />
-      <UButton v-else size="xs" icon="i-ph-phone" label="Start" @click="emit('start')" />
+      <UButton v-else-if="state?.active" size="xs" :icon="state.kind === 'call' ? 'i-ph-phone' : 'i-ph-waveform'" :label="liveJoinLabel(state.kind)" @click="emit('join')" />
     </div>
-    <UAlert v-if="huddle.error && joinedHere" color="error" :title="huddle.error" class="max-w-xs" />
+    <UAlert v-if="live.error && joinedHere" color="error" :title="live.error" class="max-w-xs" />
   </div>
 </template>

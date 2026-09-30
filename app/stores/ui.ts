@@ -54,7 +54,7 @@ export const useUiStore = defineStore('ui', () => {
   const rightPanelTab = ref<RightPanelTab>('members')
   const mobilePane = ref<'channels' | 'chat' | 'members'>('chat')
   const composerStates = ref<Record<string, ComposerState>>({})
-  const huddleSetupOpen = ref(false)
+  const liveSetupOpen = ref(false)
   const threadId = ref<string | null>(null)
   const threadParentId = ref<string | null>(null)
   const pendingThreadTitle = ref('')
@@ -147,7 +147,7 @@ export const useUiStore = defineStore('ui', () => {
     rightPanelOpen,
     rightPanelTab,
     mobilePane,
-    huddleSetupOpen,
+    liveSetupOpen,
     threadId,
     threadParentId,
     pendingThreadTitle,

@@ -9,12 +9,18 @@ export function useNavActions() {
   const createCategoryOpen = useState('nav:create-category', () => false)
   const inviteOpen = useState('nav:invite', () => false)
   const workspaceSettingsOpen = useState('nav:workspace-settings', () => false)
+  const workspaceSettingsSection = useState('nav:workspace-settings-section', () => 'overview')
   const createBoardOpen = useState('nav:create-board', () => false)
   const createDatabaseOpen = useState('nav:create-database', () => false)
   const createDocumentOpen = useState('nav:create-document', () => false)
   const createCanvasOpen = useState('nav:create-canvas', () => false)
   const createGadgetOpen = useState('nav:create-gadget', () => false)
   const composeOpen = useState('nav:compose', () => false)
+
+  function openWorkspaceSettings(section: string) {
+    workspaceSettingsSection.value = section
+    workspaceSettingsOpen.value = true
+  }
 
   function openCreateChannel(categoryId: string | null = null) {
     createChannelCategoryId.value = categoryId === 'uncategorized' ? null : categoryId
@@ -27,6 +33,7 @@ export function useNavActions() {
     createCategoryOpen,
     inviteOpen,
     workspaceSettingsOpen,
+    workspaceSettingsSection,
     createBoardOpen,
     createDatabaseOpen,
     createDocumentOpen,
@@ -34,5 +41,6 @@ export function useNavActions() {
     createGadgetOpen,
     composeOpen,
     openCreateChannel,
+    openWorkspaceSettings,
   }
 }

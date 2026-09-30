@@ -13,7 +13,7 @@ const props = defineProps<{ workspaceId: string }>()
 const route = useRoute()
 const session = useSessionStore()
 const qc = useQueryClient()
-const huddle = useHuddleStore()
+const live = useLiveStore()
 const { api } = useApi()
 const warm = useMessagePrefetch()
 
@@ -78,7 +78,7 @@ async function hide(id: string) {
 }
 
 function inCall(ch: ChannelDTO) {
-  return Boolean(huddle.stateFor(ch.id)?.active || ch.huddle?.active)
+  return Boolean((live.stateFor(ch.id) ?? ch.live)?.active)
 }
 
 function titleOf(ch: ChannelDTO) {

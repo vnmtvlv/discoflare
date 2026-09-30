@@ -3,6 +3,11 @@ import type { PushNotificationPayload } from '../shared/notifications'
 import { pushDeliveryDisposition, pushRetryDelayMs } from '../shared/notifications'
 import type { DiscoflareEnv } from './env'
 
+// Rows queued before the Live rename still carry the `huddle:` tag.
+function isLiveTag(tag: string): boolean {
+  return tag.startsWith('live:') || tag.startsWith('huddle:')
+}
+
 const DELIVERY_LIMIT = 20
 const MAX_ATTEMPTS = 6
 const LEASE_MS = 30_000
@@ -45,8 +50,8 @@ async function deliverPush(env: DiscoflareEnv, row: OutboxRow) {
     request = await buildPushPayload({
       data: payload,
       options: {
-        ttl: payload.tag.startsWith('huddle:') ? 90 : 4 * 60 * 60,
-        urgency: payload.tag.startsWith('huddle:') ? 'high' : 'normal',
+        ttl: isLiveTag(payload.tag) ? 90 : 4 * 60 * 60,
+        urgency: isLiveTag(payload.tag) ? 'high' : 'normal',
       },
     }, {
       endpoint: row.endpoint,
