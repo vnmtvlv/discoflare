@@ -1,4 +1,5 @@
 import type { DiscoflareEnv } from './env'
+import { discoflareAdmin } from './discoflare-admin'
 import {
   addParticipant,
   createMeeting,
@@ -21,8 +22,21 @@ export type LiveMedia = {
   endMeeting: (meetingId: string) => Promise<void>
 }
 
-/** The media plane for this installation, or null when Live is not connected. */
+/**
+ * The media plane for this installation, or null when Live is not connected.
+ * A workspace linked to a Discoflare Admin uses the Admin's RealtimeKit app and
+ * holds no credential; otherwise it uses the token pasted in Workspace Settings.
+ */
 export async function liveMedia(env: DiscoflareEnv): Promise<LiveMedia | null> {
+  const admin = discoflareAdmin(env)
+  if (admin) {
+    return {
+      createMeeting: title => admin.liveCreateMeeting(title),
+      addParticipant: (meetingId, seat) => admin.liveAddParticipant(meetingId, seat),
+      removeParticipants: (meetingId, participantIds) => admin.liveRemoveParticipants(meetingId, participantIds),
+      endMeeting: meetingId => admin.liveEndMeeting(meetingId),
+    }
+  }
   const config = await loadRealtimeKitConfig(env)
   if (!realtimekitConfigured(config)) return null
   return {

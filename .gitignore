@@ -47,3 +47,7 @@ DerivedData/
 
 # Local stage deployment configs
 wrangler.stage.local.jsonc
+
+# Discoflare Admin release bundle
+apps/admin/.bundle
+.dev.vars

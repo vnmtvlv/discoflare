@@ -4,6 +4,7 @@ export default withNuxt(
   {
     ignores: [
       '**/.admin-release/**',
+      '**/.bundle/**',
       '**/.nuxt/**',
       '**/.output/**',
       '**/dist/**',

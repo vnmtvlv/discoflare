@@ -65,6 +65,14 @@ jobs:
           pnpm --filter @discoflare/desktop typecheck &&
           pnpm --filter @discoflare/extension typecheck
 
+      - name: Check the Discoflare Admin types
+        if: matrix.check == 'typecheck'
+        run: pnpm --filter @discoflare/admin typecheck
+
+      - name: Build and bundle the Discoflare Admin
+        if: matrix.check == 'build'
+        run: pnpm --filter @discoflare/admin bundle
+
       # Keep test output in the log: the GitHub annotations reporter crashes
       # the runner with a Unicode EncoderFallbackException on this suite.
       - name: Run test

@@ -7,6 +7,8 @@ const outputDir = join(root, '.installer', 'release')
 const bundlePath = join(root, '.installer', 'bundle', 'index.js')
 const assetsDir = join(root, '.output', 'public')
 const migrationsDir = join(root, 'drizzle', 'migrations')
+const adminBundlePath = join(root, 'apps', 'admin', '.bundle', 'index.js')
+const adminAssetsDir = join(root, 'apps', 'admin', '.output', 'public')
 
 const packageJson = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
 const version = (process.env.DISCOFLARE_RELEASE_VERSION || packageJson.version).replace(/^v/, '')
@@ -84,13 +86,38 @@ const assetsName = 'discoflare-assets.json'
 const assetsPayload = Buffer.from(JSON.stringify({ assets, migrations }))
 await writeFile(join(outputDir, assetsName), assetsPayload)
 
+async function assetPayload(directory) {
+  const entries = []
+  for (const file of await filesUnder(directory)) {
+    const content = await readFile(file)
+    entries.push({
+      path: `/${relative(directory, file).split(sep).join('/')}`,
+      hash: digest('md5', content),
+      size: content.byteLength,
+      contentType: contentTypes[extname(file).toLowerCase()] || 'application/octet-stream',
+      contentBase64: content.toString('base64'),
+    })
+  }
+  return entries
+}
+
+// The Discoflare Admin ships in the same release, so the Admin that deploys a
+// workspace and the workspace it deploys always agree on their contract.
+const adminWorker = await readFile(adminBundlePath)
+const adminWorkerName = 'discoflare-admin.mjs'
+await writeFile(join(outputDir, adminWorkerName), adminWorker)
+const adminAssetsName = 'discoflare-admin-assets.json'
+const adminAssets = await assetPayload(adminAssetsDir)
+const adminAssetsPayload = Buffer.from(JSON.stringify({ assets: adminAssets, migrations: [] }))
+await writeFile(join(outputDir, adminAssetsName), adminAssetsPayload)
+
 const manifest = {
   schemaVersion: 1,
   version,
   releasedAt: new Date().toISOString(),
   compatibilityDate: '2026-09-28',
   compatibilityFlags: [],
-  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'managed-domain-lifecycle-v1', 'managed-realtimekit-v1'],
+  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'managed-domain-lifecycle-v1', 'managed-realtimekit-v1', 'discoflare-admin-v1'],
   worker: {
     url: `${releaseBaseUrl}/${workerName}`,
     sha256: digest('sha256', worker),
@@ -109,9 +136,27 @@ const manifest = {
     { binding: 'AGENT_DO', className: 'DiscoflareAgent', migration: 'v3' },
     { binding: 'AGENT_THINK', className: 'DiscoflareThink', migration: 'v4' },
   ],
+  admin: {
+    version,
+    compatibilityDate: '2026-09-28',
+    compatibilityFlags: ['nodejs_compat'],
+    worker: {
+      url: `${releaseBaseUrl}/${adminWorkerName}`,
+      sha256: digest('sha256', adminWorker),
+      size: adminWorker.byteLength,
+    },
+    assets: {
+      url: `${releaseBaseUrl}/${adminAssetsName}`,
+      sha256: digest('sha256', adminAssetsPayload),
+      size: adminAssetsPayload.byteLength,
+    },
+    durableObjects: [
+      { binding: 'COORDINATOR', className: 'AdminCoordinator', migration: 'v1' },
+    ],
+  },
 }
 
 await writeFile(join(outputDir, 'discoflare-cloudflare-manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`)
 
 const outputSize = (await stat(join(outputDir, assetsName))).size
-console.log(`Built Discoflare installer release ${version}: ${assets.length} assets, ${migrations.length} migrations, ${outputSize} byte asset payload.`)
+console.log(`Built Discoflare installer release ${version}: ${assets.length} assets, ${migrations.length} migrations, ${outputSize} byte asset payload; Admin ${adminAssets.length} assets, ${adminWorker.byteLength} byte Worker.`)

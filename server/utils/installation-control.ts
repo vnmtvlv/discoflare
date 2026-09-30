@@ -1,6 +1,7 @@
 import type { DiscoflareEnv } from '../../workers/env'
 import type { InstallationDomainSettingsDTO } from '../../shared/releases'
 import { fail } from './cf'
+import { discoflareAdmin } from '../../workers/discoflare-admin'
 
 const DEFAULT_CONTROL_ENDPOINT = 'https://discoflare.com/api/installation-control'
 
@@ -46,10 +47,15 @@ async function controlRequest<T>(
 export function failInstallationControl(error: unknown): never {
   const candidate = error as { statusCode?: unknown, message?: unknown }
   const status = Number(candidate?.statusCode)
-  fail(status >= 400 && status < 500 ? status : 502, 'control_plane', typeof candidate?.message === 'string' ? candidate.message : 'Discoflare Control Plane could not change this Installation')
+  fail(status >= 400 && status < 500 ? status : 502, 'control_plane', typeof candidate?.message === 'string' ? candidate.message : 'Discoflare could not change this Installation')
 }
 
 export async function readManagedInstallationDomains(env: DiscoflareEnv): Promise<InstallationDomainSettingsDTO> {
+  const admin = discoflareAdmin(env)
+  if (admin) {
+    const state = await admin.domains()
+    return { managed: true, zones: state.zones, appDomain: state.appDomain, emailDomains: state.emailDomains }
+  }
   const state = await controlRequest<Omit<InstallationDomainSettingsDTO, 'managed'>>(env, 'GET', 'domains')
   return state
     ? { managed: true, zones: state.zones, appDomain: state.appDomain, emailDomains: state.emailDomains }
@@ -57,25 +63,37 @@ export async function readManagedInstallationDomains(env: DiscoflareEnv): Promis
 }
 
 export async function connectManagedAppDomain(env: DiscoflareEnv, input: { zoneId: string, hostname: string }) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.connectAppDomain(input)
   return controlRequest<{ hostname: string }>(env, 'PUT', 'app-domain', input)
 }
 
 export async function disconnectManagedAppDomain(env: DiscoflareEnv) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.disconnectAppDomain()
   return controlRequest<{ hostname: string }>(env, 'DELETE', 'app-domain')
 }
 
 export async function connectManagedEmailDomain(env: DiscoflareEnv, input: { zoneId: string, domain: string }) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.connectEmailDomain(input)
   return controlRequest<{ id: string, domain: string, zoneId: string, zoneName: string, sendingEnabled?: boolean }>(env, 'POST', 'email-domains', input)
 }
 
 export async function disconnectManagedEmailDomain(env: DiscoflareEnv, emailDomainId: string) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.disconnectEmailDomain(emailDomainId)
   return controlRequest<{ disconnected: boolean }>(env, 'DELETE', `email-domains/${encodeURIComponent(emailDomainId)}`)
 }
 
 export function createManagedMailboxRoute(env: DiscoflareEnv, address: string) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.createMailboxRoute(address)
   return controlRequest(env, 'POST', 'mailbox-routes', { address })
 }
 
 export function deleteManagedMailboxRoute(env: DiscoflareEnv, address: string) {
+  const admin = discoflareAdmin(env)
+  if (admin) return admin.deleteMailboxRoute(address)
   return controlRequest(env, 'DELETE', 'mailbox-routes', { address })
 }

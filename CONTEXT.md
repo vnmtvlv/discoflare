@@ -148,16 +148,20 @@ The private, deployment-issued permission for the intended Owner email to create
 _Avoid_: First user wins, installer password, permanent setup token
 
 **Discoflare Account**:
-The permanent operator identity on discoflare.com. It owns Cloudflare Connections and the catalog of Installations visible in `/admin`; it is separate from every workspace Member account.
-_Avoid_: Workspace account, Admin Worker session, temporary installer session
+The permanent operator identity on discoflare.com, signed in with Cloudflare, Telegram, Google, or an email code. It lists the Discoflare Admins it created from their heartbeats; it is separate from every workspace Member account and from an Admin's own owner login.
+_Avoid_: Workspace account, Admin owner, temporary installer session
+
+**Discoflare Admin**:
+The account-local Worker that manages every Discoflare workspace in one Cloudflare account. It holds the account's only Cloudflare credential, creates, updates, links, and removes workspaces, and serves their domain, mail, and Live requests over the `DISCOFLARE_ADMIN` service binding. It is released with the workspace and updates itself.
+_Avoid_: Control Plane, Primary workspace, discoflare.com cabinet
 
 **Cloudflare Connection**:
-A revocable Cloudflare OAuth grant connected to one Discoflare Account and encrypted at rest by discoflare.com. It authorizes fixed discovery and provisioning operations in the selected Cloudflare account. It never enters a workspace Worker.
-_Avoid_: Workspace OAuth, Account Admin Token, general Cloudflare proxy
+A Cloudflare OAuth grant or account API token held by one Discoflare Admin. discoflare.com uses a grant only while it deploys an Admin, hands it over, and keeps nothing.
+_Avoid_: Workspace OAuth, discoflare.com credential, general Cloudflare proxy
 
-**Control Plane**:
-The private discoflare.com account and Installation service. It stores operator identity, encrypted Cloudflare Connections, Cloudflare account metadata, Installation metadata, connected domain metadata, and Cloudflare resource IDs needed to reverse fixed lifecycle operations; it does not store or proxy workspace chat, files, calls, or Agent state.
-_Avoid_: Hosted workspace, workspace runtime, Discoflare Admin Worker
+**Linked workspace**:
+A workspace with a `DISCOFLARE_ADMIN` service binding to its account's Discoflare Admin. It holds no Cloudflare credential.
+_Avoid_: Managed workspace (reserved for hosting by Discoflare), controlled installation
 
 **App Domain**:
 The single canonical HTTP hostname connected to an Installation after its Base Installation is ready. It is independent of every Email Domain and replaces that Installation's `workers.dev` origin until disconnected.
@@ -168,16 +172,8 @@ One of the domains connected to an Installation for inbound routing and outbound
 _Avoid_: App Domain, one zone-wide catch-all, login email domain
 
 **Installation Control Credential**:
-A random, deployment-issued credential scoped to one Installation and stored hashed by the Control Plane. The workspace Owner uses it through fixed App Domain, Email Domain, and exact Mailbox route operations. It is not the Cloudflare OAuth credential and cannot call arbitrary Cloudflare operations or manage another Installation.
+The retired per-workspace credential that let a workspace ask discoflare.com to change its domains and mailbox routes. The Discoflare Admin removes it when it links the workspace.
 _Avoid_: Cloudflare token, workspace OAuth, general control-plane session
-
-**Primary Installation**:
-The first Discoflare Installation created in a Cloudflare account. It is the only Installation eligible to own account-wide integrations such as RealtimeKit; App Domains and Email Domains remain per-Installation resources.
-_Avoid_: Main workspace, control plane, permanent leader election
-
-**Independent Mode**:
-A future operating mode in which an owner disconnects an Installation from discoflare.com and assumes all lifecycle operations. It is not part of the current guided-installation contract.
-_Avoid_: Claiming that current guided installs are already independent
 
 **Base Installation**:
 A usable workspace profile created on `workers.dev` with D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and an Owner Setup Claim. Live, custom domain, and email are not enabled during the first provisioning flow.

@@ -1,24 +1,29 @@
 # Deployment
 
-## Discoflare installer
+## Discoflare Admin
 
-The guided installer at `discoflare.com/admin` creates a permanent Discoflare Account and connects Cloudflare through public-client PKCE OAuth. Discoflare.com stores the renewable credential encrypted at rest and uses it only for fixed Installation discovery and provisioning operations. The credential never enters a workspace Worker, and the Control Plane is not in the workspace content or realtime path.
+Guided installations are managed by a **Discoflare Admin**: one small Worker named `discoflare-admin` on the Cloudflare account's `workers.dev` subdomain (see [ADR 0005](adr/0005-account-local-discoflare-admin.md)). It is released from this repository together with the workspace, so the Admin that deploys a workspace and the workspace it deploys always agree on their contract.
 
-The first release provisions a base Installation directly into the selected Cloudflare account. It creates the workspace Worker, D1, R2, KV, core Durable Objects, Workers AI, Browser Run, builtin invite-only authentication, and a private Owner Setup Claim on `workers.dev`. It does not create a separate Admin Worker, Cloudflare Access application, RealtimeKit app, custom domain, or mail route.
+1. On `discoflare.com`, sign in and choose **Deploy Admin**. Cloudflare asks once for the Admin's permissions (Workers, D1, R2, KV, Realtime, zones, DNS, Email Routing, Email Sending, and Access) on the account you pick.
+2. discoflare.com deploys the Admin into that account and hands it the refresh token as a Worker secret. It keeps no Cloudflare credential afterwards.
+3. Open the private setup link to claim the Admin with an email and password. The Admin stores its owner, the Cloudflare credential (encrypted with `ADMIN_SECRET`), and the infrastructure it connected in its own D1 database.
+4. Create workspaces from the Admin. Each starts invite-only on `workers.dev` with D1, R2, KV, the Durable Objects, Workers AI, Browser Run, and a private Owner Setup Claim, and is linked to the Admin through a `DISCOFLARE_ADMIN` service binding.
 
-The first Installation in a Cloudflare account becomes Primary. It is the only Installation eligible to own account-wide features such as RealtimeKit. App Domains, Email Domains, and literal mailbox routes belong to one exact Installation. Billing and disconnecting a guided Installation into a fully independent lifecycle are deferred; the manual repository deployment remains the independent path today.
+A linked workspace holds no Cloudflare credential. Its Owner connects one App Domain from **Workspace Settings → System → Domain**, Email Domains from **Workspace Settings → Email → Domains**, and uses Live without any setup; the workspace asks the Admin over the service binding, and the Admin identifies it from the binding's `props`, which the caller cannot change. The Admin creates one RealtimeKit app per workspace with host and participant presets the first time someone goes live.
 
-Discoflare.com stores operator identity, connected Cloudflare account metadata, the encrypted OAuth connection, and Installation metadata. Messages, mail, files, Data, Tasks, and Agent state remain in the customer-owned workspace resources. If the Control Plane is unavailable, existing workspace runtime continues while provisioning and infrastructure changes pause.
+Updates, owner setup links, and deletion happen in the Admin. It checks GitHub Releases, updates itself automatically unless the owner turns that off, and updates workspaces when the owner asks (or automatically, if enabled). Deleting a workspace still needs the one-time authorization the workspace Owner starts in **Workspace Settings → Danger zone**; the workspace empties its own files first.
 
-Cloudflare asks for the complete supported lifecycle grant when an account is connected, including the domain, DNS, Email Routing, and Email Sending permissions needed later in Settings. This avoids a second consent flow when optional infrastructure is connected. Cloudflare grants are account- and zone-scoped rather than bound to one Worker. A compromised Control Plane credential can therefore exercise every permission granted to it across the selected account. Use a separate Cloudflare account for the strongest isolation; using an existing paid account shares that authority boundary.
+The Admin needs `discoflare.com` only to be created and to reconnect Cloudflare: a reconnect runs PKCE with the verifier kept in the Admin, and discoflare.com's OAuth callback only forwards the code. Everything else, including workspaces, updates, domains, email, and Live, keeps working when discoflare.com is unavailable. An owner may instead paste an account API token into the Admin. OAuth grants belong to the Cloudflare user who approved them, so if that person leaves the account the Admin asks for a reconnect.
+
+Cloudflare permissions are account- and zone-scoped rather than bound to one Worker, so the Admin's credential can act across the account. Use a separate Cloudflare account for the strongest isolation.
 
 Select **Cloudflare Access** only when the operator wants Cloudflare Zero Trust to own the login perimeter. Member admission is then managed in the Cloudflare Access policy rather than with Discoflare invites or signup, and changing authentication mode later requires a manual migration.
 
-The Base Installation does not accept or persist App Domain or Email Domain choices. After the workspace is healthy on `workers.dev`, its Owner may connect one App Domain from **Workspace Settings → System → Domain** and multiple Email Domains from **Workspace Settings → Email → Domains**. The workspace calls only fixed lifecycle endpoints with its Installation Control Credential; the broad OAuth credential remains encrypted in the Control Plane. The App Domain is the canonical HTTP origin; Email Domains are independent inbound and outbound mail identities, and each Email Domain belongs to exactly one Installation.
+Connecting an Email Domain enables Cloudflare Email Routing DNS for that exact apex or subdomain, onboards the same domain for Email Sending, and adds it to the owning Worker's bindings. Creating a Mailbox inside the workspace creates one exact literal-address Email Routing rule; deleting the Mailbox removes that rule first. Multiple workspaces can therefore share a zone without sharing mail, while unknown addresses never route to a workspace. A domain already owned by another workspace is refused instead of being moved implicitly. Disconnecting an Email Domain requires its Mailboxes to be deleted first, then removes its exact Email Sending subdomain and Worker bindings; the zone-level Email Routing service stays enabled because other domains or rules may share it.
 
-Connecting an Email Domain enables Cloudflare Email Routing DNS for that exact apex or subdomain, onboards the same domain for Email Sending, and adds it to the owning Worker's bindings. Creating a Mailbox inside the workspace creates one exact literal-address Email Routing rule through the same fixed Installation Control Credential; deleting the Mailbox removes that rule first. Multiple Installations can therefore share a zone without sharing mail, while unknown addresses never route to a workspace. A domain already owned by another Installation is refused instead of being moved implicitly.
+### Workspaces installed before the Admin
 
-The lifecycle operation returns a conflict instead of replacing a foreign domain or literal-address rule. Disconnecting an Email Domain requires its Mailboxes to be deleted first, then removes its exact Email Sending subdomain and Worker bindings. It intentionally leaves the zone-level Email Routing service enabled because other domains or rules may share it. Workspace Workers never receive the Control Plane's broad credential.
+Workspaces created by earlier releases of discoflare.com carry an Installation Control Credential instead of `DISCOFLARE_ADMIN`. After an Admin is deployed into their account it lists them as not linked. **Update** in the Admin moves them to the current release, adds `DISCOFLARE_ADMIN`, removes the control credential, and rebuilds their App Domain, Email Domains, and mailbox routes from Cloudflare so nothing has to be reconnected.
 
 ## GitHub / Workers Builds
 
@@ -140,7 +145,7 @@ The callback origin must be the deployed workspace URL. `discoflare.com` is the 
 Email delivery is not required to create the Owner or to create an account from a private invite link. The invite itself is the admission credential; verification and password reset remain unavailable until auth-email delivery is configured. To verify new addresses and enable password reset:
 
 1. Onboard the sender domain in Cloudflare Email Service.
-2. Add a Worker send binding named `EMAIL`, or use the guided installer's Primary workspace mail binding.
+2. Add a Worker send binding named `EMAIL`. Workspaces created by the Discoflare Admin get `MAIL_EMAIL` when an Email Domain is connected.
 3. Set a sender in the Authentication UI or with `EMAIL_FROM`. Guided mail-enabled installations default to their initial workspace mailbox address.
 4. Configure and enable Turnstile.
 5. Keep **Invite only** or select **Open signup**, according to the workspace admission policy.
@@ -164,11 +169,11 @@ For manual deployments, the authentication `EMAIL` binding and workspace `MAIL_E
 
 ## Secrets
 
-The first discoflare.com account release does not provision RealtimeKit. A later Control Plane flow may create its account resources for the Primary Installation, but its broad Cloudflare credential must never enter the workspace.
+A workspace linked to a Discoflare Admin needs no RealtimeKit setup: the Admin provides Live. The settings below are for workspaces deployed from this repository without an Admin.
 
 Any installation can connect Live later in **Workspace Settings → Live** with one Cloudflare API token that has **Realtime Admin** on the account. Discoflare finds the account, reuses or creates a RealtimeKit app named after the installation's hostname, and provisions two presets: `discoflare_live_host` for hosts (the person who started the room, and Channel managers) and `discoflare_live_participant` for everyone else. Neither preset records or transcribes. The token is encrypted in D1 with `AUTH_SECRET`, is never returned by the API, and takes effect without a Worker redeploy. **Test connection** checks the app and both presets with a read-only request. Installations connected before hosts and participants were split show a **Reconnect** action that provisions the presets with the saved token.
 
-Each installation should use its own RealtimeKit app, which Live creates for it. Being the Primary Installation matters only to future Control Plane provisioning; the workspace itself does not check it.
+Each installation should use its own RealtimeKit app, which Live creates for it.
 
 Deployment variables remain supported and override everything saved in Discoflare, including presets. Set all three of `REALTIMEKIT_ACCOUNT_ID`, `REALTIMEKIT_APP_ID`, and `REALTIMEKIT_API_TOKEN`; the presets default to RealtimeKit's `group_call_host` and `group_call_participant`:
 
