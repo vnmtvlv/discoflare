@@ -27,6 +27,7 @@ const section = defineModel<string>('section', { default: '' })
 const appConfig = useAppConfig()
 const releaseUrl = computed(() => discoflareReleaseUrl(appConfig.version))
 const isMobile = useIsMobile()
+const detailBack = provideSettingsDetailBack()
 
 const query = ref('')
 /**
@@ -194,8 +195,8 @@ defineShortcuts({
                 color="neutral"
                 variant="ghost"
                 square
-                aria-label="Back to settings list"
-                @click="mobileView = 'nav'"
+                :aria-label="detailBack ? `Back to ${detailBack.label}` : 'Back to settings list'"
+                @click="detailBack ? detailBack.go() : mobileView = 'nav'"
               />
               <span class="min-w-0 flex-1 truncate text-sm text-muted">{{ activeLabel }}</span>
               <UButton icon="i-ph-x" color="neutral" variant="ghost" square aria-label="Close settings" @click="close" />
