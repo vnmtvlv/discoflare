@@ -14,7 +14,7 @@ Use the living documents instead of a separate product spec:
 Repository invariants:
 
 - One installation and URL contain one workspace. The web app does not select among multiple workspaces.
-- One workspace installation remains one Nuxt/Nitro Worker at the repository root. The private account and Installation Control Plane lives in the separate `discoflare-com` repository; new guided installs do not create an account-local Admin Worker.
+- One workspace installation remains one Nuxt/Nitro Worker at the repository root. Guided installations also use one account-local Discoflare Admin per Cloudflare account, built from `apps/admin` and `packages/admin-core`; the separate `discoflare-com` repository creates Admins and relays OAuth reconnects but keeps no Cloudflare credential.
 - Direct Messages, threads, reactions, attachments, roles, and optional RealtimeKit Live rooms and Calls are part of the current product.
 - The marketing site and hosted installer live in the separate `discoflare-com` repository. `sandbox.discoflare.com` is a deployment of this root workspace app, not a fork.
 - Personal development targets belong in ignored env files or local deployment configs. Use the generic `dev:remote` command; never add personal hostnames, accounts, or per-installation commands to tracked code, tests, or documentation.

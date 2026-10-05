@@ -15,14 +15,15 @@ Discoflare gives a team one private, real-time workspace without an origin serve
 
 ## Monorepo
 
-This repository is the source of truth for the open-source workspace runtime and independent deployment path:
+This repository is the source of truth for the open-source workspace runtime, account-local Admin, and independent deployment path:
 
 - the root Nuxt app is the workspace Worker and shared frontend;
-- `discoflare.com` is a separate private account and installation control plane;
+- `apps/admin` is the account-local Discoflare Admin Worker and `packages/admin-core` is its shared provisioning engine;
+- `discoflare.com` is a separate account and bootstrap service that creates Admins and relays OAuth reconnects without retaining Cloudflare credentials;
 - `apps/desktop`, `apps/mobile`, and `apps/extension` package the shared frontend; and
-- `scripts/build-installer-release.mjs` packages the immutable Worker, assets, and migrations consumed by `discoflare.com`.
+- `scripts/build-installer-release.mjs` packages the versioned workspace and Admin bundles consumed by the Admin and `discoflare.com`.
 
-`sandbox.discoflare.com` is a deployment of the root workspace app, not a separate application. Control-plane changes do not version or redeploy workspace installations, and client releases use their own platform tags.
+`sandbox.discoflare.com` is a deployment of the root workspace app, not a separate application. Changes to `discoflare.com` do not version or redeploy workspace installations, and client releases use their own platform tags.
 
 ## What you can do
 
