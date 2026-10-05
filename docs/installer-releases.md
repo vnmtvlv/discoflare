@@ -1,28 +1,75 @@
 # Discoflare installer releases
 
-The private control plane at `discoflare.com/admin` consumes immutable workspace release artifacts from this repository and provisions selected Installations in connected Cloudflare accounts. The Cloudflare Deploy Button remains the source-level recovery path.
+One Discoflare GitHub Release carries a matching workspace Worker, account-local
+Discoflare Admin, and the shared provisioning engine. The Admin consumes these
+artifacts to install and update workspaces in its Cloudflare account.
+`discoflare.com` consumes the same pinned provisioning package only to create or
+reconnect an Admin; it does not keep a Cloudflare credential or manage a
+workspace directly. The Cloudflare Deploy Button remains the source-build path
+for independent installations.
+
+## Release artifacts
+
+`pnpm release:installer` produces six files:
+
+| Artifact | Purpose |
+| --- | --- |
+| `discoflare-cloudflare-manifest.json` | Version, compatibility settings, Durable Object migrations, capabilities, and SHA-256 metadata for both Workers. |
+| `discoflare-worker.mjs` | Bundled workspace Worker. |
+| `discoflare-assets.json` | Workspace static assets and ordered D1 migrations. |
+| `discoflare-admin.mjs` | Bundled account-local Admin Worker. |
+| `discoflare-admin-assets.json` | Admin static assets. |
+| `discoflare-admin-core-<version>.tgz` | Public `@discoflare/admin-core` package consumed from the exact release tag by `discoflare.com`. |
+
+The manifest pins and verifies the workspace and Admin Worker payloads. The
+versioned `admin-core` package is a companion asset in the same GitHub Release;
+it is not nested in the manifest.
 
 ## Publishing a release
 
-Publishing a GitHub Release triggers `.github/workflows/publish-installer-release.yml`. The workflow:
+Release tags use `v<version>` and must match `package.json`. Pushing the tag
+triggers `.github/workflows/publish-installer-release.yml`. The workflow:
 
-1. Builds the workspace Nuxt Worker without deploying it.
-2. Packages the Worker, static assets, and D1 migrations.
-3. Attaches exactly three files to the GitHub Release: the manifest, Worker bundle, and asset payload.
+1. Requires GitHub's native immutable-releases setting to be enabled.
+2. Builds the workspace and Admin with the Node version pinned in
+   `.node-version` (currently Node 24.21.0), without deploying either Worker.
+3. Creates or updates a draft GitHub Release and uploads the six artifacts.
+4. Verifies that the draft contains exactly the locally built artifact set.
 
-Release tags use `v<version>` and must match the version in `package.json`.
+A maintainer reviews the draft and publishes it only after the workflow passes.
+Draft assets may be replaced when repairing a failed build. Publication freezes
+the release tag, description, and assets; never publish an empty release and
+expect the workflow to attach files later. GitHub applies native immutability
+only to releases published after the repository setting was enabled.
 
-The control plane discovers Installations by their `DISCOFLARE_INSTALLATION` marker and applies a selected update in place while reusing bound D1, R2, KV, Durable Object, domain, and mail resources. Installations do not contain a Cloudflare management token or Admin service binding. The provisioning engine is private control-plane code in the separate `discoflare-com` repository; it is not a public release artifact.
+## Installation and updates
 
-Before deploying an updated Worker, the installer reads `d1_migrations` from that bound D1 database and applies every missing release migration in filename order. Each migration and its migration marker execute in the same D1 batch. A failed or unrecorded migration stops the update. The installer does not create an automatic backup; the owner can first download one or manually upload one to a configured S3-compatible bucket from **Workspace Settings → System → Backups**.
+The Admin reads the requested release manifest, verifies every referenced
+payload against its SHA-256 digest, and applies a workspace update in place
+while reusing its D1, R2, KV, Durable Object, domain, mail, and Live resources.
+The workspace contains a `DISCOFLARE_ADMIN` service binding but no Cloudflare
+credential. Workspaces created before the Admin architecture retain their
+Installation Control Credential until the Admin adopts and updates them.
 
-The same temporary OAuth installer owns the managed uninstall flow at `discoflare.com/uninstall`. The workspace Owner starts it from **Workspace Settings → System → Delete**, receives a short-lived one-use claim, may leave to create an optional backup, and must type the full workspace origin after the installer has matched the marked Worker. The live R2 bucket is emptied by the installed Worker before the installer deletes the managed Cloudflare resources. Manual installations are deliberately excluded from automatic resource deletion.
+Before deploying an updated workspace Worker, `admin-core` reads
+`d1_migrations` from its D1 database and applies every missing release migration
+in filename order. Each migration and its marker execute in the same D1 batch.
+A failed or unrecorded migration stops the update. The installer does not create
+an automatic backup; the owner can first download one or upload one to a
+configured S3-compatible bucket from **Workspace Settings → Backups**.
+
+Updates, setup links, and deletion are initiated in the account-local Admin.
+Workspace deletion still requires the one-use authorization started by the
+workspace Owner from **Workspace Settings → Danger Zone**. The workspace
+empties its own files before the Admin removes its managed Cloudflare resources.
+Independent manual deployments remain outside automatic resource deletion.
 
 ## Building locally
 
-Run:
+Use the exact Node version in `.node-version`, then run:
 
 ```sh
+pnpm install --frozen-lockfile
 pnpm release:installer
 ```
 

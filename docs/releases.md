@@ -31,13 +31,14 @@ running five independent checks: `lint`, `typecheck`, `test`, `build`, and
 Failed checks do not cancel the other checks; a newer update to the same PR or
 branch cancels its superseded run.
 
-Node.js 24 is required for these checks because the backup tests use
-`node:sqlite` to read text containing NUL bytes; Node.js 22 truncates those
-values when returning them to JavaScript. CI uses Vitest's default text
-reporter because the GitHub annotations reporter crashes the runner while
-reporting the large Unicode diff from that failing test.
+All CI and release-producing workflows read the exact local runtime from
+`.node-version` (currently Node.js 24.21.0). Node.js 24 is required because the
+backup tests use `node:sqlite` to read text containing NUL bytes; Node.js 22
+truncates those values when returning them to JavaScript. CI uses Vitest's
+default text reporter because the GitHub annotations reporter crashes the
+runner while reporting the large Unicode diff from that failing test.
 
-Configure the GitHub ruleset targeting `main` to require those four checks from
+Configure the GitHub ruleset targeting `main` to require those five checks from
 GitHub Actions. Require PRs and resolved review conversations, allow only squash
 merges, block force pushes and deletion, and keep required approvals at zero
 while the maintainer is the only reviewer.
@@ -71,18 +72,22 @@ Use Semantic Versioning while the product is pre-1.0:
 
 After the release PR is merged:
 
-1. Confirm `main` is at the intended release commit.
-2. Create the immutable Git tag `v<version>` from that commit.
-3. Create a GitHub Release attached to that tag.
-4. Review the title and Markdown description, then publish the release.
-5. Wait for the Cloudflare installer release workflow to finish.
-6. Verify that the Worker bundle, asset payload, and installer manifest are attached to the release and identify the expected version.
+1. Confirm GitHub native release immutability is enabled for the repository. It
+   affects only releases published after it is enabled.
+2. Confirm `main` is at the intended release commit.
+3. Create the protected Git tag `v<version>` from that commit and push it.
+4. Wait for `.github/workflows/publish-installer-release.yml` to create and
+   populate the draft GitHub Release.
+5. Verify the draft has the expected version and all six artifacts documented
+   in [Discoflare installer releases](./installer-releases.md).
+6. Review its title and Markdown description, then publish the draft.
+7. Confirm the published release reports itself as immutable and that its asset
+   digests match the manifest.
 
-Publishing the GitHub Release triggers
-`.github/workflows/publish-installer-release.yml`. It builds the Nuxt Worker and
-packages the static assets and D1 migrations as three versioned artifacts: the
-release manifest, Worker bundle, and asset payload. The guided installer consumes
-the pinned payloads rather than an unversioned branch.
+The tag workflow builds the workspace and Admin Workers, packages their static
+assets and D1 migrations, and packs the matching `@discoflare/admin-core`
+package. The account-local Admin and `discoflare.com` consume exact release URLs
+rather than an unversioned branch.
 
 Do not move an existing release tag or overwrite a broken version. Fix the
 problem and publish the next patch release.
