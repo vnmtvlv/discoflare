@@ -27,14 +27,22 @@ it is not nested in the manifest.
 
 ## Publishing a release
 
+Before creating a tag, confirm in the repository settings that GitHub native
+release immutability is enabled. The standard workflow token cannot read or
+change that Administration setting, so this is a maintainer-owned release gate.
+
 Release tags use `v<version>` and must match `package.json`. Pushing the tag
 triggers `.github/workflows/publish-installer-release.yml`. The workflow:
 
-1. Requires GitHub's native immutable-releases setting to be enabled.
+1. Checks out the exact protected tag rather than an unversioned branch.
 2. Builds the workspace and Admin with the Node version pinned in
    `.node-version` (currently Node 24.21.0), without deploying either Worker.
 3. Creates or updates a draft GitHub Release and uploads the six artifacts.
 4. Verifies that the draft contains exactly the locally built artifact set.
+
+If a tag-triggered run fails before the draft is ready, use **Run workflow** on
+the same workflow and enter the existing protected tag. The manual recovery path
+checks out and rebuilds that tag; it never moves or replaces it.
 
 A maintainer reviews the draft and publishes it only after the workflow passes.
 Draft assets may be replaced when repairing a failed build. Publication freezes

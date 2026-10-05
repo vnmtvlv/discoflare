@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing protected release tag to build
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,9 +17,13 @@ permissions:
 jobs:
   installer:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ env.RELEASE_TAG }}
 
       - name: Set up pnpm
         uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
@@ -28,30 +38,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Verify release version
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
         run: node -e "const p=require('./package.json'); if ('v'+p.version !== process.env.RELEASE_TAG) throw new Error('Release tag must equal v'+p.version)"
 
       - name: Build release artifacts
         env:
-          DISCOFLARE_RELEASE_VERSION: ${{ github.ref_name }}
-          DISCOFLARE_RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+          DISCOFLARE_RELEASE_VERSION: ${{ env.RELEASE_TAG }}
+          DISCOFLARE_RELEASE_BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}
         run: pnpm release:installer
-
-      - name: Verify immutable releases are enabled
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          enabled="$(gh api "repos/${{ github.repository }}/immutable-releases" --jq .enabled)"
-          if [[ "$enabled" != "true" ]]; then
-            echo "::error::Enable native release immutability before publishing a Discoflare release"
-            exit 1
-          fi
 
       - name: Create or update draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           notes="docs/release-notes/${RELEASE_TAG}.md"
           if [[ ! -f "$notes" ]]; then
@@ -75,7 +72,6 @@ jobs:
       - name: Upload and verify draft artifacts
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
         run: |
           gh release upload "$RELEASE_TAG" .installer/release/* --clobber
           find .installer/release -maxdepth 1 -type f -exec basename {} \; | LC_ALL=C sort > "$RUNNER_TEMP/expected-assets"
