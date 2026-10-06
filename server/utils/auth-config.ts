@@ -8,8 +8,8 @@ import { decryptAuthSecret } from './auth-secrets'
 import { getDb } from './db'
 import { authMode } from './cloudflare-access'
 
-export const AUTH_PROVIDERS = ['github', 'twitter', 'telegram', 'turnstile'] as const satisfies readonly AuthCredentialProvider[]
-export const LOGIN_METHODS = ['email', 'github', 'twitter', 'telegram'] as const satisfies readonly AuthLoginMethod[]
+export const AUTH_PROVIDERS = ['github', 'google', 'twitter', 'telegram', 'linkedin', 'turnstile'] as const satisfies readonly AuthCredentialProvider[]
+export const LOGIN_METHODS = ['email', 'github', 'google', 'twitter', 'telegram', 'linkedin'] as const satisfies readonly AuthLoginMethod[]
 export const DEV_AUTH_SECRET = 'discoflare-dev-secret-do-not-use-in-prod!!'
 
 type Credential = {
@@ -47,13 +47,15 @@ export function installedMailboxSender(env: DiscoflareEnv): string | null {
 }
 
 function envCredential(env: DiscoflareEnv, provider: AuthCredentialProvider): Credential | null {
-  const pair = provider === 'github'
-    ? [env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET]
-    : provider === 'twitter'
-      ? [env.TWITTER_CLIENT_ID, env.TWITTER_CLIENT_SECRET]
-      : provider === 'telegram'
-        ? [env.TELEGRAM_CLIENT_ID, env.TELEGRAM_CLIENT_SECRET]
-        : [env.TURNSTILE_SITE_KEY, env.TURNSTILE_SECRET_KEY]
+  const pairs: Record<AuthCredentialProvider, [string | undefined, string | undefined]> = {
+    github: [env.GITHUB_CLIENT_ID, env.GITHUB_CLIENT_SECRET],
+    google: [env.GOOGLE_CLIENT_ID, env.GOOGLE_CLIENT_SECRET],
+    twitter: [env.TWITTER_CLIENT_ID, env.TWITTER_CLIENT_SECRET],
+    telegram: [env.TELEGRAM_CLIENT_ID, env.TELEGRAM_CLIENT_SECRET],
+    linkedin: [env.LINKEDIN_CLIENT_ID, env.LINKEDIN_CLIENT_SECRET],
+    turnstile: [env.TURNSTILE_SITE_KEY, env.TURNSTILE_SECRET_KEY],
+  }
+  const pair = pairs[provider]
   const publicKey = pair[0]?.trim()
   const secret = pair[1]?.trim()
   return publicKey && secret ? { publicKey, secret, source: 'deployment', secretReadable: true } : null
@@ -73,6 +75,8 @@ async function ensureSettings(env: DiscoflareEnv) {
     registrationMode: registrationDefault(env),
     emailEnabled: true,
     githubEnabled: Boolean(envCredential(env, 'github')),
+    linkedinEnabled: Boolean(envCredential(env, 'linkedin')),
+    googleEnabled: Boolean(envCredential(env, 'google')),
     twitterEnabled: Boolean(envCredential(env, 'twitter')),
     telegramEnabled: Boolean(envCredential(env, 'telegram')),
     turnstileEnabled: Boolean(envCredential(env, 'turnstile')),
@@ -154,6 +158,8 @@ export async function loadAuthRuntimeConfig(env: DiscoflareEnv, baseURL?: string
   const enabled = {
     email: settings.emailEnabled,
     github: settings.githubEnabled,
+    linkedin: settings.linkedinEnabled,
+    google: settings.googleEnabled,
     twitter: settings.twitterEnabled,
     telegram: settings.telegramEnabled,
     turnstile: settings.turnstileEnabled,
@@ -183,13 +189,15 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
       signupEnabled: false,
       emailSignupEnabled: false,
       passwordResetEnabled: false,
-      methods: { email: false, github: false, twitter: false, telegram: false },
+      methods: { email: false, github: false, google: false, twitter: false, telegram: false, linkedin: false },
       turnstile: { enabled: false, siteKey: null },
     }
   }
   const methods = {
     email: config.enabled.email,
     github: config.enabled.github && credentialReady(config, 'github'),
+    linkedin: config.enabled.linkedin && credentialReady(config, 'linkedin'),
+    google: config.enabled.google && credentialReady(config, 'google'),
     twitter: config.enabled.twitter && credentialReady(config, 'twitter'),
     telegram: config.enabled.telegram && credentialReady(config, 'telegram'),
   }
@@ -201,7 +209,7 @@ export function publicAuthConfig(config: AuthRuntimeConfig): PublicAuthConfig {
   return {
     mode: 'builtin',
     registrationMode: config.registrationMode,
-    signupEnabled: config.registrationMode === 'open' && (emailSignupEnabled || methods.github || methods.twitter || methods.telegram),
+    signupEnabled: config.registrationMode === 'open' && (emailSignupEnabled || methods.github || methods.google || methods.twitter || methods.telegram || methods.linkedin),
     emailSignupEnabled,
     passwordResetEnabled: methods.email && config.email.verificationReady,
     methods,
@@ -247,6 +255,8 @@ export function authSettingsAdminDto(config: AuthRuntimeConfig): AuthSettingsAdm
     },
     providers: {
       github: providerDto('github'),
+      linkedin: providerDto('linkedin'),
+      google: providerDto('google'),
       twitter: providerDto('twitter'),
       telegram: providerDto('telegram'),
       turnstile: providerDto('turnstile'),

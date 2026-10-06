@@ -119,12 +119,14 @@ The agent runtime adds no required secret. `AGENT_MODEL` is an optional public W
 
 ## Authentication
 
-The owner can configure GitHub, X, Telegram, and Turnstile in **Workspace Settings → Authentication**. Client secrets entered there are encrypted in D1 with AES-256-GCM under a key derived from `AUTH_SECRET`. The API never returns saved secrets.
+The owner can configure GitHub, Google, X, Telegram, LinkedIn, and Turnstile in **Workspace Settings → Authentication**. Client secrets entered there are encrypted in D1 with AES-256-GCM under a key derived from `AUTH_SECRET`. The API never returns saved secrets.
 
 Alternatively, set a provider's client ID and secret as Worker secrets. Deployment values override D1 and appear as **Managed by deployment** in the UI:
 
 ```
 GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET
+GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET
+LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET
 TWITTER_CLIENT_ID / TWITTER_CLIENT_SECRET
 TELEGRAM_CLIENT_ID / TELEGRAM_CLIENT_SECRET
 TURNSTILE_SITE_KEY / TURNSTILE_SECRET_KEY
@@ -134,9 +136,13 @@ OAuth callbacks are:
 
 ```
 https://your-domain.example/api/auth/callback/github
+https://your-domain.example/api/auth/callback/google
+https://your-domain.example/api/auth/callback/linkedin
 https://your-domain.example/api/auth/callback/twitter
 https://your-domain.example/api/auth/callback/telegram
 ```
+
+Google uses a Web application OAuth client. LinkedIn requires the **Sign In with LinkedIn using OpenID Connect** product. Both request only `openid`, `profile`, and `email`; LinkedIn accounts without an email address cannot complete sign-in. Discoflare does not mark an unverified LinkedIn email as verified or add it to the trusted-provider linking list. Existing installations keep these new methods disabled until the owner enables them.
 
 The callback origin must be the deployed workspace URL. `discoflare.com` is the separate marketing site, not an authentication callback host. In invite-only mode, a new identity remains pending until it accepts an invite. In open mode, it becomes an active Member immediately.
 

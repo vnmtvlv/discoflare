@@ -43,6 +43,10 @@ export type DiscoflareEnv = {
   PUBLIC_ORIGIN?: string
   TWITTER_CLIENT_ID?: string
   TWITTER_CLIENT_SECRET?: string
+  GOOGLE_CLIENT_ID?: string
+  GOOGLE_CLIENT_SECRET?: string
+  LINKEDIN_CLIENT_ID?: string
+  LINKEDIN_CLIENT_SECRET?: string
   GITHUB_CLIENT_ID?: string
   GITHUB_CLIENT_SECRET?: string
   TELEGRAM_CLIENT_ID?: string

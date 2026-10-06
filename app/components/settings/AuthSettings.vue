@@ -10,6 +10,8 @@ const registrationMode = ref<RegistrationMode>('invite_only')
 const email = reactive({ enabled: true, sender: '', senderName: '' })
 const providers = reactive<Record<AuthCredentialProvider, { enabled: boolean; publicKey: string; secret: string; removeCredential: boolean }>>({
   github: { enabled: false, publicKey: '', secret: '', removeCredential: false },
+  google: { enabled: false, publicKey: '', secret: '', removeCredential: false },
+  linkedin: { enabled: false, publicKey: '', secret: '', removeCredential: false },
   twitter: { enabled: false, publicKey: '', secret: '', removeCredential: false },
   telegram: { enabled: false, publicKey: '', secret: '', removeCredential: false },
   turnstile: { enabled: false, publicKey: '', secret: '', removeCredential: false },
@@ -17,6 +19,8 @@ const providers = reactive<Record<AuthCredentialProvider, { enabled: boolean; pu
 
 const socialProviders = [
   { id: 'github' as const, label: 'GitHub', publicLabel: 'Client ID', secretLabel: 'Client secret', callback: '/api/auth/callback/github' },
+  { id: 'google' as const, label: 'Google', publicLabel: 'Client ID', secretLabel: 'Client secret', callback: '/api/auth/callback/google' },
+  { id: 'linkedin' as const, label: 'LinkedIn', publicLabel: 'Client ID', secretLabel: 'Client secret', callback: '/api/auth/callback/linkedin' },
   { id: 'twitter' as const, label: 'X', publicLabel: 'Client ID', secretLabel: 'Client secret', callback: '/api/auth/callback/twitter' },
   { id: 'telegram' as const, label: 'Telegram', publicLabel: 'Client ID', secretLabel: 'Client secret', callback: '/api/auth/callback/telegram' },
 ]

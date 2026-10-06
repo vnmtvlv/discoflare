@@ -83,6 +83,8 @@ export const authSettings = sqliteTable('auth_settings', {
   registrationMode: text('registration_mode', { enum: ['open', 'invite_only'] }).notNull().default('invite_only'),
   emailEnabled: integer('email_enabled', { mode: 'boolean' }).notNull().default(true),
   githubEnabled: integer('github_enabled', { mode: 'boolean' }).notNull().default(false),
+  googleEnabled: integer('google_enabled', { mode: 'boolean' }).notNull().default(false),
+  linkedinEnabled: integer('linkedin_enabled', { mode: 'boolean' }).notNull().default(false),
   twitterEnabled: integer('twitter_enabled', { mode: 'boolean' }).notNull().default(false),
   telegramEnabled: integer('telegram_enabled', { mode: 'boolean' }).notNull().default(false),
   turnstileEnabled: integer('turnstile_enabled', { mode: 'boolean' }).notNull().default(false),
@@ -96,14 +98,14 @@ export const authSettings = sqliteTable('auth_settings', {
 
 /** OAuth and Turnstile secrets entered in the owner UI. Secrets are AES-GCM encrypted. */
 export const authProviderCredentials = sqliteTable('auth_provider_credentials', {
-  provider: text('provider', { enum: ['github', 'twitter', 'telegram', 'turnstile'] }).primaryKey(),
+  provider: text('provider', { enum: ['github', 'google', 'twitter', 'telegram', 'linkedin', 'turnstile'] }).primaryKey(),
   publicKey: text('public_key').notNull(),
   secretCiphertext: text('secret_ciphertext').notNull(),
   secretIv: text('secret_iv').notNull(),
   secretVersion: integer('secret_version').notNull().default(1),
   ...isoTimestamps(),
 }, table => [
-  check('auth_provider_credentials_provider_check', sql`${table.provider} in ('github', 'twitter', 'telegram', 'turnstile')`),
+  check('auth_provider_credentials_provider_check', sql`${table.provider} in ('github', 'google', 'twitter', 'telegram', 'linkedin', 'turnstile')`),
 ])
 
 /** Immutable published Privacy, Terms, and workspace Rules bundle. */

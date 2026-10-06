@@ -6,7 +6,7 @@ function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig 
   return {
     mode: 'builtin',
     registrationMode: 'invite_only',
-    enabled: { email: true, github: false, twitter: false, telegram: false, turnstile: false },
+    enabled: { email: true, github: false, google: false, linkedin: false, twitter: false, telegram: false, turnstile: false },
     credentials: {},
     email: { binding: false, from: null, fromName: null, senderManagedByDeployment: false, verificationReady: false },
     ...overrides,
@@ -14,6 +14,22 @@ function runtime(overrides: Partial<AuthRuntimeConfig> = {}): AuthRuntimeConfig 
 }
 
 describe('public auth config', () => {
+  it.each(['google', 'linkedin'] as const)('gates %s on usable credentials and the owner switch', (provider) => {
+    const config = runtime({ registrationMode: 'open' })
+    config.enabled.email = false
+    config.enabled[provider] = true
+    expect(publicAuthConfig(config).methods[provider]).toBe(false)
+    expect(publicAuthConfig(config).signupEnabled).toBe(false)
+    config.credentials[provider] = { publicKey: 'client-id', secret: 'client-secret', source: 'database', secretReadable: true }
+    expect(publicAuthConfig(config).methods[provider]).toBe(true)
+    expect(publicAuthConfig(config).signupEnabled).toBe(true)
+    config.credentials[provider]!.secretReadable = false
+    expect(publicAuthConfig(config).methods[provider]).toBe(false)
+    config.credentials[provider]!.secretReadable = true
+    config.enabled[provider] = false
+    expect(publicAuthConfig(config).methods[provider]).toBe(false)
+  })
+
   it('uses an installed workspace mailbox for auth email delivery', () => {
     const mailEmail = { send: () => Promise.resolve() } as unknown as SendEmail
     const legacyEmail = { send: () => Promise.resolve() } as unknown as SendEmail
@@ -26,7 +42,7 @@ describe('public auth config', () => {
 
   it('requires both credentials and the owner switch for social login', () => {
     const config = runtime({
-      enabled: { email: true, github: true, twitter: false, telegram: false, turnstile: false },
+      enabled: { email: true, github: true, google: false, linkedin: false, twitter: false, telegram: false, turnstile: false },
       credentials: { github: { publicKey: 'id', secret: 'secret', source: 'database', secretReadable: true } },
     })
     expect(publicAuthConfig(config).methods.github).toBe(true)
@@ -41,7 +57,7 @@ describe('public auth config', () => {
       signupEnabled: false,
       emailSignupEnabled: false,
       passwordResetEnabled: false,
-      methods: { email: false, github: false, twitter: false, telegram: false },
+      methods: { email: false, github: false, google: false, linkedin: false, twitter: false, telegram: false },
       turnstile: { enabled: false, siteKey: null },
     })
   })
@@ -60,7 +76,7 @@ describe('public auth config', () => {
   it('keeps invite-only email signup available without optional email delivery', () => {
     const config = runtime({
       registrationMode: 'invite_only',
-      enabled: { email: true, github: false, twitter: false, telegram: false, turnstile: true },
+      enabled: { email: true, github: false, google: false, linkedin: false, twitter: false, telegram: false, turnstile: true },
       credentials: { turnstile: { publicKey: 'site', secret: 'secret', source: 'database', secretReadable: true } },
       email: { binding: true, from: 'login@example.com', fromName: 'Discoflare', senderManagedByDeployment: false, verificationReady: true },
     })
