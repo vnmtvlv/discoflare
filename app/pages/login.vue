@@ -93,6 +93,8 @@ async function signInWith(provider: Exclude<AuthLoginMethod, 'email'>) {
 
 const socialProviders = computed(() => [
   { id: 'github' as const, label: 'Continue with GitHub', icon: 'i-ph-github-logo' },
+  { id: 'google' as const, label: 'Continue with Google', icon: 'i-ph-google-logo' },
+  { id: 'linkedin' as const, label: 'Continue with LinkedIn', icon: 'i-ph-linkedin-logo' },
   { id: 'twitter' as const, label: 'Continue with X', icon: 'i-ph-x-logo' },
   { id: 'telegram' as const, label: 'Continue with Telegram', icon: 'i-ph-telegram-logo' },
 ].filter(provider => !native && authConfig.value?.methods[provider.id]))

@@ -27,6 +27,8 @@ const bodySchema = z.object({
   }),
   providers: z.object({
     github: providerSchema,
+    linkedin: providerSchema,
+    google: providerSchema,
     twitter: providerSchema,
     telegram: providerSchema,
     turnstile: providerSchema,
@@ -46,6 +48,8 @@ export default defineEventHandler(async (event): Promise<{ auth: AuthSettingsAdm
 
   const ready: Record<AuthCredentialProvider, boolean> = {
     github: false,
+    linkedin: false,
+    google: false,
     twitter: false,
     telegram: false,
     turnstile: false,
@@ -73,24 +77,26 @@ export default defineEventHandler(async (event): Promise<{ auth: AuthSettingsAdm
   const effective = {
     email: body.email.enabled,
     github: body.providers.github.enabled && ready.github,
+    linkedin: body.providers.linkedin.enabled && ready.linkedin,
+    google: body.providers.google.enabled && ready.google,
     twitter: body.providers.twitter.enabled && ready.twitter,
     telegram: body.providers.telegram.enabled && ready.telegram,
     turnstile: body.providers.turnstile.enabled && ready.turnstile,
   }
-  if (!effective.email && !effective.github && !effective.twitter && !effective.telegram) {
+  if (!effective.email && !effective.github && !effective.google && !effective.twitter && !effective.telegram && !effective.linkedin) {
     fail(400, 'last_login_method', 'At least one login method must remain available')
   }
   const ownerAccounts = await db.select({ providerId: authAccounts.providerId }).from(authAccounts).where(eq(authAccounts.userId, member.user.id))
   const ownerCanSignIn = ownerAccounts.some((account) => {
     const method = account.providerId === 'credential' ? 'email' : account.providerId
-    return method === 'email' || method === 'github' || method === 'twitter' || method === 'telegram'
+    return method === 'email' || method === 'github' || method === 'google' || method === 'twitter' || method === 'telegram' || method === 'linkedin'
       ? effective[method]
       : false
   })
   if (!ownerCanSignIn) fail(400, 'owner_lockout', 'Keep a login method linked to the owner account enabled')
   const sender = current.email.senderManagedByDeployment ? current.email.from : body.email.sender?.trim() || null
   const emailSignupReady = effective.email && current.email.binding && Boolean(sender) && effective.turnstile
-  if (body.registrationMode === 'open' && !emailSignupReady && !effective.github && !effective.twitter && !effective.telegram) {
+  if (body.registrationMode === 'open' && !emailSignupReady && !effective.github && !effective.google && !effective.twitter && !effective.telegram && !effective.linkedin) {
     fail(400, 'open_signup_unavailable', 'Open signup requires a social provider or verified email signup with Turnstile')
   }
 
@@ -140,6 +146,8 @@ export default defineEventHandler(async (event): Promise<{ auth: AuthSettingsAdm
     registrationMode: body.registrationMode,
     emailEnabled: body.email.enabled,
     githubEnabled: body.providers.github.enabled,
+    linkedinEnabled: body.providers.linkedin.enabled,
+    googleEnabled: body.providers.google.enabled,
     twitterEnabled: body.providers.twitter.enabled,
     telegramEnabled: body.providers.telegram.enabled,
     turnstileEnabled: body.providers.turnstile.enabled,

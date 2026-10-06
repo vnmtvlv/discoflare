@@ -31,6 +31,7 @@ import taskPeopleAndDiscussionsSql from '../../drizzle/migrations/0027_task_peop
 import mailboxScopedEmailDeliverySql from '../../drizzle/migrations/0028_mailbox_scoped_email_delivery.sql?raw'
 import retireScheduledHuddlesSql from '../../drizzle/migrations/0029_retire_scheduled_huddles.sql?raw'
 import liveRoomsReplaceVoiceChannelsSql from '../../drizzle/migrations/0030_live_rooms_replace_voice_channels.sql?raw'
+import googleLinkedinAuthSql from '../../drizzle/migrations/0031_google_linkedin_auth.sql?raw'
 import { schema } from '../../drizzle/schema'
 
 export function getDb(d1: D1Database) {
@@ -84,6 +85,7 @@ export const INIT_SQL = d1ExecSql([
   mailboxScopedEmailDeliverySql,
   retireScheduledHuddlesSql,
   liveRoomsReplaceVoiceChannelsSql,
+  googleLinkedinAuthSql,
 ].join('\n--> statement-breakpoint\n'))
 
 /** Bootstrap is only for an empty, pre-v0.1 database. Deployed changes use D1 migrations. */

@@ -328,7 +328,7 @@ export type SessionUser = PublicUser & {
 
 export type RegistrationMode = 'open' | 'invite_only'
 export type AuthMode = 'builtin' | 'access'
-export type AuthLoginMethod = 'email' | 'github' | 'twitter' | 'telegram'
+export type AuthLoginMethod = 'email' | 'github' | 'google' | 'twitter' | 'telegram' | 'linkedin'
 export type AuthCredentialProvider = Exclude<AuthLoginMethod, 'email'> | 'turnstile'
 
 export type PublicAuthConfig = {

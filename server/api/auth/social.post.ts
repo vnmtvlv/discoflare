@@ -9,7 +9,7 @@ import { parseBody } from '../../utils/validate'
 import { createSocialOnboardingTicket, requireCurrentOnboardingAcceptance } from '../../utils/onboarding'
 
 const bodySchema = z.object({
-  provider: z.enum(['github', 'twitter', 'telegram']),
+  provider: z.enum(['github', 'google', 'twitter', 'telegram', 'linkedin']),
   callbackURL: z.string().url().max(1000),
   errorCallbackURL: z.string().url().max(1000),
   inviteCode: z.string().trim().max(100).optional(),

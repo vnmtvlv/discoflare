@@ -47,7 +47,7 @@ Five apps bring conversations, work, email, knowledge, and internal tools into o
 
 - **Access and roles** — Keep members in chat by default and delegate administrative access through custom roles. Manage invites, workspace settings, and audit history.
 - **Profiles** — Members set their display name and upload an avatar from User Settings. Avatars are cropped to a square and stored in the workspace's own R2 bucket.
-- **Registration and login** — Choose invite-only or open registration and enable email, GitHub, X, and Telegram login. Password reset is available when email login, an `EMAIL` binding, and a verified sender are configured.
+- **Registration and login** — Choose invite-only or open registration and enable email, GitHub, Google, X, Telegram, and LinkedIn login. Password reset is available when email login, an `EMAIL` binding, and a verified sender are configured.
 - **Onboarding** — Publish versioned Terms, Privacy, and workspace Rules with the built-in rich-text editor. New accounts must accept the current version.
 - **MCP** — Let the Owner create revocable, scoped access tokens for Codex and other MCP clients, choose the Human or Agent identity each token acts as, and read or update Tasks and Documents through the installation's own `/mcp` endpoint.
 - **Backups** — As the Owner, manually download a backup containing a logical D1 export and every R2 object, or upload it to a separately configured S3-compatible bucket.

@@ -180,7 +180,7 @@ A usable workspace profile created on `workers.dev` with D1, R2, KV, core Durabl
 _Avoid_: Trial workspace, incomplete installation, free workspace
 
 **Login Method**:
-An owner-enabled way to authenticate: email, GitHub, X, or Telegram. A method is effective only when its required credentials or bindings are also available.
+An owner-enabled way to authenticate: email, GitHub, Google, X, Telegram, or LinkedIn. A method is effective only when its required credentials or bindings are also available.
 _Avoid_: Provider credentials as workspace data, enabled UI button as backend authorization
 
 **Onboarding Revision**:

@@ -69,6 +69,8 @@ export async function createAuth(
 ) {
   const config = runtimeConfig ?? await loadAuthRuntimeConfig(env, baseURL)
   const publicConfig = publicAuthConfig(config)
+  const google = config.credentials.google
+  const linkedin = config.credentials.linkedin
   const github = config.credentials.github
   const twitter = config.credentials.twitter
   const telegram = config.credentials.telegram
@@ -135,6 +137,12 @@ export async function createAuth(
         }
       : undefined,
     socialProviders: {
+      ...(publicConfig.methods.linkedin && linkedin
+        ? { linkedin: { clientId: linkedin.publicKey, clientSecret: linkedin.secret, disableImplicitSignUp: true } }
+        : {}),
+      ...(publicConfig.methods.google && google
+        ? { google: { clientId: google.publicKey, clientSecret: google.secret, disableImplicitSignUp: true } }
+        : {}),
       ...(publicConfig.methods.github && github
         ? { github: { clientId: github.publicKey, clientSecret: github.secret, disableImplicitSignUp: true } }
         : {}),
