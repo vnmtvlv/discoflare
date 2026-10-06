@@ -146,6 +146,16 @@ Google uses a Web application OAuth client. LinkedIn requires the **Sign In with
 
 The callback origin must be the deployed workspace URL. `discoflare.com` is the separate marketing site, not an authentication callback host. In invite-only mode, a new identity remains pending until it accepts an invite. In open mode, it becomes an active Member immediately.
 
+### Member login methods
+
+Provider credentials and enabled methods belong to **Workspace Settings → Authentication**, managed by the Owner. Members connect their own identities in **User Settings → Account → Login methods**. Website account authentication on `discoflare.com` and the account-local Admin's owner login are separate.
+
+A member can connect any enabled social provider, add or change an email after verifying the new address, and set an initial password after verifying a real email when the Owner enables email login. A Telegram identity's internal email placeholder is not a deliverable address and cannot be used to set a password. Existing password changes still require the current password and revoke other sessions.
+
+Account changes require a sign-in within the previous 15 minutes. Removing a provider is refused unless another enabled, usable login remains; a password login counts only when its real email meets the workspace's verification policy. Linking preserves the same member id, role, messages, and onboarding record. Provider identities or emails already attached to another member are rejected rather than merging members. An unverified social email is not trusted for linking.
+
+Verification delivery is required to add or change an email or add an initial password. Existing invite-created email/password accounts continue to work under their existing admission policy. Cloudflare Access installations keep their operator-managed authentication and do not expose built-in login-method controls.
+
 ### Verification and password-reset email
 
 Email delivery is not required to create the Owner or to create an account from a private invite link. The invite itself is the admission credential; verification and password reset remain unavailable until auth-email delivery is configured. To verify new addresses and enable password reset:
