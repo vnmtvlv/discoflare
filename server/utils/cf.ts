@@ -31,6 +31,11 @@ export function fail(status: number, code: string, message: string): never {
   })
 }
 
+export function requireFiles(env: Pick<DiscoflareEnv, 'FILES'>): R2Bucket {
+  if (!env.FILES) fail(409, 'files_disabled', 'Files and backups are disabled. Enable R2 from this workspace’s Discoflare Admin, then reload the workspace.')
+  return env.FILES
+}
+
 export function originOk(event: H3Event): boolean {
   const method = event.method.toUpperCase()
   if (method === 'GET' || method === 'HEAD' || method === 'OPTIONS') return true

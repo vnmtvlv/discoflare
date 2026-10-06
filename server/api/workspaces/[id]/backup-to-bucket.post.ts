@@ -4,7 +4,7 @@ import { backupDestinations } from '../../../../drizzle/schema'
 import type { BucketBackupResultDTO } from '../../../../shared/backups'
 import { authSecret } from '../../../utils/auth-config'
 import { backupDestinationConfigured, loadBackupDestination } from '../../../utils/backup-destination'
-import { cf, fail } from '../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { requireMember } from '../../../utils/guards'
 import { writeAudit } from '../../../utils/messages'
@@ -16,6 +16,7 @@ export default defineEventHandler(async (event): Promise<BucketBackupResultDTO> 
   const member = await requireMember(event, workspaceId)
   if (!member.isOwner) fail(403, 'forbidden', 'Only the owner can create backups')
   const { env } = cf(event)
+  requireFiles(env)
   const config = await loadBackupDestination(env, authSecret(env, getRequestURL(event).origin))
   if (!backupDestinationConfigured(config)) {
     fail(409, 'backup_destination_unconfigured', config.secretReadable

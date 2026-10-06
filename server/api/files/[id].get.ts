@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import { attachments } from '../../../drizzle/schema'
 import { parseByteRange } from '../../../shared/http-range'
 import { requireChannelMember } from '../../utils/guards'
-import { cf, fail } from '../../utils/cf'
+import { cf, requireFiles, fail } from '../../utils/cf'
 import { getDb } from '../../utils/db'
 
 export default defineEventHandler(async (event) => {
@@ -16,20 +16,20 @@ export default defineEventHandler(async (event) => {
   const rangeHeader = getHeader(event, 'range')
   let obj: R2ObjectBody | null
   if (rangeHeader) {
-    const metadata = await env.FILES.head(row.r2Key)
+    const metadata = await requireFiles(env).head(row.r2Key)
     if (!metadata) fail(404, 'not_found', 'Blob missing')
     const range = parseByteRange(rangeHeader, metadata.size)
     if (!range) {
       setHeader(event, 'Content-Range', `bytes */${metadata.size}`)
       fail(416, 'range_not_satisfiable', 'Requested file range is not satisfiable')
     }
-    obj = await env.FILES.get(row.r2Key, { range: { offset: range.offset, length: range.length } })
+    obj = await requireFiles(env).get(row.r2Key, { range: { offset: range.offset, length: range.length } })
     setResponseStatus(event, 206)
     setHeader(event, 'Content-Range', `bytes ${range.start}-${range.end}/${metadata.size}`)
     setHeader(event, 'Content-Length', range.length)
   }
   else {
-    obj = await env.FILES.get(row.r2Key)
+    obj = await requireFiles(env).get(row.r2Key)
     if (obj) setHeader(event, 'Content-Length', obj.size)
   }
   if (!obj) fail(404, 'not_found', 'Blob missing')

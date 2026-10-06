@@ -7,7 +7,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
   session.value = await fetch<AdminSession>('/api/session').catch(() => null)
   if (to.path === '/claim') return
   if (!session.value?.claimed) return navigateTo('/claim')
-  if (to.path === '/login') {
+  if (to.path === '/login' || to.path === '/recover') {
     if (session.value.owner) return navigateTo('/')
     return
   }

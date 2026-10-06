@@ -27,10 +27,12 @@ export type DeployRequest = {
   mailSubdomain: string
   mailLocalPart: string
   targetVersion?: string
+  /** New installs may omit R2; existing storage is always preserved. */
+  filesEnabled?: boolean
 }
 
 export type BaseInstallRequest = Pick<DeployRequest,
-  'accountId' | 'workerName' | 'adminEmail' | 'allowedEmails' | 'appName' | 'authMode' | 'registrationMode' | 'targetVersion'
+  'accountId' | 'workerName' | 'adminEmail' | 'allowedEmails' | 'appName' | 'authMode' | 'registrationMode' | 'targetVersion' | 'filesEnabled'
 >
 
 export type DeployResponse = {

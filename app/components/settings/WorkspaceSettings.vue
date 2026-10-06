@@ -232,6 +232,7 @@ async function onSave(event: FormSubmitEvent<Schema>) {
 }
 
 async function uploadWorkspaceIcon(event: Event) {
+  if (session.health?.bindings.r2 === false) return
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
@@ -479,6 +480,7 @@ function roleLabel(name: string) {
               color="neutral"
               variant="soft"
               label="Change icon"
+              :disabled="session.health?.bindings.r2 === false"
               :loading="workspaceIconBusy"
               @click="workspaceIconInput?.click()"
             />

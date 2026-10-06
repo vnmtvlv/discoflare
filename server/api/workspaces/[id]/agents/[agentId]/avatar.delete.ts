@@ -3,7 +3,7 @@ import { agents, users } from '../../../../../../drizzle/schema'
 import { nowIso } from '../../../../../../shared/ids'
 import { Permission } from '../../../../../../shared/permissions'
 import { signalMembersChanged } from '../../../../../../workers/member-events'
-import { cf, fail } from '../../../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../../../utils/cf'
 import { getDb } from '../../../../../utils/db'
 import { requireMember } from '../../../../../utils/guards'
 import { writeAudit } from '../../../../../utils/messages'
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event) => {
     db.update(users).set({ avatarR2Key: null, updatedAt: now }).where(eq(users.id, agentId)),
     db.update(agents).set({ updatedAt: now }).where(eq(agents.userId, agentId)),
   ])
-  if (current.avatarR2Key) await env.FILES.delete(current.avatarR2Key)
+  if (current.avatarR2Key) await requireFiles(env).delete(current.avatarR2Key)
   await writeAudit(env, {
     workspaceId,
     actorId: actor.user.id,

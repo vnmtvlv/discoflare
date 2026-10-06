@@ -4,7 +4,7 @@ import { extForMime, sniffMime } from '../../../../../../shared/mime'
 import { newId, nowIso } from '../../../../../../shared/ids'
 import { Permission } from '../../../../../../shared/permissions'
 import { signalMembersChanged } from '../../../../../../workers/member-events'
-import { cf, fail } from '../../../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../../../utils/cf'
 import { getDb } from '../../../../../utils/db'
 import { requireMember } from '../../../../../utils/guards'
 import { writeAudit } from '../../../../../utils/messages'
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event): Promise<{ avatarR2Key: string }
   if (!current) fail(404, 'not_found', 'Agent not found')
 
   const key = `${workspaceId}/agents/${agentId}/avatar-${newId()}.${extForMime(mime)}`
-  await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
+  await requireFiles(env).put(key, file.data, { httpMetadata: { contentType: mime } })
   try {
     const now = nowIso()
     await db.batch([
@@ -40,10 +40,10 @@ export default defineEventHandler(async (event): Promise<{ avatarR2Key: string }
     ])
   }
   catch (error) {
-    await env.FILES.delete(key)
+    await requireFiles(env).delete(key)
     throw error
   }
-  if (current.avatarR2Key) await env.FILES.delete(current.avatarR2Key)
+  if (current.avatarR2Key) await requireFiles(env).delete(current.avatarR2Key)
   await writeAudit(env, {
     workspaceId,
     actorId: actor.user.id,

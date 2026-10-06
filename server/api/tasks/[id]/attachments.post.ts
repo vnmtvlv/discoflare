@@ -3,7 +3,7 @@ import { newId, nowIso, WORKSPACE_ID } from '../../../../shared/ids'
 import { MAX_ATTACHMENT_BYTES, sniffMime } from '../../../../shared/mime'
 import { hasPermission, Permission } from '../../../../shared/permissions'
 import { signalTasksChanged } from '../../../../workers/task-events'
-import { cf, fail } from '../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { requireMember } from '../../../utils/guards'
 import { writeAudit } from '../../../utils/messages'
@@ -25,13 +25,13 @@ export default defineEventHandler(async (event) => {
   const id = newId()
   const safeName = (file.filename || 'file').replace(/[^\w.-]+/g, '_').slice(0, 80)
   const key = `${WORKSPACE_ID}/tasks/${taskId}/${id}-${safeName}`
-  await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
+  await requireFiles(env).put(key, file.data, { httpMetadata: { contentType: mime } })
   const row = { id, taskId, uploaderId: actor.user.id, r2Key: key, filename: safeName, contentType: mime, sizeBytes: file.data.byteLength, width: null, height: null, createdAt: nowIso() }
   try {
     await getDb(env.DB).insert(taskAttachments).values(row)
   }
   catch (error) {
-    await env.FILES.delete(key)
+    await requireFiles(env).delete(key)
     throw error
   }
   await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task_attachment.create', targetType: 'task', targetId: taskId, meta: { attachmentId: id, filename: safeName } })

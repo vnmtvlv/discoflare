@@ -8,7 +8,7 @@ export function asRpc<T>(stub: unknown): Rpc<T> {
 
 export type DiscoflareEnv = {
   DB: D1Database
-  FILES: R2Bucket
+  FILES?: R2Bucket
   TICKETS: KVNamespace
   CHANNEL_DO: DurableObjectNamespace
   WORKSPACE_DO: DurableObjectNamespace

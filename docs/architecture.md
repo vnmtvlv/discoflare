@@ -13,7 +13,7 @@ Cloudflare Access (optional advanced outer perimeter)
 Nuxt/Nitro Worker
   Access JWT or Better Auth, admission policy, REST, email ingress, R2, RealtimeKit tokens
   ├─ D1          catalog + message history + Data resources
-  ├─ R2          FILES
+  ├─ R2          FILES (optional)
   ├─ KV          TICKETS
   ├─ ChannelDO   live sockets, typing, Live session lifecycle
   ├─ WorkspaceDO presence
@@ -135,3 +135,5 @@ Replies in that DM Thread keep addressing the same Agent without another mention
 - A thread is a `channels.type = thread` child with one root message and its own Channel DO, messages, and read cursor.
 - A thread inherits access from its parent channel; copied visibility is descriptive, not an authorization boundary.
 - A channel is shown unread when either its own cursor or one of its thread cursors trails the latest message.
+
+An installation may omit `FILES` when R2 is not enabled. D1, KV and workspace Durable Objects still support a text workspace. File APIs and full backup exports fail explicitly with `files_disabled`; email ingress stores text and reports omitted attachments. The account-local Admin can provision and attach R2 later without redeploying workspace code or replacing other bindings. Admin recovery codes are stored only as hashes in Admin D1; a single transaction consumes the code, changes the owner password and revokes sessions. Neither path depends on discoflare.com.

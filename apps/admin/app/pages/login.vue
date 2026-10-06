@@ -35,7 +35,7 @@ async function submit() {
         <UInput v-model="password" type="password" autocomplete="current-password" class="w-full" />
       </UFormField>
       <UButton type="submit" label="Sign in" block :loading="loading" />
-      <p class="text-xs text-dimmed">Forgot your password? Set a new <code>ADMIN_CLAIM_TOKEN</code> secret on this Worker and open <code>/claim#token=…</code>.</p>
+      <NuxtLink to="/recover" class="block text-sm text-primary">Forgot your password? Use a recovery code</NuxtLink>
     </form>
   </div>
 </template>

@@ -109,7 +109,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     const model = profile.model || this.getModel()
     const metadata = this.messageMetadata(this.activeTurnMetadata)
     const canSeeImages = agentModelSupportsVision(model)
-    const messages = metadata?.hasImages && canSeeImages
+    const messages = metadata?.hasImages && canSeeImages && this.env.FILES
       ? await attachMessageImages(ctx.messages, this.env.DB, this.env.FILES, metadata.sourceMessageId)
       : ctx.messages
     const browserOn = agentBrowserConfigured(this.env)

@@ -89,7 +89,7 @@ onChange((list) => {
   resetFiles()
 })
 
-const attachmentsDisabled = computed(() => props.disabled || props.canAttach === false)
+const attachmentsDisabled = computed(() => props.disabled || props.canAttach === false || session.health?.bindings.r2 === false)
 
 function addFiles(incoming: File[]) {
   if (!incoming.length) return
@@ -344,7 +344,7 @@ async function submit() {
     toast.add({ title: `Messages can be up to ${MAX_LENGTH} characters`, color: 'error' })
     return
   }
-  if (files.value.length && props.canAttach === false) {
+  if (files.value.length && attachmentsDisabled.value) {
     toast.add({ title: 'You cannot attach files in this channel', color: 'error' })
     return
   }

@@ -4,7 +4,7 @@ import { isStoredAvatarKey, MAX_AVATAR_BYTES } from '../../../shared/avatar'
 import { newId, nowIso, WORKSPACE_ID } from '../../../shared/ids'
 import { extForMime, sniffMime } from '../../../shared/mime'
 import { signalMembersChanged } from '../../../workers/member-events'
-import { cf, fail } from '../../utils/cf'
+import { cf, requireFiles, fail } from '../../utils/cf'
 import { getDb } from '../../utils/db'
 import { requireMember } from '../../utils/guards'
 
@@ -24,15 +24,15 @@ export default defineEventHandler(async (event): Promise<{ avatarR2Key: string }
   if (!current) fail(404, 'not_found', 'User not found')
 
   const key = `${WORKSPACE_ID}/users/${user.id}/avatar-${newId()}.${extForMime(mime)}`
-  await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
+  await requireFiles(env).put(key, file.data, { httpMetadata: { contentType: mime } })
   try {
     await db.update(users).set({ avatarR2Key: key, updatedAt: nowIso() }).where(eq(users.id, user.id))
   }
   catch (error) {
-    await env.FILES.delete(key)
+    await requireFiles(env).delete(key)
     throw error
   }
-  if (isStoredAvatarKey(current.avatarR2Key)) await env.FILES.delete(current.avatarR2Key)
+  if (isStoredAvatarKey(current.avatarR2Key)) await requireFiles(env).delete(current.avatarR2Key)
   waitUntil(signalMembersChanged(env, WORKSPACE_ID))
   return { avatarR2Key: key }
 })

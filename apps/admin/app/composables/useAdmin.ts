@@ -17,6 +17,7 @@ export type Workspace = {
   version: string | null
   linked: boolean
   updateAvailable: boolean
+  filesEnabled: boolean
 }
 
 export type ProgressState = 'pending' | 'active' | 'complete'

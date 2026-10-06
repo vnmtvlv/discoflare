@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ProgressState, Workspace } from '../../composables/useAdmin'
+import type { AdminSession, ProgressState, Workspace } from '../../composables/useAdmin'
 
 type Detail = {
   workspace: Workspace
@@ -12,6 +12,7 @@ type Detail = {
 }
 
 const route = useRoute()
+const session = useState<AdminSession | null>('admin-session')
 const toast = useToast()
 const name = computed(() => String(route.params.name))
 const busy = ref('')
@@ -67,6 +68,12 @@ const link = () => run('link', async () => {
 const ownerSetup = () => run('owner', async () => {
   const result = await adminFetch<{ setupUrl: string }>(`/api/workspaces/${name.value}/owner-setup`, { method: 'POST' })
   setupUrl.value = result.setupUrl
+})
+
+const enableFiles = () => run('files', async () => {
+  await adminFetch(`/api/workspaces/${name.value}/files`, { method: 'POST' })
+  toast.add({ title: 'R2 connected. Reload the workspace to enable files and backups.', color: 'success' })
+  await refresh()
 })
 
 const provisionLive = () => run('live', async () => {
@@ -138,6 +145,19 @@ const remove = () => run('delete', async () => {
             <UBadge v-if="!domain.sendingEnabled" label="Cannot send" color="warning" variant="subtle" size="sm" class="ms-1" />
           </li>
         </ul>
+      </section>
+
+      <section class="rounded-lg border border-default p-5">
+        <h2 class="font-semibold text-highlighted">Files and backups</h2>
+        <p v-if="workspace.filesEnabled" class="mt-1 text-sm text-muted">R2 is connected. Attachments, uploaded avatars, and workspace backups are available.</p>
+        <template v-else>
+          <UAlert class="mt-3" color="warning" title="R2 is not connected" description="This workspace works without file storage. Attachments, uploaded avatars, and workspace backups are disabled." />
+          <p class="mt-3 text-sm text-muted">Enable an R2 subscription in your Cloudflare account, then connect it here. R2 includes free monthly usage; additional usage is billed by Cloudflare.</p>
+          <div class="mt-4 flex flex-wrap gap-2">
+            <UButton :to="`https://dash.cloudflare.com/${session?.accountId || ''}/r2/overview`" target="_blank" label="Enable R2 in Cloudflare" color="neutral" variant="outline" trailing-icon="i-ph-arrow-up-right" />
+            <UButton label="Connect R2" :loading="busy === 'files'" :disabled="Boolean(busy)" @click="enableFiles" />
+          </div>
+        </template>
       </section>
 
       <section class="rounded-lg border border-default p-5">

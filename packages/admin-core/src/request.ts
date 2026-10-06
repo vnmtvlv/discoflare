@@ -53,6 +53,7 @@ export function parseDeployRequest(value: unknown): DeployRequest {
     mailSubdomain,
     mailLocalPart,
     targetVersion,
+    filesEnabled: body.filesEnabled !== false,
   }
 }
 
@@ -77,6 +78,7 @@ export function parseBaseInstallRequest(value: unknown): BaseInstallRequest {
     authMode,
     registrationMode,
     targetVersion,
+    filesEnabled,
   } = parsed
-  return { accountId, workerName, adminEmail, allowedEmails, appName, authMode, registrationMode, targetVersion }
+  return { accountId, workerName, adminEmail, allowedEmails, appName, authMode, registrationMode, targetVersion, filesEnabled }
 }

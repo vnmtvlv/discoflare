@@ -19,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const attachments = await db.select({ r2Key: taskAttachments.r2Key }).from(taskAttachments).where(eq(taskAttachments.taskId, taskId))
   await db.delete(tasks).where(eq(tasks.id, taskId))
   await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'task.delete', targetType: 'task', targetId: taskId, meta: { boardId: task.boardId, title: task.title } })
-  if (attachments.length) waitUntil(Promise.all(attachments.map(item => env.FILES.delete(item.r2Key))))
+  if (attachments.length) waitUntil(Promise.all(attachments.map(item => env.FILES?.delete(item.r2Key))))
   waitUntil(signalTasksChanged(env, task.boardId, taskId))
   return { ok: true }
 })
