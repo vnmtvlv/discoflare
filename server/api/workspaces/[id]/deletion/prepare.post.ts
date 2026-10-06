@@ -23,6 +23,6 @@ export default defineEventHandler(async (event): Promise<{ ok: true, deletedObje
   }
 
   await env.TICKETS.delete(key)
-  const deletedObjects = await emptyLiveFiles(env.FILES)
+  const deletedObjects = env.FILES ? await emptyLiveFiles(env.FILES) : 0
   return { ok: true, deletedObjects }
 })

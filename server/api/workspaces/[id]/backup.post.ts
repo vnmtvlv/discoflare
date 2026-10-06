@@ -1,5 +1,5 @@
 import { version as packageVersion } from '../../../../package.json'
-import { cf, fail, originOk } from '../../../utils/cf'
+import { cf, requireFiles, fail, originOk } from '../../../utils/cf'
 import { requireMember } from '../../../utils/guards'
 import { writeAudit } from '../../../utils/messages'
 import { createWorkspaceBackup } from '../../../utils/workspace-backup'
@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
   if (!member.isOwner) fail(403, 'forbidden', 'Only the owner can download backups')
 
   const { env } = cf(event)
+  requireFiles(env)
   const createdAt = new Date().toISOString()
   const version = env.DISCOFLARE_VERSION?.trim() || packageVersion
   await writeAudit(env, {

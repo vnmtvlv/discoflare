@@ -1,3 +1,4 @@
+import { requireFiles } from './cf'
 import type { DiscoflareEnv } from '../../workers/env'
 import { createTarStream, sqlIdentifier, sqlInsertStatements, textEntry, type TarEntry } from './backup-format'
 
@@ -118,7 +119,7 @@ async function* backupEntries(env: DiscoflareEnv, createdAt: string, version: st
 
   let cursor: string | undefined
   do {
-    const listed = await env.FILES.list({
+    const listed = await requireFiles(env).list({
       limit: 1000,
       cursor,
       include: ['httpMetadata', 'customMetadata'],
@@ -138,7 +139,7 @@ async function* backupEntries(env: DiscoflareEnv, createdAt: string, version: st
       }
       yield textEntry(`r2/${sequence}.json`, `${JSON.stringify(metadata, null, 2)}\n`, modifiedAt)
 
-      const body = await env.FILES.get(object.key, { onlyIf: { etagMatches: object.etag } })
+      const body = await requireFiles(env).get(object.key, { onlyIf: { etagMatches: object.etag } })
       if (!body || !('body' in body)) throw new Error(`R2 object changed while backing up: ${object.key}`)
       yield {
         path: `r2/${sequence}.bin`,
@@ -160,5 +161,6 @@ async function* backupEntries(env: DiscoflareEnv, createdAt: string, version: st
 }
 
 export function createWorkspaceBackup(env: DiscoflareEnv, createdAt: string, version: string) {
+  requireFiles(env)
   return createTarStream(backupEntries(env, createdAt, version))
 }

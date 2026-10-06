@@ -202,6 +202,7 @@ async function cleanup(prNumber) {
   const resources = previewResourceNames(prNumber)
   const production = JSON.parse(await readFile(workerConfigPath, 'utf8'))
   deletePreview(resources, production.name)
+  deletePreview({ ...resources, previewName: `${resources.previewName}-no-files` }, production.name)
   const complete = deleteDataResources(resources)
   console.log(JSON.stringify({ prNumber: resources.prNumber, complete }))
 }

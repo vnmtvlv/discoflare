@@ -27,6 +27,7 @@ export type WorkspaceSummary = {
   /** Reaches this Admin through `DISCOFLARE_ADMIN`. */
   linked: boolean
   updateAvailable: boolean
+  filesEnabled: boolean
 }
 
 const WORKER_NAME = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/u
@@ -42,6 +43,7 @@ function summary(installation: CloudflareInstallation, latest: string | null): W
     origin: installation.origin,
     version: installation.version,
     linked: installation.resources.admin,
+    filesEnabled: Boolean(installation.resources.bucketName),
     updateAvailable: Boolean(latest && installation.version && compareVersions(latest, installation.version) > 0),
   }
 }
@@ -69,7 +71,7 @@ export async function workspaceSummary(env: AdminEnv, workerName: string): Promi
 
 export async function createWorkspace(
   env: AdminEnv,
-  input: { workerName?: unknown, appName?: unknown, ownerEmail?: unknown },
+  input: { workerName?: unknown, appName?: unknown, ownerEmail?: unknown, filesEnabled?: unknown },
   report: DeployProgressReporter,
 ) {
   const workerName = typeof input.workerName === 'string' ? input.workerName.trim().toLowerCase() : ''
@@ -91,6 +93,7 @@ export async function createWorkspace(
     allowedEmails: [],
     authMode: 'builtin',
     registrationMode: 'invite_only',
+    filesEnabled: input.filesEnabled === true,
     ...(version ? { targetVersion: version } : {}),
   }, { admin: link(env), report, manifestUrl: env.DISCOFLARE_RELEASE_MANIFEST || undefined })
   await audit(env.ADMIN_DB, 'workspace.create', workerName, { version: result.version })

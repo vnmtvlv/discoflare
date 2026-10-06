@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm'
 import { agents, users } from '../../../../../../drizzle/schema'
-import { cf, fail } from '../../../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../../../utils/cf'
 import { getDb } from '../../../../../utils/db'
 import { requireMember } from '../../../../../utils/guards'
 
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
     .where(and(eq(users.id, agentId), eq(users.kind, 'agent')))
     .limit(1))[0]
   if (!row?.avatarR2Key) fail(404, 'not_found', 'Agent avatar not found')
-  const object = await env.FILES.get(row.avatarR2Key)
+  const object = await requireFiles(env).get(row.avatarR2Key)
   if (!object) fail(404, 'not_found', 'Agent avatar blob missing')
   setHeader(event, 'Content-Type', object.httpMetadata?.contentType || 'application/octet-stream')
   setHeader(event, 'Cache-Control', 'private, max-age=3600')

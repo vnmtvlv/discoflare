@@ -4,6 +4,8 @@ import * as z from 'zod'
 import type { BackupDestinationDTO, BucketBackupResultDTO } from '~~/shared/backups'
 import { formatBytes, formatDateTime } from '~~/shared/format'
 
+const filesEnabled = computed(() => useSessionStore().health?.bindings.r2 !== false)
+
 const props = defineProps<{ workspaceId: string }>()
 const toast = useToast()
 const loading = ref(true)
@@ -179,6 +181,7 @@ onMounted(load)
     <h1 class="text-xl font-semibold text-highlighted">Backups</h1>
     <p class="mt-1 text-sm text-muted">Create a manual workspace archive.</p>
 
+    <UAlert v-if="!filesEnabled" class="mt-5" color="warning" title="Backups are disabled" description="Enable R2 from this workspace’s Discoflare Admin, then reload the workspace. Files and full workspace backups will become available." />
     <div class="mt-8 rounded-lg border border-default bg-elevated p-5">
       <div class="flex items-start gap-3">
         <div class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-accented text-muted">
@@ -201,7 +204,7 @@ onMounted(load)
       />
 
       <form class="mt-5" method="post" :action="downloadUrl" target="_blank">
-        <UButton type="submit" label="Download backup" trailing-icon="i-ph-download-simple" />
+        <UButton type="submit" label="Download backup" :disabled="!filesEnabled" trailing-icon="i-ph-download-simple" />
       </form>
     </div>
 
@@ -329,7 +332,7 @@ onMounted(load)
               label="Backup to bucket"
               trailing-icon="i-ph-cloud-arrow-up"
               :loading="uploading"
-              :disabled="saving || testing || destinationDirty"
+              :disabled="!filesEnabled || saving || testing || destinationDirty"
               @click="backupToBucket"
             />
           </div>

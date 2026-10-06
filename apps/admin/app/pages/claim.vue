@@ -7,6 +7,7 @@ const email = ref('')
 const password = ref('')
 const error = ref('')
 const loading = ref(false)
+const codes = ref<string[]>([])
 
 function readToken() {
   const hash = new URLSearchParams(window.location.hash.slice(1))
@@ -27,8 +28,10 @@ async function submit() {
   loading.value = true
   error.value = ''
   try {
-    await adminFetch('/api/claim', { method: 'POST', body: { token: token.value, email: email.value, password: password.value } })
-    await navigateTo('/', { replace: true })
+    const result = await adminFetch<{ codes: string[] }>('/api/claim', { method: 'POST', body: { token: token.value, email: email.value, password: password.value } })
+    codes.value = result.codes
+    password.value = ''
+    token.value = ''
   }
   catch (cause) {
     error.value = failureMessage(cause, 'The Admin could not be claimed')
@@ -41,7 +44,8 @@ async function submit() {
 
 <template>
   <div class="grid min-h-dvh place-items-center bg-default px-4">
-    <form class="w-full max-w-sm space-y-5" @submit.prevent="submit">
+    <RecoveryCodes v-if="codes.length" :codes="codes" class="w-full max-w-lg" @saved="navigateTo('/', { replace: true })" />
+    <form v-else class="w-full max-w-sm space-y-5" @submit.prevent="submit">
       <div>
         <h1 class="text-xl font-semibold text-highlighted">{{ session?.claimed ? 'Recover the Admin' : 'Claim your Discoflare Admin' }}</h1>
         <p class="mt-1 text-sm text-muted">

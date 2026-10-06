@@ -122,6 +122,15 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: node scripts/preview-report.mjs comment .preview/deployment.ndjson
 
+      - name: Build Discoflare Admin for runtime verification
+        run: pnpm --filter @discoflare/admin build
+
+      - name: Verify a workspace Worker Preview without R2
+        run: node scripts/preview-no-files.mjs
+
+      - name: Verify recovery on an isolated Admin Worker and clean up
+        run: node scripts/admin-preview-smoke.mjs
+
   cleanup:
     name: Delete closed PR Preview
     if: >-

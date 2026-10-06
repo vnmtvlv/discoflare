@@ -80,7 +80,7 @@ const { can, mine } = usePermissions(members)
 const canPin = computed(() => isDm.value ? !frozen.value : can(Permission.manageChannels))
 const effectivePermissions = computed(() => channel.value?.permissions ?? mine.value?.role.permissions ?? 0)
 const canSendMessages = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.sendMessages))
-const canAttachFiles = computed(() => isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.attachFiles))
+const canAttachFiles = computed(() => session.health?.bindings.r2 !== false && (isDm.value ? !frozen.value : hasPermission(effectivePermissions.value, Permission.attachFiles)))
 // Starting follows the role in Direct Messages too; anyone who can open the conversation can join.
 const canStartLive = computed(() => !frozen.value && hasPermission(effectivePermissions.value, Permission.startLive))
 const isConversation = computed(() => type.value !== 'thread')

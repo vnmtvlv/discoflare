@@ -70,6 +70,7 @@ async function setAutomatic(key: 'admin' | 'workspaces', value: boolean) {
 <template>
   <AdminShell>
     <div class="space-y-8">
+      <AccountRecovery />
       <CloudflareConnection v-if="session" :session="session" @changed="reloadSession" />
 
       <section>

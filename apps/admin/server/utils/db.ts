@@ -33,15 +33,23 @@ const SCHEMA = [
     worker_name TEXT PRIMARY KEY, app_id TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS audit (
     id TEXT PRIMARY KEY, at TEXT NOT NULL, action TEXT NOT NULL, target TEXT, detail TEXT)`,
+  `CREATE TABLE IF NOT EXISTS recovery_codes (
+    code_hash TEXT PRIMARY KEY, owner_id TEXT NOT NULL, used_at TEXT, created_at TEXT NOT NULL)`,
+  `CREATE TABLE IF NOT EXISTS recovery_attempts (
+    key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires_at INTEGER NOT NULL)`,
 ]
 
-let ready: Promise<void> | null = null
+const schemas = new WeakMap<D1Database, Promise<void>>()
 
 export function ensureSchema(db: D1Database): Promise<void> {
-  ready ??= db.batch(SCHEMA.map(sql => db.prepare(sql))).then(() => undefined).catch((error) => {
-    ready = null
-    throw error
-  })
+  let ready = schemas.get(db)
+  if (!ready) {
+    ready = db.batch(SCHEMA.map(sql => db.prepare(sql))).then(() => undefined).catch((error) => {
+      schemas.delete(db)
+      throw error
+    })
+    schemas.set(db, ready)
+  }
   return ready
 }
 

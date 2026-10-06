@@ -142,6 +142,7 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
       key: `${WORKSPACE_ID}/mail/attachments/${messageId}/${id}-${filename}`,
     }]
   })
+  if (!env.FILES) omitted.push(...attachmentRows.splice(0).map(attachment => `${attachment.filename} (R2 is disabled)`))
   for (const extra of attachmentRows.splice(MAIL_LIMITS.attachments)) omitted.push(extra.filename)
   const body = plainBody(parsed.text, parsed.html)
   const content = omitted.length
@@ -200,10 +201,10 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
       parsed.messageId || null,
       parsed.inReplyTo || null,
       JSON.stringify(refs),
-      rawKey,
+      env.FILES ? rawKey : null,
       created,
     ),
-    ...attachmentRows.map(attachment => env.DB.prepare(
+    ...(env.FILES ? attachmentRows : []).map(attachment => env.DB.prepare(
       `INSERT INTO attachments
        (id, message_id, channel_id, uploader_id, r2_key, filename, content_type, size_bytes, width, height, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?)`,
@@ -211,16 +212,17 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
   )
 
   // Files go to R2 before their rows exist; if the rows cannot be written, remove them again.
+  const files = env.FILES
   const keys = [rawKey, ...attachmentRows.map(attachment => attachment.key)]
   try {
-    await Promise.all([
-      env.FILES.put(rawKey, raw, { httpMetadata: { contentType: 'message/rfc822' } }),
-      ...attachmentRows.map(attachment => env.FILES.put(attachment.key, attachment.content, { httpMetadata: { contentType: attachment.contentType } })),
+    if (files) await Promise.all([
+      files.put(rawKey, raw, { httpMetadata: { contentType: 'message/rfc822' } }),
+      ...attachmentRows.map(attachment => files.put(attachment.key, attachment.content, { httpMetadata: { contentType: attachment.contentType } })),
     ])
     await env.DB.batch(statements)
   }
   catch (error) {
-    await env.FILES.delete(keys).catch(() => {})
+    await files?.delete(keys).catch(() => {})
     // Another delivery of the same email saved it first.
     if (/UNIQUE constraint failed/iu.test(error instanceof Error ? error.message : String(error))) return { accepted: true }
     throw error

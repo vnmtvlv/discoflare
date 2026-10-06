@@ -134,6 +134,17 @@ describe('inbound email', () => {
     expect(await replyRecipients(env, thread!.id, 'support@example.com')).toEqual(['manager@example.net'])
   })
 
+  it('delivers email without R2 and explicitly reports omitted attachments', async () => {
+    env = { ...env, FILES: undefined }
+    await receive(email({ id: '<no-r2@example.net>', to: 'support@example.com', attachments: [{ name: 'a.bin', bytes: 10 }] }), 'support@example.com')
+    expect(threadsIn('support')).toHaveLength(1)
+    expect(sqlite.prepare('SELECT raw_r2_key FROM email_messages').get()).toEqual({ raw_r2_key: null })
+    expect(sqlite.prepare('SELECT COUNT(*) AS count FROM attachments').get()).toEqual({ count: 0 })
+    const message = sqlite.prepare("SELECT content FROM messages WHERE author_id = 'mail-external'").get() as { content: string }
+    expect(message.content).toContain('a.bin (R2 is disabled)')
+    expect(files.size).toBe(0)
+  })
+
   it('rejects a message over the size limit before reading it', async () => {
     const result = await receive(email({ id: '<big@example.net>', to: 'support@example.com' }), 'support@example.com', MAIL_LIMITS.rawBytes + 1)
     expect(result).toEqual({ accepted: false, reason: 'Message is too large' })

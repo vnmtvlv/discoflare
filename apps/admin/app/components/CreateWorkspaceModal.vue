@@ -10,7 +10,7 @@ const emit = defineEmits<{ created: [] }>()
 const STEPS = [
   { id: 'account', label: 'Check the Cloudflare account' },
   { id: 'installation', label: 'Reserve the workspace' },
-  { id: 'storage', label: 'Create D1, R2, and KV storage' },
+  { id: 'storage', label: 'Create workspace storage' },
   { id: 'database', label: 'Apply database migrations' },
   { id: 'assets', label: 'Upload the app' },
   { id: 'access', label: 'Configure sign-in' },
@@ -23,6 +23,7 @@ const STEPS = [
 const appName = ref('')
 const workerName = ref('')
 const edited = ref(false)
+const filesEnabled = ref(false)
 const phase = ref<'form' | 'working' | 'done'>('form')
 const steps = ref<Record<string, ProgressState>>({})
 const error = ref('')
@@ -41,6 +42,7 @@ watch(open, (value) => {
   appName.value = ''
   workerName.value = ''
   edited.value = false
+  filesEnabled.value = false
 })
 
 watch(appName, (value) => {
@@ -72,7 +74,7 @@ async function create() {
   error.value = ''
   steps.value = {}
   try {
-    result.value = await streamProgress<Result>('/api/workspaces', { appName: appName.value.trim(), workerName: workerName.value }, (step, state) => {
+    result.value = await streamProgress<Result>('/api/workspaces', { appName: appName.value.trim(), workerName: workerName.value, filesEnabled: filesEnabled.value }, (step, state) => {
       steps.value = { ...steps.value, [step]: state }
     })
     phase.value = 'done'
@@ -107,6 +109,9 @@ async function create() {
             <span class="mt-1 block">Also the Worker name in Cloudflare. It can't be changed later.</span>
           </template>
         </UFormField>
+        <USwitch v-model="filesEnabled" label="Enable files and backups with R2" />
+        <UAlert v-if="!filesEnabled" color="warning" title="Start without R2" description="Chat, Tasks, Mail, and Data work without file storage. Attachments, uploaded avatars, and workspace backups are disabled. Enable R2 and connect it here later." />
+        <p v-else class="text-sm text-muted">First enable an R2 subscription in Cloudflare. R2 includes free monthly usage; additional usage is billed by Cloudflare.</p>
         <p class="text-sm text-muted">The workspace starts invite-only on workers.dev. Connect domains, email, and Live from its Workspace Settings.</p>
       </form>
       <div v-else-if="phase === 'working'" class="space-y-5">
@@ -116,6 +121,7 @@ async function create() {
       <div v-else-if="result" class="space-y-4">
         <p class="font-medium text-highlighted">{{ appName }} is running on Discoflare {{ result.version }}.</p>
         <ULink :to="result.url" target="_blank" class="block truncate text-sm text-primary">{{ result.url }}</ULink>
+        <UAlert v-if="!filesEnabled" color="warning" title="Files and backups are disabled" description="You can enable R2 later from this workspace’s Admin page." />
         <p v-if="result.setupUrl" class="text-sm text-muted">Next, create the workspace owner. The private setup link works once; you can issue a new one from the workspace page.</p>
       </div>
     </template>

@@ -26,7 +26,6 @@ const missing = computed(() => {
   const bindings = health.value?.bindings
   const out: string[] = []
   if (bindings && !bindings.db) out.push('database')
-  if (bindings && !bindings.r2) out.push('files')
   if (bindings && !bindings.kv) out.push('tickets')
   if (bindings && !bindings.channelDo) out.push('channel')
   if (bindings && !bindings.workspaceDo) out.push('workspace')

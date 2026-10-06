@@ -174,7 +174,7 @@ export async function ensureD1(client: Cloudflare, accountId: string, name: stri
   return database.uuid
 }
 
-async function ensureR2(client: Cloudflare, accountId: string, name: string) {
+export async function ensureR2(client: Cloudflare, accountId: string, name: string) {
   let cursor: string | undefined
   do {
     const page = await client.r2.buckets.list({ account_id: accountId, name_contains: name, cursor })
@@ -190,6 +190,18 @@ async function ensureKv(client: Cloudflare, accountId: string, title: string) {
     if (namespace.title === title) return namespace.id
   }
   return (await client.kv.namespaces.create({ account_id: accountId, title })).id
+}
+
+export async function provisionWorkspaceStorage(client: Cloudflare, request: Pick<DeployRequest, 'accountId' | 'workerName' | 'filesEnabled'>, existing: Pick<ExistingWorker, 'exists' | 'databaseId' | 'bucketName' | 'kvId'>) {
+  const [databaseId, bucketName, kvId] = existing.exists
+    ? [existing.databaseId, existing.bucketName, existing.kvId]
+    : await Promise.all([
+        ensureD1(client, request.accountId, `${request.workerName}-db`),
+        request.filesEnabled !== false ? ensureR2(client, request.accountId, `${request.workerName}-files`) : undefined,
+        ensureKv(client, request.accountId, `${request.workerName}-tickets`),
+      ])
+  if (!databaseId || !kvId) throw createError({ statusCode: 409, statusMessage: 'Existing Discoflare storage bindings are incomplete' })
+  return { databaseId, bucketName, kvId }
 }
 
 async function assertDomainAvailable(accessToken: string, request: DeployRequest) {
@@ -377,7 +389,7 @@ async function uploadWorker(
   request: DeployRequest,
   manifest: InstallerReleaseManifest,
   worker: ArrayBuffer,
-  resources: { databaseId: string, bucketName: string, kvId: string, assetsJwt: string, origin: string },
+  resources: { databaseId: string, bucketName: string | undefined, kvId: string, assetsJwt: string, origin: string },
   existing: ExistingWorker,
   ownerSetupToken: string | null,
   telemetry: { installationId: string, token: string },
@@ -389,7 +401,6 @@ async function uploadWorker(
   const hostname = new URL(resources.origin).hostname
   const bindings: Array<Record<string, unknown>> = [
     { type: 'd1', name: 'DB', database_id: resources.databaseId },
-    { type: 'r2_bucket', name: 'FILES', bucket_name: resources.bucketName },
     { type: 'kv_namespace', name: 'TICKETS', namespace_id: resources.kvId },
     { type: 'ai', name: 'AI' },
     { type: 'browser', name: 'BROWSER' },
@@ -413,6 +424,7 @@ async function uploadWorker(
     { type: 'secret_text', name: 'DISCOFLARE_TELEMETRY_TOKEN', text: telemetry.token },
     ...manifest.durableObjects.map(item => ({ type: 'durable_object_namespace', name: item.binding, class_name: item.className })),
   ]
+  if (resources.bucketName) bindings.push({ type: 'r2_bucket', name: 'FILES', bucket_name: resources.bucketName })
   if (admin) bindings.push(workspaceAdminBinding(request.workerName, admin))
   if (control && !admin) {
     bindings.push(
@@ -651,6 +663,9 @@ export async function deployDiscoflare(
   if (admin && !release.manifest.capabilities?.includes(ADMIN_CAPABILITY)) {
     throw createError({ statusCode: 409, statusMessage: `Discoflare ${release.manifest.version} cannot be managed by a Discoflare Admin` })
   }
+  if (request.filesEnabled === false && !release.manifest.capabilities?.includes('optional-r2')) {
+    throw createError({ statusCode: 409, statusMessage: 'Update to a Discoflare release supporting optional R2 before installing without files' })
+  }
   const existing = await inspectWorker(client, request.accountId, request.workerName)
   const existingPrimary = await primaryWorker(client, request.accountId)
   const primary = existing.exists ? existing.primary === true : existingPrimary === null
@@ -708,17 +723,8 @@ export async function deployDiscoflare(
     token: randomBase64Url(32),
   }
   await progress('storage', 'active')
-  const [databaseId, bucketName, kvId] = existing.exists
-    ? [existing.databaseId, existing.bucketName, existing.kvId]
-    : await Promise.all([
-        ensureD1(client, request.accountId, `${request.workerName}-db`),
-        ensureR2(client, request.accountId, `${request.workerName}-files`),
-        ensureKv(client, request.accountId, `${request.workerName}-tickets`),
-      ])
-  if (!databaseId || !bucketName || !kvId) {
-    throw createError({ statusCode: 409, statusMessage: 'Existing Discoflare storage bindings are incomplete' })
-  }
-  await progress('storage', 'complete', existing.exists ? 'Reusing D1, R2, and KV' : 'D1, R2, and KV ready')
+  const { databaseId, bucketName, kvId } = await provisionWorkspaceStorage(client, request, existing)
+  await progress('storage', 'complete', bucketName ? 'D1, R2, and KV ready' : 'D1 and KV ready; files and backups disabled')
 
   await progress('database', 'active')
   const appliedMigrations = await applyD1Migrations(accessToken, request.accountId, databaseId, release.assets)

@@ -117,7 +117,7 @@ const manifest = {
   releasedAt: new Date().toISOString(),
   compatibilityDate: '2026-09-28',
   compatibilityFlags: [],
-  capabilities: ['cloudflare-access-auth', 'primary-workspace-mail-v1', 'managed-domain-lifecycle-v1', 'managed-realtimekit-v1', 'discoflare-admin-v1'],
+  capabilities: ['cloudflare-access-auth', 'optional-r2', 'primary-workspace-mail-v1', 'managed-domain-lifecycle-v1', 'managed-realtimekit-v1', 'discoflare-admin-v1'],
   worker: {
     url: `${releaseBaseUrl}/${workerName}`,
     sha256: digest('sha256', worker),

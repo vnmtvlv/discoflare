@@ -125,3 +125,5 @@ objects when the PR closes, a daily sweep retries deletion after expiration.
 
 Fork pull requests do not receive credentials or deploy a Preview. CI still
 runs for them.
+
+The Preview deployment job also verifies a `pr-<number>-no-files` workspace Preview with no R2 binding (same disposable D1/KV as the regular PR Preview), and runs claim/recovery against a separate temporary Admin Worker with its own D1. The Admin smoke checks rotation, concurrent consumption, session revocation, replay rejection and throttling. It removes that Worker and D1 before the job ends. PR cleanup removes both workspace Previews.

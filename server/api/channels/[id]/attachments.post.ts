@@ -3,7 +3,7 @@ import { MAX_ATTACHMENT_BYTES, sniffMime } from '../../../../shared/mime'
 import { newId, nowIso } from '../../../../shared/ids'
 import { Permission } from '../../../../shared/permissions'
 import { requireChannelMember } from '../../../utils/guards'
-import { cf, fail } from '../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { attachmentDto } from '../../../utils/messages'
 
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
   const id = newId()
   const safeName = (file.filename || 'file').replace(/[^\w.-]+/g, '_').slice(0, 80)
   const key = `${member.workspaceId}/${channelId}/${id}-${safeName}`
-  await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
+  await requireFiles(env).put(key, file.data, { httpMetadata: { contentType: mime } })
 
   const db = getDb(env.DB)
   const row = {

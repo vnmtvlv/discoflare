@@ -81,14 +81,14 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 ### Requirements
 
 - A Cloudflare account to host the workspace and its resources.
-- R2 enabled on that account. Cloudflare requires completing the R2 subscription checkout even when usage remains inside its free tier.
+- Optional R2 for attachments, uploaded avatars/icons, and full workspace backups. Start without it from the Admin; Cloudflare requires an R2 subscription checkout to enable it later.
 - Workers AI access for Agents. The default model needs no external model API key.
 
 ### Guided installation
 
 1. On [discoflare.com](https://discoflare.com/admin), sign in and deploy a **Discoflare Admin** into the Cloudflare account you choose.
-2. Claim the Admin with the private setup link. It runs in your account on `workers.dev` and is the only place there that holds a Cloudflare credential; discoflare.com keeps none.
-3. Create workspaces from the Admin. Each starts on `workers.dev` with D1, R2, KV, and the base Durable Objects, then opens the private Owner Setup Claim.
+2. Claim the Admin with the private setup link and save the one-use recovery codes. It runs in your account on `workers.dev` and is the only place there that holds a Cloudflare credential; discoflare.com keeps none.
+3. Create workspaces from the Admin. Each starts on `workers.dev` with D1, KV, optional R2, and the base Durable Objects, then opens the private Owner Setup Claim.
 4. In a workspace, open **Workspace Settings → System → Domain** for its App Domain and **Workspace Settings → Email → Domains** for Email Domains. Live needs no setup. The workspace asks the Admin over a service binding; it holds no Cloudflare credential of its own.
 
 The Admin updates itself and, when you ask, your workspaces. Workspaces, updates, domains, email, and Live keep working when `discoflare.com` is unavailable; it is needed only to create an Admin or reconnect Cloudflare.

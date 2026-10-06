@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     'SELECT a.r2_key as r2Key FROM task_attachments a JOIN tasks t ON t.id = a.task_id WHERE t.board_id = ?',
   ).bind(id).all<{ r2Key: string }>()
   await getDb(env.DB).delete(taskBoards).where(eq(taskBoards.id, id))
-  if (blobs.results?.length) waitUntil(Promise.all(blobs.results.map(row => env.FILES.delete(row.r2Key))))
+  if (blobs.results?.length) waitUntil(Promise.all(blobs.results.map(row => env.FILES?.delete(row.r2Key))))
   await writeAudit(env, { workspaceId: WORKSPACE_ID, actorId: actor.user.id, action: 'board.delete', targetType: 'task_board', targetId: id, meta: { name: board.name } })
   waitUntil(signalTasksChanged(env, id))
   return { ok: true }

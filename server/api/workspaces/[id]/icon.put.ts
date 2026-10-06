@@ -4,7 +4,7 @@ import { newId, nowIso } from '../../../../shared/ids'
 import { extForMime, sniffMime } from '../../../../shared/mime'
 import { Permission } from '../../../../shared/permissions'
 import { requireMember } from '../../../utils/guards'
-import { cf, fail } from '../../../utils/cf'
+import { cf, requireFiles, fail } from '../../../utils/cf'
 import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
 
@@ -26,9 +26,9 @@ export default defineEventHandler(async (event) => {
     .where(eq(workspace.id, workspaceId)).limit(1))[0]
   if (!current) fail(404, 'not_found', 'Workspace not found')
   const key = `${workspaceId}/workspace/icon-${newId()}.${extForMime(mime)}`
-  await env.FILES.put(key, file.data, { httpMetadata: { contentType: mime } })
+  await requireFiles(env).put(key, file.data, { httpMetadata: { contentType: mime } })
   await db.update(workspace).set({ iconR2Key: key, updatedAt: nowIso() }).where(eq(workspace.id, workspaceId))
-  if (current.iconR2Key) await env.FILES.delete(current.iconR2Key)
+  if (current.iconR2Key) await requireFiles(env).delete(current.iconR2Key)
   await writeAudit(env, {
     workspaceId,
     actorId: member.user.id,

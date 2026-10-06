@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import type { AdminEnv } from '../env'
 import { ensureSchema, nowIso, readMeta, writeMeta, audit } from './db'
 import { adminEnv, fail } from './http'
+import { generateRecoveryCodes } from './recovery'
 import { hashPassword, randomToken, sameString, sha256, verifyPassword } from './secrets'
 
 const COOKIE = 'discoflare_admin'
@@ -57,7 +58,8 @@ export async function claimOwner(event: H3Event, body: { token?: unknown, email?
   await writeMeta(env.ADMIN_DB, 'claim_used', await sha256(env.ADMIN_CLAIM_TOKEN!.trim()))
   await audit(env.ADMIN_DB, existing ? 'owner.recover' : 'owner.claim', email)
   await startSession(event, env, id)
-  return { email }
+  const codes = await generateRecoveryCodes(env.ADMIN_DB, id, passwordHash)
+  return { email, codes }
 }
 
 export async function login(event: H3Event, body: { email?: unknown, password?: unknown }) {
