@@ -1,6 +1,6 @@
 {
   "name": "@discoflare/admin-core",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Cloudflare provisioning engine shared by the Discoflare Admin and discoflare.com",
   "type": "module",
   "license": "MIT",
