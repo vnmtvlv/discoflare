@@ -49,6 +49,10 @@ export async function verifyAdminRecovery(origin, token) {
   const loggedIn = await request('/api/login', { body: { email, password: nextPassword } })
   cookie = loggedIn.setCookie
   assert.equal((await request('/api/admin/recovery', { authenticated: true })).payload.remaining, 9)
+  // Owner selection is validated before any Cloudflare resource is provisioned.
+  await request('/api/workspaces', { authenticated: true, status: 400, body: { appName: 'Owner choice check', workerName: 'owner-choice-check', forMyself: false, ownerEmail: 'invalid' } })
+  await request('/api/workspaces', { authenticated: true, status: 400, body: { appName: 'Owner choice check', workerName: 'owner-choice-check', forMyself: 'false' } })
+  console.log('Admin Worker verified: rejects invalid workspace owner choices before provisioning')
   console.log('Admin Worker verified: claim, rotation, recovery, concurrent consumption, session revocation, replay rejection, throttling and independent password login')
 }
 
