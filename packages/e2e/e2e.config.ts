@@ -16,6 +16,7 @@ export default {
   projectId: 'discoflare',
   workers: 1,
   retries: 0,
+  trace: 'retain-on-failure',
   timeout: 120_000,
   assertionTimeout: 15_000,
   cache: 'read-write',
