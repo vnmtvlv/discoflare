@@ -35,6 +35,7 @@ worker-configuration.d.ts
 
 # Tests
 coverage
+.e2e
 
 # Bundled client output
 apps/mobile/www
