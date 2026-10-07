@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import type { ProgressState, Workspace } from '../composables/useAdmin'
+import type { AdminSession, ProgressState, Workspace } from '../composables/useAdmin'
 
 type Result = { url: string, setupUrl?: string, version: string }
 
 const props = defineProps<{ workspaces: Workspace[] }>()
 const open = defineModel<boolean>('open', { default: false })
 const emit = defineEmits<{ created: [] }>()
+const session = useState<AdminSession | null>('admin-session')
 
 const STEPS = [
   { id: 'account', label: 'Check the Cloudflare account' },
@@ -24,6 +25,9 @@ const appName = ref('')
 const workerName = ref('')
 const edited = ref(false)
 const filesEnabled = ref(false)
+const forMyself = ref(true)
+const otherOwnerEmail = ref('')
+const ownerEmail = computed(() => forMyself.value ? session.value?.owner?.email || '' : otherOwnerEmail.value.trim())
 const phase = ref<'form' | 'working' | 'done'>('form')
 const steps = ref<Record<string, ProgressState>>({})
 const error = ref('')
@@ -43,6 +47,8 @@ watch(open, (value) => {
   workerName.value = ''
   edited.value = false
   filesEnabled.value = false
+  forMyself.value = true
+  otherOwnerEmail.value = ''
 })
 
 watch(appName, (value) => {
@@ -66,7 +72,8 @@ const nameError = computed(() => {
   return ''
 })
 
-const canSubmit = computed(() => Boolean(appName.value.trim() && workerName.value && !nameError.value))
+const canSubmit = computed(() => Boolean(appName.value.trim() && workerName.value && !nameError.value
+  && ownerEmail.value.length <= 254 && /^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(ownerEmail.value)))
 
 async function create() {
   if (!canSubmit.value) return
@@ -74,7 +81,10 @@ async function create() {
   error.value = ''
   steps.value = {}
   try {
-    result.value = await streamProgress<Result>('/api/workspaces', { appName: appName.value.trim(), workerName: workerName.value, filesEnabled: filesEnabled.value }, (step, state) => {
+    result.value = await streamProgress<Result>('/api/workspaces', {
+      appName: appName.value.trim(), workerName: workerName.value, filesEnabled: filesEnabled.value,
+      forMyself: forMyself.value, ownerEmail: ownerEmail.value,
+    }, (step, state) => {
       steps.value = { ...steps.value, [step]: state }
     })
     phase.value = 'done'
@@ -108,6 +118,11 @@ async function create() {
             <span class="break-all">https://<span class="text-highlighted">{{ workerName || 'acme' }}</span>.{{ subdomain || 'your-subdomain' }}.workers.dev</span>
             <span class="mt-1 block">Also the Worker name in Cloudflare. It can't be changed later.</span>
           </template>
+        </UFormField>
+        <UCheckbox v-model="forMyself" label="This workspace is for me" />
+        <UFormField label="Workspace owner email" required :help="forMyself ? 'Using your Admin email. You will create the workspace owner in the next step.' : 'Share the private setup link with this person so they can create their workspace owner account. No email is sent automatically.'">
+          <UInput v-if="forMyself" :model-value="ownerEmail" type="email" readonly class="w-full" />
+          <UInput v-else v-model="otherOwnerEmail" type="email" maxlength="254" placeholder="owner@example.com" required class="w-full" />
         </UFormField>
         <USwitch v-model="filesEnabled" label="Enable files and backups with R2" />
         <UAlert v-if="!filesEnabled" color="warning" title="Start without R2" description="Chat, Tasks, Mail, and Data work without file storage. Attachments, uploaded avatars, and workspace backups are disabled. Enable R2 and connect it here later." />
