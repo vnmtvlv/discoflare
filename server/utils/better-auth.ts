@@ -90,6 +90,10 @@ export async function createAuth(
         verification: authVerifications,
       },
     }),
+    account: {
+      accountLinking: { allowDifferentEmails: true, requireLocalEmailVerified: true },
+    },
+    user: { changeEmail: { enabled: config.email.verificationReady } },
     emailAndPassword: {
       enabled: config.enabled.email,
       disableSignUp: !publicConfig.emailSignupEnabled,
