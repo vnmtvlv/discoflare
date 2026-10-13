@@ -85,6 +85,10 @@ export type DiscoflareEnv = {
   DISCOFLARE_TELEMETRY_ID?: string
   DISCOFLARE_TELEMETRY_TOKEN?: string
   DISCOFLARE_TELEMETRY_ENDPOINT?: string
+  /** `true` when this workspace runs on Discoflare's Workers for Platforms account. */
+  DISCOFLARE_HOSTED?: string
+  /** Monthly included agent allowance in USD micros. The KV ledger is authoritative. */
+  DISCOFLARE_AGENT_ALLOWANCE_MICROS?: string
   /** Service binding to the account's Discoflare Admin (`WorkspaceControl`). See workers/discoflare-admin.ts. */
   DISCOFLARE_ADMIN?: Fetcher
   /** Legacy Installation Control Credential from discoflare.com, replaced by DISCOFLARE_ADMIN. */
