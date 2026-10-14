@@ -288,7 +288,7 @@ describe('runtime capabilities', () => {
       containers: false,
       browser: 'cdp',
       emailOutbound: true,
-      emailInbound: false,
+      emailInbound: null,
       emailProvider: 'smtp',
       callsProvider: null,
     })
@@ -297,7 +297,7 @@ describe('runtime capabilities', () => {
       containers: false,
       browser: 'cloudflare-rest',
       emailOutbound: true,
-      emailInbound: false,
+      emailInbound: null,
       emailProvider: 'cloudflare-rest',
       callsProvider: 'realtimekit-rest',
     })

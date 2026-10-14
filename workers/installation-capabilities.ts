@@ -1,10 +1,10 @@
 import type { RuntimeCapabilities } from '../shared/types'
+import { emailInboundProvider } from './inbound-email'
 import { authEmailAvailable, emailProvider } from './mail-transport'
 import {
   aiProvider,
   browserProvider,
   callsProvider,
-  cloudflareNetwork,
   type DiscoflareEnv,
 } from './env'
 
@@ -13,7 +13,7 @@ export const UNAVAILABLE_CAPABILITIES: RuntimeCapabilities = {
   containers: false,
   browser: null,
   emailOutbound: false,
-  emailInbound: false,
+  emailInbound: null,
   emailProvider: null,
   callsProvider: null,
 }
@@ -24,14 +24,13 @@ export function containersAvailable(): boolean {
 }
 
 export function installationCapabilities(env: DiscoflareEnv): RuntimeCapabilities {
-  const network = cloudflareNetwork(env)
   const calls = callsProvider(env)
   return {
     calls: calls !== null,
     containers: containersAvailable(),
     browser: browserProvider(env),
     emailOutbound: authEmailAvailable(env),
-    emailInbound: network,
+    emailInbound: emailInboundProvider(env),
     emailProvider: emailProvider(env),
     callsProvider: calls,
   }

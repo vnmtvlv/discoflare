@@ -36,9 +36,20 @@ export type DiscoflareEnv = {
   MAIL_GATEWAY?: Fetcher | string
   MAIL_GATEWAY_URL?: string
   MAIL_GATEWAY_TOKEN?: string
-  /** HTTP gateway that relays outbound mail over SMTP. Inbound mail is not provided. */
+  /** HTTP gateway that relays outbound mail over SMTP. Inbound mail is a separate webhook. */
   SMTP_GATEWAY_URL?: string
   SMTP_GATEWAY_TOKEN?: string
+  /**
+   * Shared secret for `POST /api/email/inbound`. At least 32 characters.
+   * The Email Routing bridge signs with the same value.
+   */
+  INBOUND_EMAIL_SECRET?: string
+  /** HTTP Basic password for `POST /api/email/inbound/postmark`. At least 32 characters. */
+  POSTMARK_INBOUND_SECRET?: string
+  /** Mailgun HTTP webhook signing key for `POST /api/email/inbound/mailgun`. At least 32 characters. */
+  MAILGUN_WEBHOOK_SIGNING_KEY?: string
+  /** Amazon SNS topic ARN allowed to call `POST /api/email/inbound/ses`. */
+  SES_SNS_TOPIC_ARN?: string
   /**
    * `cloudflare` or `workers` keeps Cloudflare-network features.
    * Any other value, including `celld`, turns them off.

@@ -151,13 +151,25 @@
         "description": "HTTP endpoint that accepts Discoflare's outbound mail JSON when no email binding is present."
       },
       "SMTP_GATEWAY_URL": {
-        "description": "HTTP endpoint that relays Discoflare's outbound mail JSON over SMTP. Inbound email still needs Cloudflare."
+        "description": "HTTP endpoint that relays Discoflare's outbound mail JSON over SMTP. Inbound mail uses INBOUND_EMAIL_SECRET or a provider webhook."
       },
       "SMTP_GATEWAY_TOKEN": {
         "description": "Bearer token for SMTP_GATEWAY_URL. Store this as a secret."
       },
+      "INBOUND_EMAIL_SECRET": {
+        "description": "Secret of at least 32 characters for POST /api/email/inbound. The Email Routing bridge signs with the same value."
+      },
+      "POSTMARK_INBOUND_SECRET": {
+        "description": "HTTP Basic password for POST /api/email/inbound/postmark. At least 32 characters. Store this as a secret."
+      },
+      "MAILGUN_WEBHOOK_SIGNING_KEY": {
+        "description": "Mailgun HTTP webhook signing key for POST /api/email/inbound/mailgun. At least 32 characters. Not the API key."
+      },
+      "SES_SNS_TOPIC_ARN": {
+        "description": "Amazon SNS topic ARN allowed to POST /api/email/inbound/ses. Example: arn:aws:sns:<region>:<account>:discoflare-inbound."
+      },
       "DISCOFLARE_RUNTIME": {
-        "description": "Set to celld on non-Cloudflare Workers runtimes. Inbound email stays off. Calls, Workers AI, Browser Run, and outbound mail can use CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN. cloudflare or workers keeps Cloudflare-network features."
+        "description": "Set to celld on non-Cloudflare Workers runtimes. Inbound mail then uses INBOUND_EMAIL_SECRET or a Postmark, Mailgun, or Amazon SES webhook. Calls, Workers AI, Browser Run, and outbound mail can use CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN. cloudflare or workers keeps Cloudflare-network features."
       }
     }
   },

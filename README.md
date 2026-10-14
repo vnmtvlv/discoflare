@@ -110,7 +110,7 @@ The deploy script builds the Worker, applies remote D1 migrations, and deploys i
 
 ### Self-host on celld
 
-Discoflare also runs on [celld](https://celld.dev) and other Workers runtimes that provide D1, KV, R2, and Durable Objects. When a Cloudflare binding is absent, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` call Workers AI, Browser Run, Email Sending, and RealtimeKit over REST. An OpenAI-compatible model endpoint, an external Chromium DevTools URL, and an HTTP or SMTP mail gateway are the next fallbacks. Inbound email and agent containers stay off. See [Self-host on celld](docs/self-host/celld.md). `wrangler.celld.json` is the example config.
+Discoflare also runs on [celld](https://celld.dev) and other Workers runtimes that provide D1, KV, R2, and Durable Objects. When a Cloudflare binding is absent, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` call Workers AI, Browser Run, Email Sending, and RealtimeKit over REST. An OpenAI-compatible model endpoint, an external Chromium DevTools URL, and an HTTP or SMTP mail gateway are the next fallbacks. Inbound mail uses a signed webhook (`INBOUND_EMAIL_SECRET` and `examples/email-bridge`) or a Postmark, Mailgun, or Amazon SES webhook. Agent containers stay off. See [Self-host on celld](docs/self-host/celld.md). `wrangler.celld.json` is the example config.
 
 ### Optional services
 

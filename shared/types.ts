@@ -606,6 +606,7 @@ export type InvitePreviewDTO = {
 export type AiProviderName = 'workers-ai' | 'workers-ai-rest' | 'openai-compatible' | null
 export type BrowserProviderName = 'workers' | 'cloudflare-rest' | 'cdp' | null
 export type EmailProviderName = 'binding' | 'cloudflare-rest' | 'gateway' | 'smtp' | null
+export type EmailInboundProvider = 'binding' | 'bridge' | 'postmark' | 'mailgun' | 'ses' | null
 export type CallsProviderName = 'realtimekit' | 'realtimekit-rest' | null
 
 export type RuntimeCapabilities = {
@@ -615,8 +616,11 @@ export type RuntimeCapabilities = {
   containers: boolean
   browser: BrowserProviderName
   emailOutbound: boolean
-  /** Cloudflare Email Routing. False on other Workers runtimes. */
-  emailInbound: boolean
+  /**
+   * Inbound mail path. `binding` is Cloudflare Email Routing. The other values
+   * are webhooks. `null` means nothing is configured.
+   */
+  emailInbound: EmailInboundProvider
   /** Which outbound mail path health selected. */
   emailProvider: EmailProviderName
   /** Which calls path health selected. */
