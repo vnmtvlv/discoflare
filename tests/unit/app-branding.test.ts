@@ -3,6 +3,7 @@ import {
   DEFAULT_APP_NAME,
   DEFAULT_APP_SUBTITLE,
   DEFAULT_APP_TITLE,
+  NEUTRAL_APP_SUBTITLE,
   readAppBranding,
 } from '../../shared/app-branding'
 
@@ -30,6 +31,19 @@ describe('readAppBranding', () => {
       appTitle: 'One workspace.\nEvery kind of teammate.',
       appSubtitle: 'Built on your Cloudflare stack.',
     })
+  })
+
+  it('uses neutral login copy when the runtime is not Cloudflare', () => {
+    expect(readAppBranding({ DISCOFLARE_RUNTIME: 'celld' }).appSubtitle).toBe(NEUTRAL_APP_SUBTITLE)
+    expect(readAppBranding({
+      DISCOFLARE_RUNTIME: 'celld',
+      APP_SUBTITLE: 'Built on your Cloudflare stack.',
+    }).appSubtitle).toBe(NEUTRAL_APP_SUBTITLE)
+    expect(readAppBranding({
+      DISCOFLARE_RUNTIME: 'celld',
+      APP_SUBTITLE: 'Chat for the lab.',
+    }).appSubtitle).toBe('Chat for the lab.')
+    expect(readAppBranding({ DISCOFLARE_RUNTIME: 'cloudflare' }).appSubtitle).toBe(DEFAULT_APP_SUBTITLE)
   })
 
   it('bounds public copy returned to the client', () => {

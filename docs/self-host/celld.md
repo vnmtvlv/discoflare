@@ -63,11 +63,22 @@ pnpm build
 Edit `wrangler.celld.json`:
 
 - `PUBLIC_ORIGIN` is the origin members open, such as `http://127.0.0.1:8080` before you add TLS.
-- `AUTH_SECRET` signs sessions. Replace the placeholder with a random value of at least 32 characters. Treat it as a secret.
 - `ADMIN_EMAIL` is the first owner's email.
-- `ADMIN_SETUP_TOKEN` is the private claim for that owner. Replace the placeholder.
 - `ADMIN_WORKSPACE` is the workspace name shown during setup.
 - `database_name` is the D1 name you will pass to migrations. The example uses `discoflare`. `database_id` and the KV `id` only need to be stable for this installation.
+
+`AUTH_SECRET` and `ADMIN_SETUP_TOKEN` in that file are the placeholders `invalid`. Both are shorter than 32 characters, so they do not pass validation: owner setup ignores the token, and session signing rejects the secret. Do not put the real values in `wrangler.celld.json`. Set them as secrets in a file the node reads over those vars. Each value must be a random string of at least 32 characters.
+
+```bash
+install -m 600 /dev/null /etc/discoflare/worker.vars
+```
+
+```
+AUTH_SECRET=<random 32+ characters>
+ADMIN_SETUP_TOKEN=<random 32+ characters>
+```
+
+Point celld at that file with `CELLD_VARS_FILE=/etc/discoflare/worker.vars`, or export `CELLD_VAR_AUTH_SECRET` and `CELLD_VAR_ADMIN_SETUP_TOKEN`. Those names override `vars`. `AI_API_KEY` belongs in the same file when you use an OpenAI-compatible model.
 
 Optional model and browser values, when you want those features:
 
@@ -94,10 +105,20 @@ celld d1 migrations apply discoflare wrangler.celld.json --bucket s3://cells
 Start one node. `--listen` is the public HTTP address. `--internal-listen` and `--advertise` are how nodes reach each other. On one machine they can all be loopback:
 
 ```bash
-celld --bucket s3://cells --listen 127.0.0.1:8080 --internal-listen 127.0.0.1:8081 --advertise 127.0.0.1:8081
+CELLD_VARS_FILE=/etc/discoflare/worker.vars celld --bucket s3://cells --listen 127.0.0.1:8080 --internal-listen 127.0.0.1:8081 --advertise 127.0.0.1:8081
 ```
 
-Open `/setup#claim=<ADMIN_SETUP_TOKEN>` and create the owner. `PUBLIC_ORIGIN` must be the origin you use in the browser.
+A single node renews its own lease. After a stall long enough to miss that renewal it fences itself, logs `node lease not renewed within TTL`, and exits. The fenced process does not resume on its own. Run it under systemd with `Restart=always`. `RestartSec` should be at least one lease lifetime (`CELLD_TTL_MS`, 10 seconds by default) so a fence does not restart in a tight loop.
+
+```ini
+[Service]
+Environment=CELLD_VARS_FILE=/etc/discoflare/worker.vars
+ExecStart=/usr/local/bin/celld --bucket s3://cells --listen 127.0.0.1:8080 --internal-listen 127.0.0.1:8081 --advertise 127.0.0.1:8081
+Restart=always
+RestartSec=15
+```
+
+Open `/setup#claim=<ADMIN_SETUP_TOKEN>` and create the owner. `PUBLIC_ORIGIN` must be the origin you use in the browser. The claim works only after `ADMIN_SETUP_TOKEN` is a secret of at least 32 characters.
 
 ## Reverse proxy
 

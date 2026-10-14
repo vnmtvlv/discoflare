@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { authSecret } from '../../server/utils/auth-config'
+import { readOwnerSetupEnv } from '../../server/utils/owner-setup'
 import { rewriteConsoleCreateTask, rewriteNodeTimersImports } from '../../nitro.runtime.mjs'
 import { installCreateTaskGuard } from '../../server/shims/create-task-guard'
 import { clearImmediate, setImmediate } from '../../server/shims/node-timers.mjs'
@@ -21,6 +23,17 @@ const message = {
   subject: 'Hello',
   text: 'World',
 }
+
+describe('celld secret placeholders', () => {
+  it('rejects an AUTH_SECRET and setup token shorter than 32 characters', () => {
+    expect(() => authSecret({ AUTH_SECRET: 'invalid' } as never)).toThrow(/at least 32 characters/)
+    expect(authSecret({ AUTH_SECRET: 'x'.repeat(32) } as never)).toHaveLength(32)
+    expect(readOwnerSetupEnv({
+      ADMIN_EMAIL: 'owner@example.com',
+      ADMIN_SETUP_TOKEN: 'invalid',
+    })).toBeNull()
+  })
+})
 
 describe('node:timers shim', () => {
   it('runs setImmediate on the next timer turn and clears it', () => {

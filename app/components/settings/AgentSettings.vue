@@ -10,6 +10,7 @@ const qc = useQueryClient()
 const { api } = useApi()
 const session = useSessionStore()
 const openAiCompatible = computed(() => session.health?.aiProvider === 'openai-compatible')
+const workersAi = computed(() => session.health?.aiProvider === 'workers-ai')
 const agentsUnavailable = computed(() => session.health?.aiProvider === null)
 const browserCopy = computed(() => {
   const provider = session.health?.capabilities.browser
@@ -95,6 +96,12 @@ function modelOption(value: unknown) {
   return modelOptions.find(option => option.id === value)
 }
 
+function modelLabel(model: string) {
+  if (openAiCompatible.value && model.startsWith('@cf/')) return session.health?.aiModel || model
+  if (!workersAi.value) return model
+  return modelOption(model)?.label ?? model
+}
+
 function selectAgent(agent: AgentDTO) {
   creatingNew.value = false
   selectedAgentId.value = agent.id
@@ -122,6 +129,12 @@ function createAgent() {
     status: 'active',
   })
 }
+
+watch(() => [session.health?.aiProvider, session.health?.aiModel] as const, () => {
+  const model = session.health?.aiModel
+  if (!openAiCompatible.value || !model) return
+  if (!form.model || form.model.startsWith('@cf/')) form.model = model
+})
 
 watch(agents, (list) => {
   if (!list.length) return
@@ -225,7 +238,7 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
           <UserAvatar :user="agentAvatarUser(agent)" size="sm" />
           <span class="min-w-0">
             <span class="block truncate text-sm font-medium">{{ agent.displayName }}</span>
-            <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelOption(agent.model)?.label ?? agent.model }}</span>
+            <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelLabel(agent.model) }}</span>
           </span>
         </span>
       </button>
@@ -265,8 +278,13 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         </div>
       </UFormField>
 
-      <UFormField name="model" label="Model" :description="openAiCompatible ? 'This installation uses an OpenAI-compatible endpoint. The model id is sent to AI_BASE_URL.' : undefined">
-        <template v-if="!openAiCompatible" #hint>
+      <UFormField
+        v-if="workersAi || openAiCompatible"
+        name="model"
+        label="Model"
+        :description="openAiCompatible ? `Sent to the OpenAI-compatible endpoint. This installation's AI_MODEL is ${session.health?.aiModel}.` : undefined"
+      >
+        <template v-if="workersAi" #hint>
           <ULink
             to="https://developers.cloudflare.com/workers-ai/models/"
             target="_blank"
