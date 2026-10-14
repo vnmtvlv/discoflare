@@ -82,34 +82,12 @@ const mailTarget = computed(() => {
 })
 
 const modes = computed(() => [
-  { value: 'chat' as const, label: 'Chat', icon: 'i-ph-chat-circle', to: chatTarget.value, dot: chatUnread.value, shortcut: '1' },
-  ...(can(Permission.manageTasks) ? [{ value: 'tasks' as const, label: 'Tasks', icon: 'i-ph-kanban', to: '/tasks', dot: false, shortcut: '2' }] : []),
-  { value: 'mail' as const, label: 'Mail', icon: 'i-ph-envelope-simple', to: mailTarget.value, dot: mailUnread.value, shortcut: '3' },
-  ...(can(Permission.manageDatabases) ? [{ value: 'databases' as const, label: 'Data', icon: 'i-ph-table', to: '/databases', dot: false, shortcut: '4' }] : []),
-  ...(can(Permission.useGadgets) || can(Permission.manageGadgets) ? [{ value: 'gadgets' as const, label: 'Apps', icon: 'i-ph-squares-four', to: '/gadgets', dot: false, shortcut: '5' }] : []),
+  { value: 'chat' as const, label: 'Chat', icon: 'i-ph-chat-circle', to: chatTarget.value, dot: chatUnread.value },
+  ...(can(Permission.manageTasks) ? [{ value: 'tasks' as const, label: 'Tasks', icon: 'i-ph-kanban', to: '/tasks', dot: false }] : []),
+  { value: 'mail' as const, label: 'Mail', icon: 'i-ph-envelope-simple', to: mailTarget.value, dot: mailUnread.value },
+  ...(can(Permission.manageDatabases) ? [{ value: 'databases' as const, label: 'Data', icon: 'i-ph-table', to: '/databases', dot: false }] : []),
+  ...(can(Permission.useGadgets) || can(Permission.manageGadgets) ? [{ value: 'gadgets' as const, label: 'Apps', icon: 'i-ph-squares-four', to: '/gadgets', dot: false }] : []),
 ])
-
-const commandHeld = useState('app-switcher-command-held', () => false)
-function onAppShortcutKeydown(event: KeyboardEvent) {
-  if (event.key === 'Meta') {
-    commandHeld.value = true
-    return
-  }
-  if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return
-  commandHeld.value = true
-  const target = modes.value.find(item => item.shortcut === event.key)
-  if (!target) return
-  event.preventDefault()
-  void navigateTo(target.to)
-}
-
-function onAppShortcutKeyup(event: KeyboardEvent) {
-  if (event.key === 'Meta' || !event.metaKey) commandHeld.value = false
-}
-
-function clearCommandHeld() {
-  commandHeld.value = false
-}
 
 function leaveLiveOnPageExit() {
   if (!live.currentChannelId || live.connection !== 'connected') return
@@ -123,17 +101,10 @@ watch(() => live.notice, (message) => {
 })
 
 onMounted(() => {
-  window.addEventListener('keydown', onAppShortcutKeydown)
-  window.addEventListener('keyup', onAppShortcutKeyup)
-  window.addEventListener('blur', clearCommandHeld)
   window.addEventListener('pagehide', leaveLiveOnPageExit)
 })
 
 onBeforeUnmount(() => {
-  clearCommandHeld()
-  window.removeEventListener('keydown', onAppShortcutKeydown)
-  window.removeEventListener('keyup', onAppShortcutKeyup)
-  window.removeEventListener('blur', clearCommandHeld)
   window.removeEventListener('pagehide', leaveLiveOnPageExit)
 })
 
@@ -294,20 +265,10 @@ watch(nav.inviteOpen, (open) => {
           :key="item.value"
           :to="item.to"
           class="relative flex flex-col items-center gap-0.5 rounded-md py-1.5 text-[11px]"
-          :class="commandHeld
-            ? 'bg-primary/10 text-highlighted ring-1 ring-inset ring-primary/50'
-            : mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
+          :class="mode === item.value ? 'bg-default text-highlighted shadow-sm' : 'text-muted hover:text-default'"
           :aria-current="mode === item.value ? 'page' : undefined"
-          :aria-keyshortcuts="`Meta+${item.shortcut}`"
         >
-          <span
-            v-if="commandHeld"
-            class="flex size-[18px] items-center justify-center rounded bg-primary text-[11px] font-bold leading-none text-inverted shadow-sm"
-            aria-hidden="true"
-          >
-            {{ item.shortcut }}
-          </span>
-          <UIcon v-else :name="item.icon" class="size-[18px]" />
+          <UIcon :name="item.icon" class="size-[18px]" />
           <span>{{ item.label }}</span>
           <span
             v-if="item.dot && mode !== item.value"

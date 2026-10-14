@@ -1,8 +1,10 @@
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { INIT_SQL } from '../../server/utils/db'
+import { getDb, INIT_SQL } from '../../server/utils/db'
 import { deliverOutboundEmail, replyRecipients } from '../../server/utils/mail-outbound'
 import { listMailThreads } from '../../server/utils/mail-threads'
+import { hydrateMailMessages } from '../../server/utils/mail-data'
+import { messages } from '../../drizzle/schema'
 import { MAIL_LIMITS } from '../../shared/mail'
 import type { DiscoflareEnv } from '../../workers/env'
 import { ingestWorkspaceEmail } from '../../workers/mail-ingress'
@@ -101,6 +103,33 @@ beforeEach(() => {
 afterEach(() => sqlite.close())
 
 describe('inbound email', () => {
+  it('reads HTML mislabeled as quoted-printable plain text without exposing markup', async () => {
+    const body = '<table style=3D"max-width:600px"width=3D100%><tr><td><h2>Welcome to Example!</h2><p>Grow &amp; sell.</p><a href=3D"https://example.com/start">Get started</a></td></tr></table>'
+    const raw = email({ id: '<html-text@example.net>', to: 'support@example.com', body })
+      .replace('Content-Type: text/plain', 'Content-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable')
+    await receive(raw, 'support@example.com')
+    const { content } = sqlite.prepare("SELECT content FROM messages WHERE author_id = 'mail-external'").get() as { content: string }
+    expect(content).toContain('Welcome to Example!')
+    expect(content).toContain('Grow & sell.')
+    expect(content).toContain('https://example.com/start')
+    expect(content).not.toMatch(/<\/?(?:table|tr|td|h2|p|a)\b/u)
+  })
+
+  it('cleans already-stored HTML in message details and inbox previews without rewriting it', async () => {
+    await receive(email({ id: '<legacy@example.net>', to: 'support@example.com' }), 'support@example.com')
+    const body = `<table style="${'padding:0;'.repeat(50)}"><tr><td><h2>Welcome back!</h2><p>Ready &amp; waiting.</p></td></tr></table>`
+    sqlite.prepare("UPDATE messages SET content = ? WHERE author_id = 'mail-external'").run(body)
+    const rows = await getDb(env.DB).select().from(messages)
+    const detail = await hydrateMailMessages(env, rows, 'owner')
+    expect(detail[0]?.content).toContain('Welcome back!')
+    expect(detail[0]?.content).toContain('Ready & waiting.')
+    expect(detail[0]?.content).not.toContain('<table')
+    const inbox = await listMailThreads(env, { mailboxId: 'support', userId: 'owner', folder: 'inbox' })
+    expect(inbox.threads[0]?.preview).toContain('Welcome back!')
+    expect(inbox.threads[0]?.preview).not.toContain('<table')
+    expect(sqlite.prepare("SELECT content FROM messages WHERE author_id = 'mail-external'").get()).toEqual({ content: body })
+  })
+
   it('delivers one email sent to two mailboxes into both', async () => {
     const raw = email({ id: '<one@example.net>', to: 'support@example.com, sales@example.com' })
     expect(await receive(raw, 'support@example.com')).toEqual({ accepted: true })

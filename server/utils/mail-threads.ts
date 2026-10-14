@@ -42,15 +42,17 @@ export async function listMailThreads(
     `SELECT * FROM (
        SELECT t.channel_id as channelId, t.mailbox_channel_id as mailboxChannelId, t.subject, t.status,
          t.participants_json as participantsJson, ${sortAt} as lastMessageAt,
-         coalesce(
-           (SELECT substr(m.content, 1, 240) FROM messages m WHERE m.channel_id = t.channel_id ORDER BY m.created_at DESC, m.id DESC LIMIT 1),
-           (SELECT substr(m.content, 1, 240) FROM channels c JOIN messages m ON m.id = c.parent_message_id WHERE c.id = t.channel_id),
-           ''
-         ) as preview,
+         coalesce(p.content, '') as preview, pe.direction = 'inbound' as previewInbound,
          CASE WHEN r.last_read_message_id IS NULL OR r.last_read_message_id <
            (SELECT max(em.message_id) FROM email_messages em WHERE em.thread_channel_id = t.channel_id AND em.direction = 'inbound')
            THEN 1 ELSE 0 END as unread
        FROM email_threads t
+       JOIN channels c ON c.id = t.channel_id
+       LEFT JOIN messages p ON p.id = coalesce(
+         (SELECT m.id FROM messages m WHERE m.channel_id = t.channel_id ORDER BY m.created_at DESC, m.id DESC LIMIT 1),
+         c.parent_message_id
+       )
+       LEFT JOIN email_messages pe ON pe.message_id = p.id
        LEFT JOIN channel_reads r ON r.channel_id = t.channel_id AND r.user_id = ?
        WHERE t.mailbox_channel_id = ? AND ${filter}
      )
