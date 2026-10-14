@@ -46,8 +46,10 @@ apps/desktop/src-tauri/target
 xcuserdata/
 DerivedData/
 
-# Local stage deployment configs
+# Local stage and celld deployment configs (secrets live in vars)
 wrangler.stage.local.jsonc
+wrangler.celld.local.json
+wrangler.celld.local.jsonc
 
 # Discoflare Admin release bundle
 apps/admin/.bundle

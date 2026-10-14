@@ -16,6 +16,8 @@ const route = useRoute()
 const nav = useNavActions()
 const qc = useQueryClient()
 const toast = useToast()
+const session = useSessionStore()
+const workersAi = computed(() => !session.health || session.health.aiProvider === 'workers-ai')
 
 const gadgetsQ = useQuery({
   queryKey: computed(() => ['gadgets', workspaceId.value]),
@@ -72,7 +74,7 @@ async function createGadget(event: FormSubmitEvent<CreateSchema>) {
       body: {
         name: event.data.name,
         description: event.data.description,
-        prompt: event.data.prompt || undefined,
+        prompt: workersAi.value ? (event.data.prompt || undefined) : undefined,
       },
     })
     nav.createGadgetOpen.value = false
@@ -536,8 +538,13 @@ function roleAccessLabel(role: RoleDTO) {
         <UForm id="create-gadget" :schema="createSchema" :state="createState" class="space-y-4" @submit="createGadget">
           <UFormField name="name" label="Name" required><UInput v-model="createState.name" autofocus class="w-full" /></UFormField>
           <UFormField name="description" label="Description"><UInput v-model="createState.description" class="w-full" /></UFormField>
-          <UFormField name="prompt" label="Generate with Jev" hint="Optional">
-            <UTextarea v-model="createState.prompt" class="w-full" autoresize :rows="3" placeholder="Build a sales overview from Leads and Companies" />
+          <UFormField
+            name="prompt"
+            label="Generate with Jev"
+            :hint="workersAi ? 'Optional' : 'Needs Workers AI'"
+            :description="workersAi ? undefined : 'Jev uses Workers AI and is unavailable on this installation. Create the app directly instead.'"
+          >
+            <UTextarea v-model="createState.prompt" :disabled="!workersAi" class="w-full" autoresize :rows="3" placeholder="Build a sales overview from Leads and Companies" />
           </UFormField>
         </UForm>
       </template>

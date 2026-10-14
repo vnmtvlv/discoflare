@@ -59,6 +59,16 @@ describe('anonymous telemetry', () => {
     expect(heartbeat?.capabilities.agents).toBe(true)
   })
 
+  it('reports Agents that use an OpenAI-compatible endpoint', () => {
+    const heartbeat = telemetryHeartbeat(env({
+      AI: undefined,
+      AI_BASE_URL: 'https://llm.example.com/v1',
+      AI_API_KEY: 'secret',
+      AI_MODEL: 'your-model',
+    }))
+    expect(heartbeat?.capabilities.agents).toBe(true)
+  })
+
   it('does not report Agents without inference or an Agent Durable Object', () => {
     const heartbeat = telemetryHeartbeat(env({ AI: undefined, AGENT_DO: undefined }))
     expect(heartbeat?.capabilities.agents).toBe(false)

@@ -1,0 +1,75 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "discoflare-celld",
+  "main": ".output/server/index.mjs",
+  "compatibility_date": "2026-09-28",
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".output/public"
+  },
+  "triggers": {
+    "crons": ["17 4 * * 1"]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "discoflare",
+      "database_id": "00000000-0000-4000-8000-000000000001",
+      "migrations_dir": "drizzle/migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "discoflare-files"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "TICKETS",
+      "id": "00000000000000000000000000000001"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      { "name": "CHANNEL_DO", "class_name": "ChannelDurableObject" },
+      { "name": "WORKSPACE_DO", "class_name": "WorkspaceDurableObject" },
+      { "name": "RATE_LIMIT_DO", "class_name": "RateLimitDurableObject" },
+      { "name": "NOTIFICATION_DO", "class_name": "NotificationDurableObject" },
+      { "name": "AGENT_DO", "class_name": "DiscoflareAgent" },
+      { "name": "AGENT_THINK", "class_name": "DiscoflareThink" }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": [
+        "ChannelDurableObject",
+        "WorkspaceDurableObject",
+        "RateLimitDurableObject"
+      ]
+    },
+    {
+      "tag": "v2",
+      "new_sqlite_classes": ["NotificationDurableObject"]
+    },
+    {
+      "tag": "v3",
+      "new_sqlite_classes": ["DiscoflareAgent"]
+    },
+    {
+      "tag": "v4",
+      "new_sqlite_classes": ["DiscoflareThink"]
+    }
+  ],
+  "vars": {
+    "PUBLIC_ORIGIN": "http://127.0.0.1:8080",
+    "AUTH_REGISTRATION_MODE": "invite_only",
+    "APP_NAME": "Discoflare",
+    "DISCOFLARE_RUNTIME": "celld",
+    "AUTH_SECRET": "invalid",
+    "ADMIN_EMAIL": "owner@example.com",
+    "ADMIN_SETUP_TOKEN": "invalid",
+    "ADMIN_WORKSPACE": "workspace"
+  }
+}

@@ -35,8 +35,9 @@ export type AuthRuntimeConfig = {
 
 export function authSecret(env: DiscoflareEnv, baseURL?: string): string {
   const local = baseURL ? ['localhost', '127.0.0.1', '::1'].includes(new URL(baseURL).hostname) : false
-  const secret = env.AUTH_SECRET || (local ? DEV_AUTH_SECRET : '')
+  const secret = (env.AUTH_SECRET || (local ? DEV_AUTH_SECRET : '')).trim()
   if (!secret) throw new Error('AUTH_SECRET is required')
+  if (secret.length < 32) throw new Error('AUTH_SECRET must be at least 32 characters')
   return secret
 }
 

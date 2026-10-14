@@ -10,7 +10,7 @@ import { getDb } from '../../../utils/db'
 import { writeAudit } from '../../../utils/messages'
 import { parseBody } from '../../../utils/validate'
 import { signalMembersChanged } from '../../../../workers/member-events'
-import { agentRuntimeConfigured } from '../../../../workers/env'
+import { agentRuntimeConfigured, aiProvider, resolveAgentModelId } from '../../../../workers/env'
 
 const bodySchema = z.object({
   displayName: z.string().trim().min(1).max(80),
@@ -24,8 +24,12 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
   const body = parseBody(bodySchema, await readBody(event))
   const { env, waitUntil } = cf(event)
   if (!agentRuntimeConfigured(env)) {
-    fail(409, 'agent_runtime_disabled', 'Workers AI and the Agent Durable Object must be bound before creating an agent')
+    const provider = aiProvider(env)
+    fail(409, 'agent_runtime_disabled', provider
+      ? 'The Agent Durable Object must be bound before creating an agent'
+      : 'Bind Workers AI, set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, or set AI_BASE_URL, AI_API_KEY, and AI_MODEL, before creating an agent')
   }
+  const model = resolveAgentModelId(env, body.model)
   const db = getDb(env.DB)
   const memberRole = (await db.select().from(roles).where(eq(roles.key, 'member')).limit(1))[0]
   if (!memberRole) fail(409, 'workspace_incomplete', 'Member role not found')
@@ -59,7 +63,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
     }),
     db.insert(agents).values({
       userId: id,
-      model: body.model,
+      model,
       instructions: body.instructions,
       status: 'active',
       legacyRuntimeId,
@@ -75,7 +79,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
     action: 'agent.create',
     targetType: 'agent',
     targetId: id,
-    meta: { displayName: body.displayName, model: body.model },
+    meta: { displayName: body.displayName, model },
   })
   waitUntil(signalMembersChanged(env, workspaceId))
   return {
@@ -83,7 +87,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
       id,
       displayName: body.displayName,
       avatarR2Key: null,
-      model: body.model,
+      model,
       instructions: body.instructions,
       status: 'active',
       lastActiveAt: null,

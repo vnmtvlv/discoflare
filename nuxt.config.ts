@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import { discoflareNitroPlugins, discoflareNodeAliases } from './nitro.runtime.mjs'
 
 const devPublicHost = process.env.DISCOFLARE_DEV_HOST?.trim() || ''
 const requestedClientMode = process.env.DISCOFLARE_CLIENT_MODE
@@ -55,8 +56,9 @@ export default defineNuxtConfig({
   } : {
     preset: remoteFrontend ? 'node-server' : 'cloudflare-module',
     entry: process.env.NODE_ENV === 'development' ? undefined : './cloudflare-entry.ts',
+    alias: discoflareNodeAliases,
     rollupConfig: {
-      plugins: [rawSqlPlugin],
+      plugins: [rawSqlPlugin, ...discoflareNitroPlugins()],
     },
     errorHandler: './server/error',
     ...(remoteFrontend

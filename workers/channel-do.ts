@@ -7,7 +7,7 @@ import { ALL_PERMISSIONS, directMessagePermissions, hasPermission, Permission } 
 import { liveKindFor } from '../shared/live'
 import { resolveChannelPermissions } from '../shared/channel-permissions'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
-import { asRpc, type DiscoflareEnv } from './env'
+import { asRpc, callsProvider, type DiscoflareEnv } from './env'
 import type { RealtimeKitParticipant } from './realtimekit'
 import { liveMedia } from './live-media'
 import { userFromTicket } from './ticket'
@@ -656,6 +656,9 @@ export class ChannelDurableObject extends DurableObject<DiscoflareEnv> {
     if (authz.mailbox) return liveFailure('forbidden', 'Live sessions are unavailable for mailboxes')
     if (authz.type === 'thread') return liveFailure('forbidden', 'Join the live session in the parent conversation')
     if (authz.frozen) return liveFailure('frozen', 'You can no longer call in this Direct Message')
+    if (!callsProvider(this.env)) {
+      return liveFailure('calls_unavailable', 'Calls use Cloudflare RealtimeKit and are unavailable on this runtime')
+    }
     const media = await liveMedia(this.env)
     if (!media) return liveFailure('realtimekit_unconfigured', 'Live needs RealtimeKit')
 

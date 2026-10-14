@@ -14,7 +14,8 @@ import { tool, type ToolSet, type UIMessage } from 'ai'
 import { Agent } from 'agents'
 import { z } from 'zod'
 import { newId, nowIso } from '../shared/ids'
-import { agentBrowserConfigured, type DiscoflareEnv } from './env'
+import { modelForAgent } from './ai-runtime'
+import { agentBrowserConfigured, browserProvider, resolveAgentModelId, type DiscoflareEnv } from './env'
 import { captureBrowserScreenshot, listBrowserLinks, readBrowserMarkdown } from './agent-browser'
 import { workspaceEmailAvailable } from './mail-transport'
 import { signalMailChanged } from './mail-events'
@@ -29,8 +30,6 @@ import type { MailboxPermission } from '../shared/types'
 import { WorkspaceAction, type AuthorizationContext } from '../shared/authorization'
 import { loadAuthorizationContext } from '../server/utils/authorization'
 import { createTask, getTask, listTasks } from '../server/utils/task-service'
-
-const DEFAULT_MODEL = '@cf/moonshotai/kimi-k2.7-code'
 
 type AgentProfile = {
   displayName: string
@@ -90,7 +89,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
   private readonly streams = new Map<string, StreamState>()
 
   override getModel() {
-    return this.env.AGENT_MODEL?.trim() || DEFAULT_MODEL
+    return modelForAgent(this.env)
   }
 
   override getSystemPrompt() {
@@ -106,13 +105,14 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     const profile = await this.profile()
     if (!profile) throw new Error('Agent profile not found')
     if (profile.status !== 'active') throw new Error('Agent is paused')
-    const model = profile.model || this.getModel()
+    const modelId = resolveAgentModelId(this.env, profile.model)
+    const model = modelForAgent(this.env, profile.model)
     const metadata = this.messageMetadata(this.activeTurnMetadata)
-    const canSeeImages = agentModelSupportsVision(model)
+    const canSeeImages = agentModelSupportsVision(modelId)
     const messages = metadata?.hasImages && canSeeImages && this.env.FILES
       ? await attachMessageImages(ctx.messages, this.env.DB, this.env.FILES, metadata.sourceMessageId)
       : ctx.messages
-    const browserOn = agentBrowserConfigured(this.env)
+    const browser = browserProvider(this.env)
     return {
       model,
       messages,
@@ -121,9 +121,13 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
         `Your participant name is ${profile.displayName}.`,
         profile.instructions ? `Your profile instructions:\n${profile.instructions}` : '',
         'You do not have a project, repository, or computer. Do not claim that you ran a shell command or changed a file.',
-        browserOn
+        browser === 'workers'
           ? 'You can read public web pages through Cloudflare Browser Run. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
-          : '',
+          : browser === 'cloudflare-rest'
+            ? 'You can read public web pages through Cloudflare Browser Run over its REST API. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
+            : browser === 'cdp'
+              ? 'You can read public web pages through the external Chromium browser configured for this installation. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
+              : '',
         metadata?.hasImages && !canSeeImages
           ? 'The current workspace message has image attachments, but your selected model cannot inspect visual input. Do not pretend you saw them; ask for a vision-capable model or a text description if the image is needed.'
           : '',

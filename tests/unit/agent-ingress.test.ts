@@ -112,7 +112,29 @@ describe('agent message ingress', () => {
     }))
   })
 
-  it('does not start a turn without Workers AI', async () => {
+  it('starts a turn through an OpenAI-compatible endpoint when Workers AI is absent', async () => {
+    const receiveMessage = vi.fn(async () => 'workflow-id')
+    const env = {
+      DB: db,
+      AI_BASE_URL: 'https://llm.example.com/v1',
+      AI_API_KEY: 'secret',
+      AI_MODEL: 'your-model',
+      AGENT_DO: { getByName: () => ({ receiveMessage }) },
+    }
+
+    await signalAgentsForMessage(env as never, {
+      messageId: 'message-compatible',
+      channelId: 'dm',
+      authorId: 'human',
+      authorName: 'Human',
+      content: 'Hello',
+      mentionIds: [],
+    })
+
+    expect(receiveMessage).toHaveBeenCalled()
+  })
+
+  it('does not start a turn without a model provider', async () => {
     const receiveMessage = vi.fn(async () => 'workflow-id')
     const env = {
       DB: db,

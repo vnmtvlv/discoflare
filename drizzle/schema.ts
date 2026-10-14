@@ -535,7 +535,7 @@ export const emailMessages = sqliteTable('email_messages', {
   createdAt: text('created_at').notNull(),
   /** The mailbox that received or sent it; Message-IDs are unique within a mailbox. */
   mailboxChannelId: text('mailbox_channel_id').references(() => emailMailboxes.channelId, { onDelete: 'cascade' }),
-  /** Outbound only: the sender's request key, so a retried send is not emailed twice. */
+  /** Outbound sender request key, or the raw SHA-256 of an inbound message that has no RFC Message-ID. Unique within a mailbox, so a retry is not stored twice. */
   clientRequestId: text('client_request_id'),
   deliveryAttempts: integer('delivery_attempts').notNull().default(0),
   deliveryError: text('delivery_error'),

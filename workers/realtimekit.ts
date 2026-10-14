@@ -1,6 +1,6 @@
 import { decryptSecret } from '../shared/encrypted-secret'
 import type { RealtimeKitSettingsAdminDTO } from '../shared/types'
-import type { DiscoflareEnv } from './env'
+import { callsProvider, type DiscoflareEnv } from './env'
 import {
   DISCOFLARE_HOST_PRESET,
   DISCOFLARE_PARTICIPANT_PRESET,
@@ -16,6 +16,8 @@ export {
   DISCOFLARE_HOST_PRESET,
   DISCOFLARE_PARTICIPANT_PRESET,
   endMeeting,
+  ensureLivePresets,
+  findOrCreateApp,
   RealtimeKitHttpError,
   removeParticipants,
   type RealtimeKitAccount,
@@ -150,7 +152,9 @@ export function realtimekitConfigured(config: RealtimeKitRuntimeConfig): boolean
 export async function liveAvailable(env: DiscoflareEnv): Promise<boolean> {
   // A linked Discoflare Admin provides Live; it sets up RealtimeKit on first use.
   if (env.DISCOFLARE_ADMIN) return true
-  return realtimekitConfigured(await loadRealtimeKitConfig(env))
+  if (realtimekitConfigured(await loadRealtimeKitConfig(env))) return true
+  // Off Cloudflare, the shared API token provisions an app on the first call.
+  return callsProvider(env) === 'realtimekit-rest'
 }
 
 export function realtimekitSettingsAdminDto(config: RealtimeKitRuntimeConfig): RealtimeKitSettingsAdminDTO {

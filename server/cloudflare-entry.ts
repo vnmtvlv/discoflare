@@ -1,3 +1,4 @@
+import './shims/create-task-guard'
 import '#nitro-internal-pollyfills'
 import { useNitroApp } from 'nitropack/runtime'
 import { isPublicAssetURL } from '#nitro-internal-virtual/public-assets'

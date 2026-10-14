@@ -7,7 +7,8 @@ import { readAppBranding } from '../../../shared/app-branding'
 import { maskedOwnerEmail, readOwnerSetupEnv } from '../../utils/owner-setup'
 import { version as packageVersion } from '../../../package.json'
 import { authMode } from '../../utils/cloudflare-access'
-import { agentBrowserConfigured } from '../../../workers/env'
+import { agentBrowserConfigured, aiProvider } from '../../../workers/env'
+import { installationAiModel, installationCapabilities, UNAVAILABLE_CAPABILITIES } from '../../../workers/installation-capabilities'
 
 export default defineEventHandler(async (event): Promise<SetupHealth> => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -27,6 +28,9 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
       ownerSetup: false,
       ownerEmailHint: null,
       bindings: { db: false, r2: false, kv: false, channelDo: false, workspaceDo: false, rateLimitDo: false, notificationDo: false, agentDo: false, workersAi: false, browser: false },
+      aiProvider: null,
+      aiModel: null,
+      capabilities: UNAVAILABLE_CAPABILITIES,
       realtimekit: false,
       twitterAuth: false,
       ...readAppBranding(),
@@ -45,6 +49,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     workersAi: Boolean(env.AI),
     browser: agentBrowserConfigured(env),
   }
+  const provider = aiProvider(env)
 
   let migrated = false
   let users = 0
@@ -85,6 +90,9 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
     ownerSetup: Boolean(ownerSetup && !ready),
     ownerEmailHint: ownerSetup && !ready ? maskedOwnerEmail(ownerSetup.email) : null,
     bindings,
+    aiProvider: provider,
+    aiModel: installationAiModel(env),
+    capabilities: installationCapabilities(env),
     realtimekit: await realtimekit,
     twitterAuth: Boolean(env.TWITTER_CLIENT_ID?.trim() && env.TWITTER_CLIENT_SECRET?.trim()),
     ...readAppBranding(env),

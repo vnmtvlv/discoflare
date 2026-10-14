@@ -9,6 +9,7 @@ import { cf, fail } from '../../../../utils/cf'
 import { getDb } from '../../../../utils/db'
 import { writeAudit } from '../../../../utils/messages'
 import { parseBody } from '../../../../utils/validate'
+import { resolveAgentModelId } from '../../../../../workers/env'
 import { signalMembersChanged } from '../../../../../workers/member-events'
 
 const bodySchema = z.object({
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
 
   const now = nowIso()
   const displayName = body.displayName ?? current.user.displayName
-  const model = body.model ?? current.profile.model
+  const model = body.model !== undefined ? resolveAgentModelId(env, body.model) : current.profile.model
   const instructions = body.instructions ?? current.profile.instructions
   const status = body.status ?? current.profile.status
 

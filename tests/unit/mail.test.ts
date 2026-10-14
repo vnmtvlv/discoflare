@@ -21,6 +21,28 @@ describe('workspace mail model', () => {
     expect(mailPermissionAllows('manage', 'send')).toBe(true)
   })
 
+  it('accepts MAIL_DOMAIN without a zone id off Cloudflare', () => {
+    expect(workspaceMailDomains({
+      DISCOFLARE_RUNTIME: 'celld',
+      MAIL_DOMAIN: 'Chat.Example.com',
+    } as never)).toEqual([
+      { id: 'main', zoneId: '', domain: 'chat.example.com' },
+    ])
+  })
+
+  it('keeps requiring MAIL_ZONE_ID for the legacy domain on Cloudflare', () => {
+    expect(workspaceMailDomains({
+      DISCOFLARE_RUNTIME: 'cloudflare',
+      MAIL_DOMAIN: 'chat.example.com',
+    } as never)).toEqual([])
+    expect(workspaceMailDomains({
+      MAIL_DOMAIN: 'chat.example.com',
+      MAIL_ZONE_ID: 'zone-1',
+    } as never)).toEqual([
+      { id: 'main', zoneId: 'zone-1', domain: 'chat.example.com' },
+    ])
+  })
+
   it('reads multiple deployment-managed email domains and preserves legacy bindings', () => {
     expect(workspaceMailDomains({
       DISCOFLARE_EMAIL_DOMAINS: JSON.stringify([

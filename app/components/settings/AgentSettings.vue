@@ -9,7 +9,21 @@ const toast = useToast()
 const qc = useQueryClient()
 const { api } = useApi()
 const session = useSessionStore()
-const browserEnabled = computed(() => session.health?.bindings.browser === true)
+const openAiCompatible = computed(() => session.health?.aiProvider === 'openai-compatible')
+const workersAiRest = computed(() => session.health?.aiProvider === 'workers-ai-rest')
+const workersAi = computed(() => session.health?.aiProvider === 'workers-ai' || workersAiRest.value)
+const agentsUnavailable = computed(() => session.health?.aiProvider === null)
+const browserCopy = computed(() => {
+  const provider = session.health?.capabilities.browser
+  if (provider === 'workers') return 'Cloudflare Browser Run reads public URLs. This is not a search engine.'
+  if (provider === 'cloudflare-rest') return 'Cloudflare Browser Run reads public URLs through its REST API. This is not a search engine.'
+  if (provider === 'cdp') return 'An external Chromium browser reads public URLs. This is not a search engine.'
+  return 'Public page reading is unavailable. Bind Cloudflare Browser Run, set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, or set BROWSER_CDP_URL to a Chromium DevTools endpoint.'
+})
+function defaultModel() {
+  if (session.health?.aiProvider === 'openai-compatible' && session.health.aiModel) return session.health.aiModel
+  return '@cf/moonshotai/kimi-k2.7-code'
+}
 const selectedAgentId = shallowRef<string | null>(null)
 const creatingNew = ref(false)
 const saving = ref(false)
@@ -57,7 +71,7 @@ type AgentForm = z.output<typeof schema>
 
 const form = reactive<AgentForm>({
   displayName: '',
-  model: '@cf/moonshotai/kimi-k2.7-code',
+  model: defaultModel(),
   instructions: '',
   status: 'active',
 })
@@ -84,6 +98,12 @@ function modelOption(value: unknown) {
   return modelOptions.find(option => option.id === value)
 }
 
+function modelLabel(model: string) {
+  if (openAiCompatible.value && model.startsWith('@cf/')) return session.health?.aiModel || model
+  if (!workersAi.value) return model
+  return modelOption(model)?.label ?? model
+}
+
 function selectAgent(agent: AgentDTO) {
   creatingNew.value = false
   selectedAgentId.value = agent.id
@@ -91,7 +111,9 @@ function selectAgent(agent: AgentDTO) {
   removeCurrentAvatar.value = false
   Object.assign(form, {
     displayName: agent.displayName,
-    model: agent.model,
+    model: openAiCompatible.value && agent.model.startsWith('@cf/')
+      ? (session.health?.aiModel || agent.model)
+      : agent.model,
     instructions: agent.instructions,
     status: agent.status,
   })
@@ -104,11 +126,17 @@ function createAgent() {
   removeCurrentAvatar.value = false
   Object.assign(form, {
     displayName: '',
-    model: '@cf/moonshotai/kimi-k2.7-code',
+    model: defaultModel(),
     instructions: '',
     status: 'active',
   })
 }
+
+watch(() => [session.health?.aiProvider, session.health?.aiModel] as const, () => {
+  const model = session.health?.aiModel
+  if (!openAiCompatible.value || !model) return
+  if (!form.model || form.model.startsWith('@cf/')) form.model = model
+})
 
 watch(agents, (list) => {
   if (!list.length) return
@@ -212,7 +240,7 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
           <UserAvatar :user="agentAvatarUser(agent)" size="sm" />
           <span class="min-w-0">
             <span class="block truncate text-sm font-medium">{{ agent.displayName }}</span>
-            <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelOption(agent.model)?.label ?? agent.model }}</span>
+            <span class="block truncate text-xs text-muted">{{ agent.status }} · {{ modelLabel(agent.model) }}</span>
           </span>
         </span>
       </button>
@@ -220,6 +248,13 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
     </div>
 
     <UForm :schema="schema" :state="form" class="min-w-0 max-w-2xl space-y-5" @submit="saveAgent">
+      <UAlert
+        v-if="agentsUnavailable"
+        color="neutral"
+        variant="subtle"
+        title="Agents need a model provider"
+        description="Bind Workers AI, or set AI_BASE_URL, AI_API_KEY, and AI_MODEL for an OpenAI-compatible endpoint."
+      />
       <UFormField name="displayName" label="Name">
         <UInput v-model="form.displayName" class="w-full" />
       </UFormField>
@@ -245,8 +280,13 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         </div>
       </UFormField>
 
-      <UFormField name="model" label="Model">
-        <template #hint>
+      <UFormField
+        v-if="workersAi || openAiCompatible"
+        name="model"
+        label="Model"
+        :description="openAiCompatible ? `Sent to the OpenAI-compatible endpoint. This installation's AI_MODEL is ${session.health?.aiModel}.` : workersAiRest ? 'Sent to Workers AI through the Cloudflare REST API.' : undefined"
+      >
+        <template v-if="workersAi" #hint>
           <ULink
             to="https://developers.cloudflare.com/workers-ai/models/"
             target="_blank"
@@ -257,7 +297,9 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
             <UIcon name="i-ph-arrow-square-out" class="size-3" />
           </ULink>
         </template>
+        <UInput v-if="openAiCompatible" v-model="form.model" class="w-full" />
         <USelect
+          v-else
           v-model="form.model"
           :items="modelOptions"
           :avatar="modelOption(form.model)?.avatar"
@@ -275,16 +317,20 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         <USelect v-model="form.status" :items="statusOptions" class="w-full" />
       </UFormField>
 
-      <dl v-if="selectedAgent" class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-default pt-5 text-sm">
+      <dl class="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 border-t border-default pt-5 text-sm">
         <dt class="text-muted">Browser</dt>
-        <dd>{{ browserEnabled ? 'Cloudflare Browser Run reads public URLs. This is not a search engine.' : 'Browser Run is not bound.' }}</dd>
+        <dd :class="browserCopy.startsWith('Public page') ? 'text-muted' : ''">{{ browserCopy }}</dd>
+        <dt class="text-muted">Containers</dt>
+        <dd class="text-muted">Agents have no container, computer, or shell on this installation.</dd>
         <dt class="text-muted">Tasks</dt>
         <dd>Can read tasks and create new tasks.</dd>
-        <dt class="text-muted">Last active</dt>
-        <dd>{{ selectedAgent.lastActiveAt ? new Date(selectedAgent.lastActiveAt).toLocaleString() : 'Never' }}</dd>
+        <template v-if="selectedAgent">
+          <dt class="text-muted">Last active</dt>
+          <dd>{{ selectedAgent.lastActiveAt ? new Date(selectedAgent.lastActiveAt).toLocaleString() : 'Never' }}</dd>
+        </template>
       </dl>
 
-      <UButton type="submit" :label="isNew ? 'Create agent' : 'Save changes'" :loading="saving" />
+      <UButton type="submit" :label="isNew ? 'Create agent' : 'Save changes'" :loading="saving" :disabled="agentsUnavailable" />
     </UForm>
   </div>
 </template>

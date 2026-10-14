@@ -603,6 +603,30 @@ export type InvitePreviewDTO = {
   maxUses: number
 }
 
+export type AiProviderName = 'workers-ai' | 'workers-ai-rest' | 'openai-compatible' | null
+export type BrowserProviderName = 'workers' | 'cloudflare-rest' | 'cdp' | null
+export type EmailProviderName = 'binding' | 'cloudflare-rest' | 'gateway' | 'smtp' | null
+export type EmailInboundProvider = 'binding' | 'bridge' | 'postmark' | 'mailgun' | 'ses' | null
+export type CallsProviderName = 'realtimekit' | 'realtimekit-rest' | null
+
+export type RuntimeCapabilities = {
+  /** RealtimeKit calls. False when neither Cloudflare's network nor its REST API is available. */
+  calls: boolean
+  /** Agent containers, computers, and shells. This product does not provide them. */
+  containers: boolean
+  browser: BrowserProviderName
+  emailOutbound: boolean
+  /**
+   * Inbound mail path. `binding` is Cloudflare Email Routing. The other values
+   * are webhooks. `null` means nothing is configured.
+   */
+  emailInbound: EmailInboundProvider
+  /** Which outbound mail path health selected. */
+  emailProvider: EmailProviderName
+  /** Which calls path health selected. */
+  callsProvider: CallsProviderName
+}
+
 export type SetupHealth = {
   version: string
   authMode: AuthMode
@@ -625,6 +649,9 @@ export type SetupHealth = {
     workersAi: boolean
     browser: boolean
   }
+  aiProvider: AiProviderName
+  aiModel: string | null
+  capabilities: RuntimeCapabilities
   realtimekit: boolean
   twitterAuth: boolean
   appName: string

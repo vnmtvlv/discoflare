@@ -142,6 +142,27 @@ describe('inbound email', () => {
     expect(notified.map(event => event.mailboxId)).toEqual(['support', 'sales'])
   })
 
+  it('stores a message with no Message-ID once per raw body', async () => {
+    const raw = [
+      'From: Customer <customer@example.net>',
+      'To: support@example.com',
+      'Subject: Help',
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain',
+      '',
+      'Hello',
+    ].join('\r\n')
+    expect(await receive(raw, 'support@example.com')).toEqual({ accepted: true })
+    expect(await receive(raw, 'support@example.com')).toEqual({ accepted: true })
+    expect(threadsIn('support')).toHaveLength(1)
+    expect(notified).toHaveLength(1)
+    const row = sqlite.prepare('SELECT rfc_message_id as rfc, client_request_id as digest FROM email_messages').get() as { rfc: string | null; digest: string }
+    expect(row.rfc).toBeNull()
+    expect(row.digest).toMatch(/^[0-9a-f]{64}$/u)
+    expect(await receive(raw.replace('Hello', 'Hello again'), 'support@example.com')).toEqual({ accepted: true })
+    expect(threadsIn('support')).toHaveLength(2)
+  })
+
   it('never threads a reply into another mailbox’s conversation', async () => {
     await receive(email({ id: '<first@example.net>', to: 'support@example.com' }), 'support@example.com')
     // A reply to that email reaches sales, which has never seen the original.

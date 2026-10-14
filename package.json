@@ -128,10 +128,53 @@
       },
       "AGENT_MODEL": {
         "description": "Default Workers AI model for workspace agents. The included default is @cf/moonshotai/kimi-k2.7-code."
+      },
+      "AI_BASE_URL": {
+        "description": "OpenAI-compatible chat completions base URL, used when the AI binding is absent. Include /v1 when the server expects it."
+      },
+      "AI_API_KEY": {
+        "description": "Secret for AI_BASE_URL. Store this as a secret."
+      },
+      "AI_MODEL": {
+        "description": "Model id sent to AI_BASE_URL when Workers AI is not bound and Cloudflare REST credentials are absent."
+      },
+      "CLOUDFLARE_ACCOUNT_ID": {
+        "description": "Cloudflare account id for Workers AI, Browser Run, Email Sending, and RealtimeKit REST calls when those bindings are absent. A 32-character hex id. Store the matching token as a secret."
+      },
+      "CLOUDFLARE_API_TOKEN": {
+        "description": "Secret. API token for CLOUDFLARE_ACCOUNT_ID. Workers AI Read and Edit, Browser Run Edit (or Browser Rendering Edit), Email Sending Edit, and Realtime Admin."
+      },
+      "BROWSER_CDP_URL": {
+        "description": "Chromium DevTools endpoint used when the BROWSER binding is absent. http(s) base or ws(s) browser socket. Keep it private."
+      },
+      "MAIL_GATEWAY_URL": {
+        "description": "HTTP endpoint that accepts Discoflare's outbound mail JSON when no email binding is present."
+      },
+      "SMTP_GATEWAY_URL": {
+        "description": "HTTP endpoint that relays Discoflare's outbound mail JSON over SMTP. Inbound mail uses INBOUND_EMAIL_SECRET or a provider webhook."
+      },
+      "SMTP_GATEWAY_TOKEN": {
+        "description": "Bearer token for SMTP_GATEWAY_URL. Store this as a secret."
+      },
+      "INBOUND_EMAIL_SECRET": {
+        "description": "Secret of at least 32 characters for POST /api/email/inbound. The Email Routing bridge signs with the same value."
+      },
+      "POSTMARK_INBOUND_SECRET": {
+        "description": "HTTP Basic password for POST /api/email/inbound/postmark. At least 32 characters. Store this as a secret."
+      },
+      "MAILGUN_WEBHOOK_SIGNING_KEY": {
+        "description": "Mailgun HTTP webhook signing key for POST /api/email/inbound/mailgun. At least 32 characters. Not the API key."
+      },
+      "SES_SNS_TOPIC_ARN": {
+        "description": "Amazon SNS topic ARN allowed to POST /api/email/inbound/ses. Example: arn:aws:sns:<region>:<account>:discoflare-inbound."
+      },
+      "DISCOFLARE_RUNTIME": {
+        "description": "Set to celld on non-Cloudflare Workers runtimes. Inbound mail then uses INBOUND_EMAIL_SECRET or a Postmark, Mailgun, or Amazon SES webhook. Calls, Workers AI, Browser Run, and outbound mail can use CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN. cloudflare or workers keeps Cloudflare-network features."
       }
     }
   },
   "dependencies": {
+    "@ai-sdk/openai": "4.0.58",
     "@better-auth/drizzle-adapter": "^1.7.2",
     "@block65/webcrypto-web-push": "2.0.0",
     "@cloudflare/realtimekit": "^2.0.2",

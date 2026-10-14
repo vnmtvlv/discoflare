@@ -1,5 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { cloudflareRestConfigured } from './cloudflare-rest'
+
 export type Rpc<T> = { fetch: (request: Request) => Promise<Response> } & T
 
 export function asRpc<T>(stub: unknown): Rpc<T> {
@@ -16,14 +18,43 @@ export type DiscoflareEnv = {
   NOTIFICATION_DO: DurableObjectNamespace
   AGENT_DO: DurableObjectNamespace
   AGENT_THINK: DurableObjectNamespace
-  AI: Ai
+  AI?: Ai
+  /** OpenAI-compatible chat completions base, including `/v1` when the server expects it. */
+  AI_BASE_URL?: string
+  /** Secret. Sent as a bearer token to `AI_BASE_URL`. */
+  AI_API_KEY?: string
+  /** Model id for the OpenAI-compatible provider. */
+  AI_MODEL?: string
   BROWSER?: {
     quickAction: (action: 'markdown' | 'screenshot' | 'links', options: { url: string }) => Promise<Response>
   }
+  /** Chromium DevTools endpoint, `http://127.0.0.1:9222` or a `ws://` browser socket. */
+  BROWSER_CDP_URL?: string
   EMAIL?: SendEmail
   MAIL_EMAIL?: SendEmail
-  MAIL_GATEWAY?: Fetcher
+  /** Cloudflare service binding, or an http(s) URL for the same JSON send protocol. */
+  MAIL_GATEWAY?: Fetcher | string
+  MAIL_GATEWAY_URL?: string
   MAIL_GATEWAY_TOKEN?: string
+  /** HTTP gateway that relays outbound mail over SMTP. Inbound mail is a separate webhook. */
+  SMTP_GATEWAY_URL?: string
+  SMTP_GATEWAY_TOKEN?: string
+  /**
+   * Shared secret for `POST /api/email/inbound`. At least 32 characters.
+   * The Email Routing bridge signs with the same value.
+   */
+  INBOUND_EMAIL_SECRET?: string
+  /** HTTP Basic password for `POST /api/email/inbound/postmark`. At least 32 characters. */
+  POSTMARK_INBOUND_SECRET?: string
+  /** Mailgun HTTP webhook signing key for `POST /api/email/inbound/mailgun`. At least 32 characters. */
+  MAILGUN_WEBHOOK_SIGNING_KEY?: string
+  /** Amazon SNS topic ARN allowed to call `POST /api/email/inbound/ses`. */
+  SES_SNS_TOPIC_ARN?: string
+  /**
+   * `cloudflare` or `workers` keeps Cloudflare-network features.
+   * Any other value, including `celld`, turns them off.
+   */
+  DISCOFLARE_RUNTIME?: string
   DISCOFLARE_PRIMARY?: string
   DISCOFLARE_MAIL_ROUTES?: string
   DISCOFLARE_EMAIL_DOMAINS?: string
@@ -91,12 +122,66 @@ export type DiscoflareEnv = {
   DISCOFLARE_CONTROL_ID?: string
   DISCOFLARE_CONTROL_TOKEN?: string
   DISCOFLARE_CONTROL_ENDPOINT?: string
+  /** Cloudflare account id used to call Workers AI, Browser Run, Email Sending, and RealtimeKit over REST. */
+  CLOUDFLARE_ACCOUNT_ID?: string
+  /** Secret. Account API token for `CLOUDFLARE_ACCOUNT_ID`. Not `DISCOFLARE_ACCOUNT_ID`. */
+  CLOUDFLARE_API_TOKEN?: string
+}
+
+export type AiProviderName = 'workers-ai' | 'workers-ai-rest' | 'openai-compatible' | null
+export type BrowserProviderName = 'workers' | 'cloudflare-rest' | 'cdp' | null
+export type CallsProviderName = 'realtimekit' | 'realtimekit-rest' | null
+
+export function aiProvider(env: DiscoflareEnv): AiProviderName {
+  if (env.AI) return 'workers-ai'
+  if (cloudflareRestConfigured(env)) return 'workers-ai-rest'
+  if (env.AI_BASE_URL?.trim() && env.AI_API_KEY?.trim() && env.AI_MODEL?.trim()) return 'openai-compatible'
+  return null
 }
 
 export function agentBrowserConfigured(env: DiscoflareEnv): boolean {
-  return Boolean(env.BROWSER)
+  return browserProvider(env) !== null
+}
+
+export function browserProvider(env: DiscoflareEnv): BrowserProviderName {
+  if (env.BROWSER) return 'workers'
+  if (cloudflareRestConfigured(env)) return 'cloudflare-rest'
+  if (env.BROWSER_CDP_URL?.trim()) return 'cdp'
+  return null
 }
 
 export function agentRuntimeConfigured(env: DiscoflareEnv): boolean {
-  return Boolean(env.AI && env.AGENT_DO)
+  return Boolean(env.AGENT_DO && aiProvider(env))
+}
+
+/** RealtimeKit calls and Email Routing need Cloudflare's network. */
+export function cloudflareNetwork(env: DiscoflareEnv): boolean {
+  const runtime = env.DISCOFLARE_RUNTIME?.trim().toLowerCase()
+  if (runtime === 'cloudflare' || runtime === 'workers') return true
+  if (runtime) return false
+  const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
+  if (/celld/i.test(ua)) return false
+  return true
+}
+
+/**
+ * Calls on Cloudflare's network use the existing RealtimeKit connection.
+ * Off that network, the shared Cloudflare API token can drive RealtimeKit's REST API.
+ */
+export function callsProvider(env: DiscoflareEnv): CallsProviderName {
+  if (cloudflareNetwork(env)) return 'realtimekit'
+  if (cloudflareRestConfigured(env)) return 'realtimekit-rest'
+  return null
+}
+
+export const DEFAULT_WORKERS_MODEL = '@cf/moonshotai/kimi-k2.7-code'
+
+/** Profile ids that start with `@cf/` are Workers AI ids and are not sent to an OpenAI-compatible endpoint. */
+export function resolveAgentModelId(env: DiscoflareEnv, profileModel?: string | null): string {
+  const profile = profileModel?.trim() || ''
+  if (aiProvider(env) === 'openai-compatible') {
+    if (profile && !profile.startsWith('@cf/')) return profile
+    return env.AI_MODEL!.trim()
+  }
+  return profile || env.AGENT_MODEL?.trim() || DEFAULT_WORKERS_MODEL
 }
