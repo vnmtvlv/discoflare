@@ -78,3 +78,39 @@ jobs:
       - name: Run test
         if: matrix.check == 'test'
         run: pnpm test --reporter=default
+
+  self-host:
+    name: self-host
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Write a local env file
+        working-directory: self-host
+        run: |
+          umask 077
+          auth="$(openssl rand -hex 32)"
+          token="$(openssl rand -hex 32)"
+          secret="$(openssl rand -hex 24)"
+          cat > .env <<EOF
+          PUBLIC_ORIGIN=http://127.0.0.1:8080
+          AUTH_SECRET=${auth}
+          ADMIN_EMAIL=owner@example.com
+          ADMIN_SETUP_TOKEN=${token}
+          ADMIN_WORKSPACE=workspace
+          RUSTFS_ACCESS_KEY=discoflare
+          RUSTFS_SECRET_KEY=${secret}
+          RUSTFS_BUCKET=cells
+          AWS_REGION=us-east-1
+          EOF
+
+      - name: Build the image and require health 200
+        run: bash self-host/smoke.sh
+
+      - name: Show Compose logs
+        if: failure()
+        run: docker compose -f self-host/docker-compose.yml logs --no-color
