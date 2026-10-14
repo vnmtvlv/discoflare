@@ -161,6 +161,7 @@
     "bignumber.js": "^11.1.5",
     "dayjs": "^1.11.23",
     "drizzle-orm": "^0.45.2",
+    "html-to-text": "10.0.1",
     "jose": "6.2.10",
     "nanoid": "^6.0.1",
     "nuxt": "^4.5.2",
@@ -175,6 +176,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260926.1",
     "@nuxt/eslint": "^1.17.0",
+    "@types/html-to-text": "9.0.4",
     "@types/node": "^24.19.0",
     "@vue/test-utils": "^2.5.0",
     "drizzle-kit": "^0.31.10",

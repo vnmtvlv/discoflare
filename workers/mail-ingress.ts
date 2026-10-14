@@ -1,6 +1,7 @@
 import PostalMime, { type Address } from 'postal-mime'
 import { newId, nowIso, WORKSPACE_ID } from '../shared/ids'
 import { MAIL_EXTERNAL_USER_ID, MAIL_LIMITS, mailAddressList, mergeMailAddresses } from '../shared/mail'
+import { plainMailBody } from '../shared/mail-content'
 import type { DiscoflareEnv } from './env'
 import { signalMailChanged } from './mail-events'
 
@@ -37,12 +38,6 @@ function referenceIds(inReplyTo?: string, references?: string): string[] {
 function safeFilename(value: string | null, index: number): string {
   const normalized = (value || `attachment-${index + 1}`).replace(/[\\/\0]/gu, '-').trim()
   return normalized.slice(0, 160) || `attachment-${index + 1}`
-}
-
-function plainBody(text: string | undefined, html: string | undefined): string {
-  const body = (text || html?.replace(/<style[\s\S]*?<\/style>/giu, '').replace(/<script[\s\S]*?<\/script>/giu, '').replace(/<[^>]+>/gu, ' ') || '').replace(/\r\n/gu, '\n').trim()
-  if (body.length <= 200_000) return body
-  return `${body.slice(0, 200_000)}\n\n[Message truncated by Discoflare]`
 }
 
 function formatBytes(bytes: number): string {
@@ -144,7 +139,7 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
   })
   if (!env.FILES) omitted.push(...attachmentRows.splice(0).map(attachment => `${attachment.filename} (R2 is disabled)`))
   for (const extra of attachmentRows.splice(MAIL_LIMITS.attachments)) omitted.push(extra.filename)
-  const body = plainBody(parsed.text, parsed.html)
+  const body = plainMailBody(parsed.text, parsed.html)
   const content = omitted.length
     ? `${body}\n\n[Discoflare did not keep ${omitted.length === 1 ? 'this attachment' : `these ${omitted.length} attachments`}: ${omitted.join(', ')}]`
     : body
