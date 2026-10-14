@@ -62,7 +62,7 @@ export default defineEventHandler(async (event): Promise<SetupHealth> => {
   const realtimekit = liveAvailable(env)
   if (env.DB) {
     try {
-      migrated = await ensureMigrated(env.DB)
+      migrated = await ensureMigrated(env.DB, env)
       users = (await ensureAdminFromEnv(event)).users
       ready = await workspaceReady(env.DB)
     }

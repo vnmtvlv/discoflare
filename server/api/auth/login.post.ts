@@ -13,7 +13,7 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   const ip = getHeader(event, 'cf-connecting-ip') || getHeader(event, 'x-forwarded-for') || 'local'
   let allowed = true
   try {

@@ -127,7 +127,7 @@ let bootstrappedInIsolate = false
 
 export async function ensureAdminFromEnv(event: H3Event): Promise<{ users: number; provisioned: boolean }> {
   const { env } = cf(event)
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   const users = await userCount(env.DB)
   if (users > 0) {
     if (!bootstrappedInIsolate) {

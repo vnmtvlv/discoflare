@@ -25,7 +25,7 @@ export default defineEventHandler(async (event): Promise<{ url: string | null }>
   if (new URL(body.callbackURL).origin !== requestOrigin || new URL(body.errorCallbackURL).origin !== requestOrigin) {
     fail(400, 'invalid_callback', 'Authentication callbacks must use this origin')
   }
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   if (body.mode === 'signup' && !(await workspaceReady(env.DB))) {
     fail(409, 'workspace_not_ready', 'The workspace owner must complete setup first')
   }

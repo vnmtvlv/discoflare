@@ -21,7 +21,7 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   if (!(await workspaceReady(env.DB))) fail(409, 'workspace_not_ready', 'The workspace owner must complete setup first')
   const runtime = await loadAuthRuntimeConfig(env, getRequestURL(event).origin)
   const publicConfig = publicAuthConfig(runtime)
