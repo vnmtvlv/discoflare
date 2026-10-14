@@ -15,7 +15,7 @@ services:
     command:
       - sh
       - -c
-      - mkdir -p /data/rustfs0 /data/rustfs1 /data/rustfs2 /data/rustfs3 && chown -R 10001:10001 /data
+      - chown -R 10001:10001 /data
 
   rustfs:
     image: rustfs/rustfs:1.0.1
@@ -23,7 +23,7 @@ services:
       rustfs-perms:
         condition: service_completed_successfully
     environment:
-      - RUSTFS_VOLUMES=/data/rustfs{0...3}
+      - RUSTFS_VOLUMES=/data
       - RUSTFS_ADDRESS=0.0.0.0:9000
       - RUSTFS_CONSOLE_ENABLE=false
       - RUSTFS_ACCESS_KEY=$SERVICE_USER_RUSTFS

@@ -25,7 +25,7 @@ Then open `/setup#claim=<ADMIN_SETUP_TOKEN>` and create the owner. `PUBLIC_ORIGI
 
 A celld node that misses its own lease renews by fencing itself and exiting. Compose sets `restart: always`, so Docker starts the container again. The entrypoint waits 15 seconds on that restart (`CELLD_RESTART_DELAY`) so the old lease can expire before the new process binds the node. `rustfs-perms` and `bucket-init` are one-shot and use `restart: "no"`.
 
-RustFS is not published to the host. The four directories under the `rustfs-data` volume are the layout RustFS expects on one disk. They are not four physical disks.
+RustFS is not published to the host. One Docker volume holds the fleet bucket.
 
 ## Reverse proxy and TLS
 
