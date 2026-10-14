@@ -6,7 +6,7 @@ export interface Env {
 }
 
 /**
- * Cloudflare Email Routing bridge. Setup steps are in docs/self-host/celld.md.
+ * Cloudflare Email Routing bridge. Setup and the deploy directory are in ./README.md.
  * `INBOUND_EMAIL_SECRET` is a Worker secret, not a var in wrangler.jsonc.
  */
 export default {

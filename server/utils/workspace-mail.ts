@@ -2,7 +2,7 @@ import type { H3Event } from 'h3'
 import { eq } from 'drizzle-orm'
 import { users } from '../../drizzle/schema'
 import { newId, nowIso } from '../../shared/ids'
-import type { DiscoflareEnv } from '../../workers/env'
+import { cloudflareNetwork, type DiscoflareEnv } from '../../workers/env'
 import type { MailboxPermission } from '../../shared/types'
 import { MAIL_DOMAIN_ID, MAIL_EXTERNAL_USER_ID, mailAddress, mailPermissionAllows, normalizeMailLocalPart } from '../../shared/mail'
 import { requireChannelAccess } from './guards'
@@ -40,8 +40,11 @@ export function workspaceMailDomains(env: DiscoflareEnv): WorkspaceMailDomainCon
   }
   const legacyDomain = env.MAIL_DOMAIN?.trim().toLowerCase()
   const legacyZoneId = env.MAIL_ZONE_ID?.trim()
-  if (legacyDomain && legacyZoneId && !configured.some(item => item.domain === legacyDomain)) {
-    configured.unshift({ id: MAIL_DOMAIN_ID, zoneId: legacyZoneId, domain: legacyDomain })
+  if (legacyDomain && !configured.some(item => item.domain === legacyDomain)) {
+    // Cloudflare routing still needs a zone. Off that network the domain alone
+    // is enough; zone_id is NOT NULL, so an empty string stands in for "none".
+    if (legacyZoneId) configured.unshift({ id: MAIL_DOMAIN_ID, zoneId: legacyZoneId, domain: legacyDomain })
+    else if (!cloudflareNetwork(env)) configured.unshift({ id: MAIL_DOMAIN_ID, zoneId: '', domain: legacyDomain })
   }
   return [...new Map(configured.map(item => [item.domain, item])).values()]
 }

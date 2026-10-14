@@ -44,6 +44,18 @@ function formatBytes(bytes: number): string {
   return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`
 }
 
+function copyBytes(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength)
+  new Uint8Array(copy).set(bytes)
+  return copy
+}
+
+/** Hex SHA-256 of the raw RFC822 bytes. Used only when the message has no Message-ID. */
+async function rawSha256(raw: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', copyBytes(raw))
+  return [...new Uint8Array(digest)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+}
+
 /** Reads the raw message, giving up once it passes the size limit. */
 async function readRaw(stream: ReadableStream<Uint8Array>, limit: number): Promise<Uint8Array | null> {
   const reader = stream.getReader()
@@ -72,7 +84,10 @@ async function readRaw(stream: ReadableStream<Uint8Array>, limit: number): Promi
  * Stores one inbound email in the mailbox it was addressed to. Duplicate
  * detection and threading only ever look inside that mailbox, so the same email
  * sent to two mailboxes lands in both, and a reply never joins another
- * mailbox's conversation.
+ * mailbox's conversation. The same RFC Message-ID is stored once. A message
+ * with no Message-ID is stored once per SHA-256 of its raw bytes, in
+ * `client_request_id`, so a replay does not add a second copy. That digest is
+ * not written as a Message-ID.
  */
 export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env: DiscoflareEnv): Promise<WorkspaceEmailIngressResult> {
   const recipient = message.to.trim().toLowerCase()
@@ -89,9 +104,15 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
   const raw = await readRaw(message.raw, MAIL_LIMITS.rawBytes)
   if (!raw) return { accepted: false, reason: 'Message is too large' }
   const parsed = await PostalMime.parse(raw)
+  const rawHash = parsed.messageId ? null : await rawSha256(raw)
   if (parsed.messageId) {
     const duplicate = await env.DB.prepare('SELECT message_id FROM email_messages WHERE mailbox_channel_id = ? AND rfc_message_id = ?')
       .bind(mailbox.channelId, parsed.messageId).first()
+    if (duplicate) return { accepted: true }
+  }
+  else if (rawHash) {
+    const duplicate = await env.DB.prepare('SELECT message_id FROM email_messages WHERE mailbox_channel_id = ? AND client_request_id = ?')
+      .bind(mailbox.channelId, rawHash).first()
     if (duplicate) return { accepted: true }
   }
 
@@ -182,8 +203,8 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
     env.DB.prepare(
       `INSERT INTO email_messages
        (message_id, thread_channel_id, mailbox_channel_id, direction, from_address, from_name, to_json, cc_json, bcc_json,
-        rfc_message_id, in_reply_to, references_json, delivery_status, raw_r2_key, created_at)
-       VALUES (?, ?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?)`,
+        rfc_message_id, in_reply_to, references_json, delivery_status, raw_r2_key, client_request_id, created_at)
+       VALUES (?, ?, ?, 'inbound', ?, ?, ?, ?, ?, ?, ?, ?, 'received', ?, ?, ?)`,
     ).bind(
       messageId,
       threadChannelId,
@@ -197,6 +218,7 @@ export async function ingestWorkspaceEmail(message: WorkspaceEmailEnvelope, env:
       parsed.inReplyTo || null,
       JSON.stringify(refs),
       env.FILES ? rawKey : null,
+      rawHash,
       created,
     ),
     ...(env.FILES ? attachmentRows : []).map(attachment => env.DB.prepare(

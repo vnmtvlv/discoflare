@@ -71,10 +71,12 @@ Internal note   → ordinary Message in the same Thread → workspace only
 ```
 
 An RFC Message-ID is unique within one Mailbox, not across the Installation.
-Duplicate detection and reply threading look only inside the Mailbox that
-received the email, so one email sent to two Mailboxes lands in both and a reply
-never joins another Mailbox's conversation. A reply goes to the sender, To, and
-Cc of the latest email received in the conversation.
+A message with no RFC Message-ID is stored once per SHA-256 of its raw bytes.
+A replayed signed request inside the replay window returns success and does not
+add a second copy. Duplicate detection and reply threading look only inside the
+Mailbox that received the email, so one email sent to two Mailboxes lands in
+both and a reply never joins another Mailbox's conversation. A reply goes to
+the sender, To, and Cc of the latest email received in the conversation.
 
 Inbox lists conversations in the inbox that contain received email; a
 conversation a Member starts appears there once it gets a reply. Sent lists every
