@@ -140,6 +140,8 @@ celld deploy wrangler.celld.local.json --bucket s3://cells
 celld d1 migrations apply discoflare wrangler.celld.local.json --bucket s3://cells
 ```
 
+With `DISCOFLARE_RUNTIME=celld`, Discoflare does not apply its bundled schema. `celld d1 migrations apply` is what creates the tables and records them.
+
 Start one node. `--listen` is the public HTTP address. `--internal-listen` and `--advertise` are how nodes reach each other. On one machine they can all be loopback. Worker variables come from the deployment already written to the bucket; the listen command does not take a vars file.
 
 ```bash

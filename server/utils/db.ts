@@ -94,13 +94,22 @@ export const INIT_SQL = d1ExecSql([
 // trips on every public request.
 let migratedInIsolate = false
 
-export async function ensureMigrated(db: D1Database): Promise<boolean> {
+function celldRuntime(env?: { DISCOFLARE_RUNTIME?: string }): boolean {
+  return env?.DISCOFLARE_RUNTIME?.trim().toLowerCase() === 'celld'
+}
+
+export async function ensureMigrated(db: D1Database, env?: { DISCOFLARE_RUNTIME?: string }): Promise<boolean> {
   if (migratedInIsolate) return true
-  try {
-    await db.prepare('SELECT id FROM workspace LIMIT 1').first()
-  }
-  catch {
-    await db.exec(INIT_SQL)
+  // celld records schema in d1_migrations. Applying INIT_SQL here creates the
+  // same tables without that bookkeeping, and `celld d1 migrations apply` then
+  // stops on "table already exists".
+  if (!celldRuntime(env)) {
+    try {
+      await db.prepare('SELECT id FROM workspace LIMIT 1').first()
+    }
+    catch {
+      await db.exec(INIT_SQL)
+    }
   }
   await Promise.all([
     db.prepare('SELECT kind FROM users LIMIT 1').first(),

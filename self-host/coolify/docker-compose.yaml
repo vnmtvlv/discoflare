@@ -110,7 +110,7 @@ services:
     volumes:
       - celld-data:/var/lib/discoflare/celld
     healthcheck:
-      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/setup/health"]
+      test: ["CMD", "/usr/local/bin/discoflare-healthcheck"]
       interval: 15s
       timeout: 5s
       retries: 12

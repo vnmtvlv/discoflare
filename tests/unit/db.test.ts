@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { d1ExecSql, INIT_SQL } from '../../server/utils/db'
 import agentsAndTasksSql from '../../drizzle/migrations/0007_agents_and_tasks.sql?raw'
 import agentTurnsSql from '../../drizzle/migrations/0008_agent_turns.sql?raw'
@@ -13,6 +13,25 @@ import gadgetsSql from '../../drizzle/migrations/0024_gadgets.sql?raw'
 import retireTaskExecutionSql from '../../drizzle/migrations/0026_retire_task_execution.sql?raw'
 import retireScheduledHuddlesSql from '../../drizzle/migrations/0029_retire_scheduled_huddles.sql?raw'
 import liveRoomsSql from '../../drizzle/migrations/0030_live_rooms_replace_voice_channels.sql?raw'
+
+describe('ensureMigrated', () => {
+  it('does not apply the bundled schema when the runtime is celld', async () => {
+    vi.resetModules()
+    const { ensureMigrated } = await import('../../server/utils/db')
+    const exec = vi.fn(async () => {})
+    const db = {
+      exec,
+      prepare: () => ({
+        first: async () => {
+          throw new Error('missing table')
+        },
+      }),
+    }
+
+    await expect(ensureMigrated(db as never, { DISCOFLARE_RUNTIME: 'celld' })).rejects.toThrow('missing table')
+    expect(exec).not.toHaveBeenCalled()
+  })
+})
 
 describe('D1 bootstrap schema', () => {
   it('passes one complete statement per line to D1 exec', () => {

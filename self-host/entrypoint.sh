@@ -202,6 +202,7 @@ do
   fi
   sleep 3
 done
+touch "${CELLD_WATCH}/.migrations-applied"
 echo "discoflare: celld d1 migrations apply ${DATABASE_NAME} finished"
 
 set +e

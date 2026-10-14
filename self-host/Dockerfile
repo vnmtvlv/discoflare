@@ -46,8 +46,9 @@ COPY --from=build /src/.output /opt/discoflare/.output
 COPY --from=build /src/drizzle/migrations /opt/discoflare/drizzle/migrations
 COPY --from=build /src/wrangler.celld.json /opt/discoflare/wrangler.celld.json
 COPY self-host/entrypoint.sh /usr/local/bin/discoflare-entrypoint
+COPY self-host/healthcheck.sh /usr/local/bin/discoflare-healthcheck
 
-RUN chmod 755 /usr/local/bin/discoflare-entrypoint /usr/local/bin/esbuild /usr/local/bin/celld
+RUN chmod 755 /usr/local/bin/discoflare-entrypoint /usr/local/bin/discoflare-healthcheck /usr/local/bin/esbuild /usr/local/bin/celld
 
 WORKDIR /opt/discoflare
 
@@ -62,6 +63,6 @@ LABEL org.opencontainers.image.title="discoflare" \
       org.opencontainers.image.description="Discoflare on celld with a RustFS fleet bucket"
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=240s --retries=12 \
-    CMD curl -fsS http://127.0.0.1:8080/api/setup/health || exit 1
+    CMD /usr/local/bin/discoflare-healthcheck
 
 ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/discoflare-entrypoint"]

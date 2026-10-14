@@ -12,7 +12,7 @@ const bodySchema = z.object({
 export default defineEventHandler(async (event) => {
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   const requestOrigin = getRequestURL(event).origin
   const runtime = await loadAuthRuntimeConfig(env, requestOrigin)
   if (!publicAuthConfig(runtime).passwordResetEnabled) {

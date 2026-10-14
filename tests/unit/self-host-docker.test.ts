@@ -10,6 +10,8 @@ describe('self-host docker stack', () => {
     expect(dockerfile).toContain('ARG CELLD_VERSION=0.6.2')
     expect(dockerfile).toContain('ghcr.io/denoland/celld:${CELLD_VERSION}')
     expect(dockerfile).toContain('self-host/entrypoint.sh')
+    expect(dockerfile).toContain('self-host/healthcheck.sh')
+    expect(dockerfile).toContain('discoflare-healthcheck')
   })
 
   it('deploys, starts the node, then applies D1 migrations by database name', () => {
@@ -22,6 +24,7 @@ describe('self-host docker stack', () => {
     expect(migrations).toBeGreaterThan(listen)
     expect(entrypoint).toContain('chmod 600')
     expect(entrypoint).toContain('CELLD_RESTART_DELAY')
+    expect(entrypoint).toContain('.migrations-applied')
     expect(entrypoint).not.toContain('CELLD_VARS_FILE')
   })
 
@@ -30,7 +33,9 @@ describe('self-host docker stack', () => {
     expect(compose).toContain('image: rustfs/rustfs:1.0.1')
     expect(compose).toContain('bucket-init:')
     expect(compose).toContain('restart: always')
-    expect(compose).toContain('/api/setup/health')
+    expect(compose).toContain('discoflare-healthcheck')
+    expect(read('self-host/healthcheck.sh')).toContain('/api/setup/health')
+    expect(read('self-host/healthcheck.sh')).toContain('.migrations-applied')
     expect(compose).toContain('s3://${RUSTFS_BUCKET:-cells}')
     expect(compose).toContain('CELLD_DURABILITY: bucket')
   })

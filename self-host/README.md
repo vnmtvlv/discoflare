@@ -17,7 +17,7 @@ openssl rand -hex 32   # use one value for AUTH_SECRET and another for ADMIN_SET
 docker compose up -d
 ```
 
-The app listens on `127.0.0.1:8080`. Open `http://127.0.0.1:8080/api/setup/health` and expect HTTP 200.
+The app listens on `127.0.0.1:8080`. The container stays unhealthy until `celld d1 migrations apply` finishes, then `http://127.0.0.1:8080/api/setup/health` returns HTTP 200. On celld the app does not create tables itself. A request that applied the bundled schema would leave those tables out of `d1_migrations`, and the next apply would stop on `table already exists`.
 
 Then open `/setup#claim=<ADMIN_SETUP_TOKEN>` and create the owner. `PUBLIC_ORIGIN` must be the origin you use in the browser.
 

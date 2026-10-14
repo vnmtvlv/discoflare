@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   setHeader(event, 'Cache-Control', 'no-store')
   const body = parseBody(bodySchema, await readBody(event))
   const { env } = cf(event)
-  await ensureMigrated(env.DB)
+  await ensureMigrated(env.DB, env)
   if (await workspaceReady(env.DB)) fail(409, 'workspace_ready', 'Workspace setup is already complete')
 
   const email = verifiedOwnerSetupEmail(readOwnerSetupEnv(env), body.token)
