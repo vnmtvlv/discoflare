@@ -39,7 +39,7 @@ Five apps bring conversations, work, email, knowledge, and internal tools into o
 
 ### AI agents
 
-- Add AI participants with custom profiles and avatars, powered by Workers AI.
+- Add AI participants with custom profiles and avatars, powered by Workers AI or an OpenAI-compatible endpoint.
 - Let authorized members work with Agents in chat. Agents can read Tasks and create new ones while projects, repositories, and computers remain outside the current product boundary.
 - Use vision-capable models to inspect image attachments.
 
@@ -82,7 +82,7 @@ See the [architecture guide](docs/architecture.md) for runtime boundaries and st
 
 - A Cloudflare account to host the workspace and its resources.
 - Optional R2 for attachments, uploaded avatars/icons, and full workspace backups. Start without it from the Admin; Cloudflare requires an R2 subscription checkout to enable it later.
-- Workers AI access for Agents. The default model needs no external model API key.
+- Workers AI access for Agents, or an OpenAI-compatible endpoint. The default Workers AI model needs no external model API key.
 
 ### Guided installation
 
@@ -107,6 +107,10 @@ pnpm deploy
 ```
 
 The deploy script builds the Worker, applies remote D1 migrations, and deploys it. Verify the resulting Worker after deployment.
+
+### Self-host on celld
+
+Discoflare also runs on [celld](https://celld.dev) and other Workers runtimes that provide D1, KV, R2, and Durable Objects. Workers AI, Browser Rendering, Email Routing, RealtimeKit calls, and agent containers are Cloudflare network services. The app substitutes an OpenAI-compatible model endpoint, an external Chromium DevTools URL, and an HTTP or SMTP mail gateway when those bindings are absent, and it turns calls and inbound email off. See [Self-host on celld](docs/self-host/celld.md). `wrangler.celld.json` is the example config.
 
 ### Optional services
 

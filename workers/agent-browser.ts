@@ -1,3 +1,5 @@
+import { chromiumBrowser } from './browser-cdp'
+
 const MAX_MARKDOWN = 24_000
 const MAX_LINKS = 50
 const MAX_SCREENSHOT_BYTES = 4 * 1024 * 1024
@@ -105,9 +107,19 @@ function browserError(status: number, body: string): Error {
   return new Error(`Browser request failed (${status})`)
 }
 
-async function requireBrowser(env: { BROWSER?: BrowserBinding }): Promise<BrowserBinding> {
-  if (!env.BROWSER) throw new Error('Browser Run is not bound')
-  return env.BROWSER
+type BrowserEnv = { BROWSER?: BrowserBinding, BROWSER_CDP_URL?: string }
+
+export function browserBindingFor(env: BrowserEnv): BrowserBinding | null {
+  if (env.BROWSER) return env.BROWSER
+  const cdpUrl = env.BROWSER_CDP_URL?.trim()
+  if (cdpUrl) return chromiumBrowser(cdpUrl)
+  return null
+}
+
+async function requireBrowser(env: BrowserEnv): Promise<BrowserBinding> {
+  const browser = browserBindingFor(env)
+  if (!browser) throw new Error('Public page reading is unavailable. Bind Browser Run or set BROWSER_CDP_URL.')
+  return browser
 }
 
 async function readError(response: Response): Promise<never> {
@@ -115,7 +127,7 @@ async function readError(response: Response): Promise<never> {
 }
 
 export async function readBrowserMarkdown(
-  env: { BROWSER?: BrowserBinding, PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
+  env: BrowserEnv & { PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
   url: string,
 ): Promise<{ url: string, markdown: string }> {
   const parsed = assertPublicHttpUrl(url, workspaceHostsFrom(env))
@@ -131,7 +143,7 @@ export async function readBrowserMarkdown(
 }
 
 export async function listBrowserLinks(
-  env: { BROWSER?: BrowserBinding, PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
+  env: BrowserEnv & { PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
   url: string,
 ): Promise<{ url: string, links: string[] }> {
   const parsed = assertPublicHttpUrl(url, workspaceHostsFrom(env))
@@ -143,7 +155,7 @@ export async function listBrowserLinks(
 }
 
 export async function captureBrowserScreenshot(
-  env: { BROWSER?: BrowserBinding, FILES?: R2Bucket, PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
+  env: BrowserEnv & { FILES?: R2Bucket, PUBLIC_ORIGIN?: string, DISCOFLARE_APP_HOSTNAME?: string },
   url: string,
   objectKey: string,
 ): Promise<{ url: string, r2Key: string | null, contentType: string, sizeBytes: number }> {

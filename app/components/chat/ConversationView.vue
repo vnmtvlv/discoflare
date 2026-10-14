@@ -128,7 +128,9 @@ const pairDm = computed(() => isDm.value && !isGroup.value)
 const roomActive = computed(() => Boolean(live.state?.active))
 const liveKind = computed(() => roomActive.value ? live.state!.kind : liveKindFor(pairDm.value))
 const liveActionLabel = computed(() => roomActive.value ? liveJoinLabel(liveKind.value) : liveStartLabel(liveKind.value))
+const callsUnavailable = computed(() => session.health?.capabilities.calls === false)
 const liveActionHint = computed(() => {
+  if (callsUnavailable.value) return 'Calls use Cloudflare RealtimeKit and are unavailable on this runtime.'
   if (roomActive.value || canStartLive.value) return liveActionLabel.value
   return frozen.value ? 'You can no longer call in this Direct Message' : 'Your role cannot start live sessions here'
 })
@@ -143,6 +145,7 @@ const canEndLive = computed(() => Boolean(
 
 function openPrejoin() {
   live.error = null
+  if (callsUnavailable.value) return
   // Say Live is not connected before asking for a camera and microphone.
   if (session.health && !session.health.realtimekit) {
     ui.liveSetupOpen = true
@@ -420,7 +423,7 @@ defineShortcuts({
               :variant="roomActive ? 'soft' : 'ghost'"
               size="sm"
               square
-              :disabled="!roomActive && !canStartLive"
+              :disabled="callsUnavailable || (!roomActive && !canStartLive)"
               :aria-label="liveActionLabel"
               @click="openPrejoin()"
             />

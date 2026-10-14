@@ -60,6 +60,7 @@ export type LiveFailureCode =
   | 'rate_limited'
   | 'realtimekit_unconfigured'
   | 'realtimekit_failed'
+  | 'calls_unavailable'
 
 export type LiveFailure = { ok: false, code: LiveFailureCode, message: string }
 
@@ -74,6 +75,7 @@ export const LIVE_FAILURE_STATUS: Record<LiveFailureCode, number> = {
   rate_limited: 429,
   realtimekit_unconfigured: 501,
   realtimekit_failed: 502,
+  calls_unavailable: 501,
 }
 
 export type LiveJoinResult = { ok: true, token: string, meetingId: string, live: LiveState } | LiveFailure

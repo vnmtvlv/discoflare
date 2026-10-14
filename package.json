@@ -128,10 +128,35 @@
       },
       "AGENT_MODEL": {
         "description": "Default Workers AI model for workspace agents. The included default is @cf/moonshotai/kimi-k2.7-code."
+      },
+      "AI_BASE_URL": {
+        "description": "OpenAI-compatible chat completions base URL, used when the AI binding is absent. Include /v1 when the server expects it."
+      },
+      "AI_API_KEY": {
+        "description": "Secret for AI_BASE_URL. Store this as a secret."
+      },
+      "AI_MODEL": {
+        "description": "Model id sent to AI_BASE_URL when Workers AI is not bound."
+      },
+      "BROWSER_CDP_URL": {
+        "description": "Chromium DevTools endpoint used when the BROWSER binding is absent. http(s) base or ws(s) browser socket. Keep it private."
+      },
+      "MAIL_GATEWAY_URL": {
+        "description": "HTTP endpoint that accepts Discoflare's outbound mail JSON when no email binding is present."
+      },
+      "SMTP_GATEWAY_URL": {
+        "description": "HTTP endpoint that relays Discoflare's outbound mail JSON over SMTP. Inbound email still needs Cloudflare."
+      },
+      "SMTP_GATEWAY_TOKEN": {
+        "description": "Bearer token for SMTP_GATEWAY_URL. Store this as a secret."
+      },
+      "DISCOFLARE_RUNTIME": {
+        "description": "Set to celld on non-Cloudflare Workers runtimes so calls and inbound email stay off. cloudflare or workers keeps them available."
       }
     }
   },
   "dependencies": {
+    "@ai-sdk/openai": "4.0.58",
     "@better-auth/drizzle-adapter": "^1.7.2",
     "@block65/webcrypto-web-push": "2.0.0",
     "@cloudflare/realtimekit": "^2.0.2",

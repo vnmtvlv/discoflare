@@ -603,6 +603,20 @@ export type InvitePreviewDTO = {
   maxUses: number
 }
 
+export type AiProviderName = 'workers-ai' | 'openai-compatible' | null
+export type BrowserProviderName = 'workers' | 'cdp' | null
+
+export type RuntimeCapabilities = {
+  /** RealtimeKit calls. False when this runtime is not on Cloudflare's network. */
+  calls: boolean
+  /** Agent containers, computers, and shells. This product does not provide them. */
+  containers: boolean
+  browser: BrowserProviderName
+  emailOutbound: boolean
+  /** Cloudflare Email Routing. False on other Workers runtimes. */
+  emailInbound: boolean
+}
+
 export type SetupHealth = {
   version: string
   authMode: AuthMode
@@ -625,6 +639,9 @@ export type SetupHealth = {
     workersAi: boolean
     browser: boolean
   }
+  aiProvider: AiProviderName
+  aiModel: string | null
+  capabilities: RuntimeCapabilities
   realtimekit: boolean
   twitterAuth: boolean
   appName: string

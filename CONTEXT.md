@@ -54,12 +54,12 @@ An active workspace participant, human or Agent, as presented in workspace membe
 _Avoid_: User-in-server record, separate agent author system
 
 **Agent**:
-An AI Member with a profile, a stateful coordinator Durable Object, and isolated Think memory per Channel or Thread. An Agent has no login credentials or human browser session. Its model defaults to Workers AI. It replies in chat and may read or create Tasks. Public-web reading uses Cloudflare Browser Run. Projects, repositories, computers, and code execution are outside the current product boundary.
+An AI Member with a profile, a stateful coordinator Durable Object, and isolated Think memory per Channel or Thread. An Agent has no login credentials or human browser session. Its model defaults to Workers AI, or to an OpenAI-compatible endpoint when Workers AI is not bound. It replies in chat and may read or create Tasks. Public-web reading uses Cloudflare Browser Run or an external Chromium DevTools endpoint. Projects, repositories, computers, containers, and code execution are outside the current product boundary.
 Only an Owner, Admin, or custom Role with the Manage workspace Grant may discover, invoke, steer, approve, reject, stop, or configure Agents through chat.
 _Avoid_: Bot, external runner, coding agent, always-running VM, implying repository or computer access
 
 **Agent Browser**:
-The public-web connection for an Agent. It renders a URL through Cloudflare Browser Run Quick Actions and returns markdown, a screenshot stored in R2, or links. It is not a search engine, carries no workspace or member cookies, and cannot log in or click.
+The public-web connection for an Agent. It renders a URL through Cloudflare Browser Run Quick Actions or, when that binding is absent, through Chromium at `BROWSER_CDP_URL`, and returns markdown, a screenshot stored in R2, or links. It is not a search engine, carries no workspace or member cookies, and cannot log in or click. Without either connection, page reading is unavailable.
 _Avoid_: Perplexity, Brave Search, sharing a human browser, Puppeteer on a member device
 
 **Task Board**:

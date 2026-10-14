@@ -121,7 +121,9 @@ Manual deployments have the same Cron Trigger but no telemetry credentials, so t
 
 The build script raises Node's heap limit for the Nuxt bundle; the deploy command reuses that output instead of building a second time.
 
-The agent runtime adds no required secret. `AGENT_MODEL` is an optional public Worker variable; each Agent profile may override it with another Workers AI model id.
+The agent runtime adds no required secret when Workers AI is bound. `AGENT_MODEL` is an optional public Worker variable; each Agent profile may override it with another Workers AI model id. Without the `AI` binding, set `AI_BASE_URL`, `AI_API_KEY` (a secret), and `AI_MODEL` to use an OpenAI-compatible chat endpoint instead. `/api/setup/health` reports `aiProvider` as `workers-ai`, `openai-compatible`, or `null`.
+
+Without a `BROWSER` binding, set `BROWSER_CDP_URL` to a private Chromium DevTools endpoint. Without an email binding, outbound mail can use `MAIL_GATEWAY_URL` or `SMTP_GATEWAY_URL`. Inbound email and RealtimeKit calls need Cloudflare. See [Self-host on celld](self-host/celld.md) for a non-Cloudflare Workers runtime.
 
 ## Authentication
 

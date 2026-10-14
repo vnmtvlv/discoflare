@@ -24,7 +24,8 @@ const byAdmin = computed(() => realtimekit.value?.source === 'admin')
 const managed = computed(() => realtimekit.value?.source === 'deployment' || byAdmin.value)
 const connected = computed(() => Boolean(realtimekit.value?.configured))
 const unreadable = computed(() => realtimekit.value?.source === 'database' && !realtimekit.value.secretReadable)
-const showTokenForm = computed(() => !managed.value && (!connected.value || replacing.value || unreadable.value))
+const callsUnavailable = computed(() => session.health?.capabilities.calls === false)
+const showTokenForm = computed(() => !callsUnavailable.value && !managed.value && (!connected.value || replacing.value || unreadable.value))
 const statusLabel = computed(() => {
   if (connected.value) return 'Connected'
   if (unreadable.value) return 'Reconnect needed'
@@ -129,6 +130,14 @@ onMounted(load)
     <p class="mt-1 text-sm text-muted">
       Every channel and direct message has one live room for audio, camera, and screen sharing. A 1:1 direct message rings as a call. Media runs on Cloudflare RealtimeKit in your account; nothing is recorded.
     </p>
+    <UAlert
+      v-if="callsUnavailable"
+      class="mt-6"
+      color="neutral"
+      variant="subtle"
+      title="Calls are unavailable on this runtime"
+      description="Live sessions and calls use Cloudflare RealtimeKit. This installation is not on Cloudflare's network, so they stay off. Text chat is unaffected."
+    />
 
     <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />
     <template v-else-if="realtimekit">
@@ -233,7 +242,7 @@ onMounted(load)
         </div>
       </div>
 
-      <div v-if="connected && !byAdmin" class="mt-6 flex flex-wrap items-center justify-between gap-3">
+      <div v-if="connected && !byAdmin && !callsUnavailable" class="mt-6 flex flex-wrap items-center justify-between gap-3">
         <div v-if="!managed" class="flex items-center gap-2">
           <template v-if="removeConfirm">
             <UButton label="Cancel" color="neutral" variant="ghost" @click="removeConfirm = false" />
