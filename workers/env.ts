@@ -85,10 +85,14 @@ export type DiscoflareEnv = {
   DISCOFLARE_TELEMETRY_ID?: string
   DISCOFLARE_TELEMETRY_TOKEN?: string
   DISCOFLARE_TELEMETRY_ENDPOINT?: string
-  /** `true` when this workspace runs on Discoflare's Workers for Platforms account. */
+  /** `true` when this workspace runs in hosted mode. */
   DISCOFLARE_HOSTED?: string
-  /** Monthly included agent allowance in USD micros. The KV ledger is authoritative. */
-  DISCOFLARE_AGENT_ALLOWANCE_MICROS?: string
+  /** Monthly included agent usage, in operator-defined units. The KV ledger is authoritative. */
+  DISCOFLARE_AGENT_USAGE_UNITS?: string
+  /** JSON map of model id to `{ inputUnitsPerMillion, outputUnitsPerMillion }`. */
+  DISCOFLARE_AGENT_MODEL_RATES?: string
+  /** Units to charge when a turn reports no token counts. Unset means an unpriced turn stops further use. */
+  DISCOFLARE_AGENT_UNKNOWN_TURN_UNITS?: string
   /** Service binding to the account's Discoflare Admin (`WorkspaceControl`). See workers/discoflare-admin.ts. */
   DISCOFLARE_ADMIN?: Fetcher
   /** Legacy Installation Control Credential from discoflare.com, replaced by DISCOFLARE_ADMIN. */

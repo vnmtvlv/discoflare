@@ -4,8 +4,6 @@ import { createError } from './errors.js'
 import { installerMarker, workerObservability } from './deploy.js'
 import {
   HOSTED_CAPABILITY,
-  HOSTED_DISPATCH_NAMESPACE,
-  HOSTED_INCLUDED_ALLOWANCE_MICROS,
   HOSTED_MODE_VALUE,
   HOSTED_USAGE_KEY,
   addHostedUsageCredit,
@@ -14,8 +12,10 @@ import {
   hostedScriptName,
   isHostedApex,
   isHostedSlug,
+  parseHostedModelRates,
   parseHostedUsageLedger,
   rollHostedUsagePeriod,
+  type HostedModelRates,
   type HostedUsageLedger,
 } from './hosted-plan.js'
 import { durableObjectMigrations, pendingMigrationBatch } from './migrations.js'
@@ -30,7 +30,9 @@ export type HostedProvisionRequest = {
   appName: string
   ownerEmail: string
   dispatchNamespace: string
-  includedAllowanceMicros: number
+  includedUsageUnits: number
+  modelRates?: HostedModelRates
+  unknownTurnUnits?: number
   routingKvId?: string
 }
 
@@ -66,24 +68,32 @@ export function parseHostedProvisionRequest(value: unknown): HostedProvisionRequ
   const apex = String(body.apex || '').trim().toLowerCase().replace(/\.$/u, '')
   const appName = String(body.appName || '').trim()
   const ownerEmail = String(body.ownerEmail || '').trim().toLowerCase()
-  const dispatchNamespace = String(body.dispatchNamespace || HOSTED_DISPATCH_NAMESPACE).trim()
-  const includedAllowanceMicros = body.includedAllowanceMicros == null
-    ? HOSTED_INCLUDED_ALLOWANCE_MICROS
-    : Number(body.includedAllowanceMicros)
+  const dispatchNamespace = String(body.dispatchNamespace || '').trim()
+  const includedUsageUnits = Number(body.includedUsageUnits)
   const routingKvId = body.routingKvId ? String(body.routingKvId).trim() : undefined
-  if (!ACCOUNT_ID.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Select the Discoflare Cloudflare account' })
+  const unknownTurnUnits = body.unknownTurnUnits == null ? undefined : Number(body.unknownTurnUnits)
+  let modelRates: HostedModelRates | undefined
+  if (body.modelRates != null) {
+    const parsed = parseHostedModelRates(body.modelRates)
+    if (!parsed) throw createError({ statusCode: 400, statusMessage: 'Model rates must map each model to integer unit rates' })
+    modelRates = parsed
+  }
+  if (!ACCOUNT_ID.test(accountId)) throw createError({ statusCode: 400, statusMessage: 'Enter a Cloudflare account id' })
   if (!isHostedSlug(slug)) throw createError({ statusCode: 400, statusMessage: 'Workspace address must be 1–40 lowercase letters, numbers, or hyphens' })
   if (!isHostedApex(apex)) throw createError({ statusCode: 400, statusMessage: 'Invalid hosted apex domain' })
   if (!appName || appName.length > 80) throw createError({ statusCode: 400, statusMessage: 'App name must be 1–80 characters' })
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(ownerEmail)) throw createError({ statusCode: 400, statusMessage: 'Enter a valid owner email' })
   if (!/^[a-z0-9](?:[a-z0-9-_]{0,61}[a-z0-9])?$/u.test(dispatchNamespace)) {
-    throw createError({ statusCode: 400, statusMessage: 'Invalid dispatch namespace' })
+    throw createError({ statusCode: 400, statusMessage: 'Enter a dispatch namespace' })
   }
-  if (!Number.isSafeInteger(includedAllowanceMicros) || includedAllowanceMicros < 1 || includedAllowanceMicros > 1_000_000_000) {
-    throw createError({ statusCode: 400, statusMessage: 'Agent allowance must be a positive micros amount' })
+  if (!Number.isSafeInteger(includedUsageUnits) || includedUsageUnits < 1 || includedUsageUnits > 1_000_000_000_000) {
+    throw createError({ statusCode: 400, statusMessage: 'Included usage limit must be a positive integer' })
+  }
+  if (unknownTurnUnits != null && (!Number.isSafeInteger(unknownTurnUnits) || unknownTurnUnits < 0)) {
+    throw createError({ statusCode: 400, statusMessage: 'Unknown-turn units must be a non-negative integer' })
   }
   if (routingKvId && !KV_ID.test(routingKvId)) throw createError({ statusCode: 400, statusMessage: 'Invalid hosted routing KV namespace' })
-  return { accountId, slug, apex, appName, ownerEmail, dispatchNamespace, includedAllowanceMicros, routingKvId }
+  return { accountId, slug, apex, appName, ownerEmail, dispatchNamespace, includedUsageUnits, modelRates, unknownTurnUnits, routingKvId }
 }
 
 export function hostedUserWorkerBindings(input: {
@@ -96,8 +106,10 @@ export function hostedUserWorkerBindings(input: {
   accountId: string
   scriptName: string
   version: string
-  includedAllowanceMicros: number
+  includedUsageUnits: number
   durableObjects: Array<{ binding: string, className: string }>
+  modelRates?: HostedModelRates
+  unknownTurnUnits?: number
   authSecret?: string
   ownerSetupToken?: string
 }) {
@@ -123,9 +135,15 @@ export function hostedUserWorkerBindings(input: {
     { type: 'plain_text', name: 'DISCOFLARE_INSTALLATION', text: installerMarker },
     { type: 'plain_text', name: 'DISCOFLARE_VERSION', text: input.version },
     { type: 'plain_text', name: 'DISCOFLARE_HOSTED', text: HOSTED_MODE_VALUE },
-    { type: 'plain_text', name: 'DISCOFLARE_AGENT_ALLOWANCE_MICROS', text: String(input.includedAllowanceMicros) },
+    { type: 'plain_text', name: 'DISCOFLARE_AGENT_USAGE_UNITS', text: String(input.includedUsageUnits) },
     ...input.durableObjects.map(item => ({ type: 'durable_object_namespace', name: item.binding, class_name: item.className })),
   ]
+  if (input.modelRates) {
+    bindings.push({ type: 'plain_text', name: 'DISCOFLARE_AGENT_MODEL_RATES', text: JSON.stringify(input.modelRates) })
+  }
+  if (input.unknownTurnUnits != null) {
+    bindings.push({ type: 'plain_text', name: 'DISCOFLARE_AGENT_UNKNOWN_TURN_UNITS', text: String(input.unknownTurnUnits) })
+  }
   if (input.authSecret) bindings.push({ type: 'secret_text', name: 'AUTH_SECRET', text: input.authSecret })
   bindings.push({ type: 'secret_text', name: 'ADMIN_EMAIL', text: input.ownerEmail })
   if (input.ownerSetupToken) bindings.push({ type: 'secret_text', name: 'ADMIN_SETUP_TOKEN', text: input.ownerSetupToken })
@@ -194,8 +212,10 @@ export async function provisionHostedWorkspace(
       accountId: request.accountId,
       scriptName,
       version: release.manifest.version,
-      includedAllowanceMicros: request.includedAllowanceMicros,
+      includedUsageUnits: request.includedUsageUnits,
       durableObjects: release.manifest.durableObjects,
+      modelRates: request.modelRates,
+      unknownTurnUnits: request.unknownTurnUnits,
       authSecret: randomBase64Url(48),
       ownerSetupToken,
     }),
@@ -211,7 +231,7 @@ export async function provisionHostedWorkspace(
   form.append('metadata', JSON.stringify(metadata))
   form.append('discoflare-worker.mjs', new Blob([release.worker], { type: 'application/javascript+module' }), 'discoflare-worker.mjs')
   await api(scriptPath, { method: 'PUT', body: form })
-  await putKvValue(api, request.accountId, kvId, HOSTED_USAGE_KEY, JSON.stringify(freshHostedUsageLedger(request.includedAllowanceMicros, now)))
+  await putKvValue(api, request.accountId, kvId, HOSTED_USAGE_KEY, JSON.stringify(freshHostedUsageLedger(request.includedUsageUnits, now)))
   if (request.routingKvId) await setHostedWorkspaceRouting(api, request.accountId, request.routingKvId, request.slug, 'active', scriptName)
   return {
     created: true,
@@ -239,19 +259,19 @@ export async function setHostedWorkspaceRouting(
   await putKvValue(api, accountId, routingKvId, `script:${slug}`, scriptName)
 }
 
-/** Add prepaid agent credit. Unused monthly inclusion does not roll over; credit does. */
+/** Add usage credit. Unused monthly inclusion does not roll over; added credit does. */
 export async function addHostedAgentCredit(
   api: HostedApi,
   accountId: string,
   kvId: string,
-  micros: number,
+  units: number,
   now = new Date(),
 ): Promise<HostedUsageLedger> {
-  if (!Number.isSafeInteger(micros) || micros < 1) {
-    throw createError({ statusCode: 400, statusMessage: 'Usage pack amount must be a positive micros amount' })
+  if (!Number.isSafeInteger(units) || units < 1) {
+    throw createError({ statusCode: 400, statusMessage: 'Credit amount must be a positive integer' })
   }
   const current = await readUsageLedger(api, accountId, kvId)
-  const next = addHostedUsageCredit(rollHostedUsagePeriod(current, now), micros)
+  const next = addHostedUsageCredit(rollHostedUsagePeriod(current, now), units)
   await putKvValue(api, accountId, kvId, HOSTED_USAGE_KEY, JSON.stringify(next))
   return next
 }

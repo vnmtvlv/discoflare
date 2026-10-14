@@ -16,7 +16,7 @@ import { z } from 'zod'
 import { newId, nowIso } from '../shared/ids'
 import { agentBrowserConfigured, type DiscoflareEnv } from './env'
 import { captureBrowserScreenshot, listBrowserLinks, readBrowserMarkdown } from './agent-browser'
-import { assertHostedAgentAllowance, recordHostedAgentUsage } from './hosted-usage'
+import { assertHostedAgentLimit, recordHostedAgentUsage } from './hosted-usage'
 import { workspaceEmailAvailable } from './mail-transport'
 import { signalMailChanged } from './mail-events'
 import { deliverOutboundEmail, replyRecipients, replyThreading } from '../server/utils/mail-outbound'
@@ -107,7 +107,7 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
     const profile = await this.profile()
     if (!profile) throw new Error('Agent profile not found')
     if (profile.status !== 'active') throw new Error('Agent is paused')
-    await assertHostedAgentAllowance(this.env)
+    await assertHostedAgentLimit(this.env)
     const model = profile.model || this.getModel()
     const metadata = this.messageMetadata(this.activeTurnMetadata)
     const canSeeImages = agentModelSupportsVision(model)
