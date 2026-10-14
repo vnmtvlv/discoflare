@@ -136,7 +136,13 @@
         "description": "Secret for AI_BASE_URL. Store this as a secret."
       },
       "AI_MODEL": {
-        "description": "Model id sent to AI_BASE_URL when Workers AI is not bound."
+        "description": "Model id sent to AI_BASE_URL when Workers AI is not bound and Cloudflare REST credentials are absent."
+      },
+      "CLOUDFLARE_ACCOUNT_ID": {
+        "description": "Cloudflare account id for Workers AI, Browser Run, Email Sending, and RealtimeKit REST calls when those bindings are absent. A 32-character hex id. Store the matching token as a secret."
+      },
+      "CLOUDFLARE_API_TOKEN": {
+        "description": "Secret. API token for CLOUDFLARE_ACCOUNT_ID. Workers AI Read and Edit, Browser Run Edit (or Browser Rendering Edit), Email Sending Edit, and Realtime Admin."
       },
       "BROWSER_CDP_URL": {
         "description": "Chromium DevTools endpoint used when the BROWSER binding is absent. http(s) base or ws(s) browser socket. Keep it private."
@@ -151,7 +157,7 @@
         "description": "Bearer token for SMTP_GATEWAY_URL. Store this as a secret."
       },
       "DISCOFLARE_RUNTIME": {
-        "description": "Set to celld on non-Cloudflare Workers runtimes so calls and inbound email stay off. cloudflare or workers keeps them available."
+        "description": "Set to celld on non-Cloudflare Workers runtimes. Inbound email stays off. Calls, Workers AI, Browser Run, and outbound mail can use CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN. cloudflare or workers keeps Cloudflare-network features."
       }
     }
   },

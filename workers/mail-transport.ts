@@ -1,3 +1,10 @@
+import {
+  cloudflareAccountId,
+  cloudflareApiToken,
+  cloudflareErrorMessage,
+  cloudflareRestConfigured,
+  emailSendUrl,
+} from './cloudflare-rest'
 import type { DiscoflareEnv } from './env'
 
 export type WorkspaceEmailAddress = string | { email: string, name: string }
@@ -47,16 +54,37 @@ export function smtpGatewayHttpUrl(env: DiscoflareEnv): string | null {
   return httpUrl(env.SMTP_GATEWAY_URL)
 }
 
-export function workspaceEmailAvailable(env: DiscoflareEnv): boolean {
-  if (env.MAIL_EMAIL) return true
+export type EmailProviderName = 'binding' | 'cloudflare-rest' | 'gateway' | 'smtp' | null
+
+function gatewayConfigured(env: DiscoflareEnv): boolean {
   if (mailGatewayFetcher(env) && env.MAIL_GATEWAY_TOKEN) return true
   if (mailGatewayHttpUrl(env) && env.MAIL_GATEWAY_TOKEN) return true
-  if (smtpGatewayHttpUrl(env) && env.SMTP_GATEWAY_TOKEN) return true
+  return false
+}
+
+function smtpConfigured(env: DiscoflareEnv): boolean {
+  return Boolean(smtpGatewayHttpUrl(env) && env.SMTP_GATEWAY_TOKEN)
+}
+
+/** Binding, then Cloudflare Email Sending, then an HTTP gateway, then an SMTP gateway. */
+export function emailProvider(env: DiscoflareEnv): EmailProviderName {
+  if (env.EMAIL || env.MAIL_EMAIL) return 'binding'
+  if (cloudflareRestConfigured(env)) return 'cloudflare-rest'
+  if (gatewayConfigured(env)) return 'gateway'
+  if (smtpConfigured(env)) return 'smtp'
+  return null
+}
+
+export function workspaceEmailAvailable(env: DiscoflareEnv): boolean {
+  if (env.MAIL_EMAIL) return true
+  if (cloudflareRestConfigured(env)) return true
+  if (gatewayConfigured(env)) return true
+  if (smtpConfigured(env)) return true
   return false
 }
 
 export function authEmailAvailable(env: DiscoflareEnv): boolean {
-  return Boolean(env.EMAIL || workspaceEmailAvailable(env))
+  return emailProvider(env) !== null
 }
 
 async function postJsonGateway(url: string, token: string, message: WorkspaceEmailMessage, label: string): Promise<{ messageId: string }> {
@@ -81,7 +109,62 @@ async function postJsonGateway(url: string, token: string, message: WorkspaceEma
   return { messageId: payload.messageId }
 }
 
+function emailApiBody(message: WorkspaceEmailMessage) {
+  return {
+    from: message.from,
+    to: message.to,
+    ...(message.cc ? { cc: message.cc } : {}),
+    ...(message.bcc ? { bcc: message.bcc } : {}),
+    ...(message.replyTo ? { replyTo: message.replyTo } : {}),
+    subject: message.subject,
+    ...(message.text !== undefined ? { text: message.text } : {}),
+    ...(message.html !== undefined ? { html: message.html } : {}),
+  }
+}
+
+function emailMessageId(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null
+  const record = result as Record<string, unknown>
+  for (const key of ['message_id', 'messageId', 'id']) {
+    if (typeof record[key] === 'string' && record[key]) return record[key] as string
+  }
+  const delivered = Array.isArray(record.delivered) ? record.delivered : []
+  const queued = Array.isArray(record.queued) ? record.queued : []
+  const address = [...delivered, ...queued].find((item): item is string => typeof item === 'string' && item.length > 0)
+  if (address) return `cloudflare:${address}`
+  if ('delivered' in record || 'queued' in record) return 'cloudflare:sent'
+  return null
+}
+
+async function sendCloudflareEmail(env: DiscoflareEnv, message: WorkspaceEmailMessage): Promise<{ messageId: string }> {
+  const accountId = cloudflareAccountId(env)
+  const token = cloudflareApiToken(env)
+  if (!accountId || !token) throw new Error('Cloudflare API credentials are missing')
+  let response: Response
+  try {
+    response = await fetch(emailSendUrl(accountId), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailApiBody(message)),
+    })
+  }
+  catch {
+    throw new Error('Cloudflare Email Sending did not respond')
+  }
+  const payload = await response.json().catch(() => null) as { success?: boolean, result?: unknown } | null
+  const messageId = payload?.success !== false ? emailMessageId(payload?.result) : null
+  if (!response.ok || payload?.success === false || !messageId) {
+    throw new Error(cloudflareErrorMessage(payload, response.status, 'Cloudflare Email Sending'))
+  }
+  return { messageId }
+}
+
 export async function sendWorkspaceEmail(env: DiscoflareEnv, message: WorkspaceEmailMessage): Promise<{ messageId: string }> {
+  if (env.MAIL_EMAIL) return env.MAIL_EMAIL.send(message)
+  if (cloudflareRestConfigured(env)) return sendCloudflareEmail(env, message)
   const fetcher = mailGatewayFetcher(env)
   if (fetcher && env.MAIL_GATEWAY_TOKEN) {
     const response = await fetcher.fetch(new Request('https://discoflare-primary.internal/.discoflare/mail/send', {
@@ -106,7 +189,6 @@ export async function sendWorkspaceEmail(env: DiscoflareEnv, message: WorkspaceE
   if (smtpUrl && env.SMTP_GATEWAY_TOKEN) {
     return postJsonGateway(smtpUrl, env.SMTP_GATEWAY_TOKEN, message, 'SMTP gateway')
   }
-  if (env.MAIL_EMAIL) return env.MAIL_EMAIL.send(message)
   throw new Error('Workspace email sending is not configured')
 }
 

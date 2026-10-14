@@ -10,13 +10,15 @@ const qc = useQueryClient()
 const { api } = useApi()
 const session = useSessionStore()
 const openAiCompatible = computed(() => session.health?.aiProvider === 'openai-compatible')
-const workersAi = computed(() => session.health?.aiProvider === 'workers-ai')
+const workersAiRest = computed(() => session.health?.aiProvider === 'workers-ai-rest')
+const workersAi = computed(() => session.health?.aiProvider === 'workers-ai' || workersAiRest.value)
 const agentsUnavailable = computed(() => session.health?.aiProvider === null)
 const browserCopy = computed(() => {
   const provider = session.health?.capabilities.browser
   if (provider === 'workers') return 'Cloudflare Browser Run reads public URLs. This is not a search engine.'
+  if (provider === 'cloudflare-rest') return 'Cloudflare Browser Run reads public URLs through its REST API. This is not a search engine.'
   if (provider === 'cdp') return 'An external Chromium browser reads public URLs. This is not a search engine.'
-  return 'Public page reading is unavailable. Bind Cloudflare Browser Run or set BROWSER_CDP_URL to a Chromium DevTools endpoint.'
+  return 'Public page reading is unavailable. Bind Cloudflare Browser Run, set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, or set BROWSER_CDP_URL to a Chromium DevTools endpoint.'
 })
 function defaultModel() {
   if (session.health?.aiProvider === 'openai-compatible' && session.health.aiModel) return session.health.aiModel
@@ -282,7 +284,7 @@ async function saveAgent(event: FormSubmitEvent<AgentForm>) {
         v-if="workersAi || openAiCompatible"
         name="model"
         label="Model"
-        :description="openAiCompatible ? `Sent to the OpenAI-compatible endpoint. This installation's AI_MODEL is ${session.health?.aiModel}.` : undefined"
+        :description="openAiCompatible ? `Sent to the OpenAI-compatible endpoint. This installation's AI_MODEL is ${session.health?.aiModel}.` : workersAiRest ? 'Sent to Workers AI through the Cloudflare REST API.' : undefined"
       >
         <template v-if="workersAi" #hint>
           <ULink

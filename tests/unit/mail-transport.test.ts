@@ -10,18 +10,14 @@ const message = {
 }
 
 describe('workspace mail transport', () => {
-  it('uses the authenticated gateway before a direct send binding', async () => {
-    const direct = { send: vi.fn() }
-    const fetch = vi.fn(async (request: Request) => {
-      expect(request.url).toBe('https://discoflare-primary.internal/.discoflare/mail/send')
-      expect(request.headers.get('Authorization')).toBe('Bearer workspace-token')
-      expect(await request.json()).toEqual(message)
-      return Response.json({ messageId: 'gateway-message' })
-    })
+  it('uses a send binding before the authenticated gateway', async () => {
+    const direct = { send: vi.fn(async () => ({ messageId: 'direct-message' })) }
+    const fetch = vi.fn(async () => Response.json({ messageId: 'gateway-message' }))
     const env = { MAIL_GATEWAY: { fetch }, MAIL_GATEWAY_TOKEN: 'workspace-token', MAIL_EMAIL: direct } as never
 
-    await expect(sendWorkspaceEmail(env, message)).resolves.toEqual({ messageId: 'gateway-message' })
-    expect(direct.send).not.toHaveBeenCalled()
+    await expect(sendWorkspaceEmail(env, message)).resolves.toEqual({ messageId: 'direct-message' })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(direct.send).toHaveBeenCalledWith(message)
     expect(workspaceEmailAvailable(env)).toBe(true)
   })
 

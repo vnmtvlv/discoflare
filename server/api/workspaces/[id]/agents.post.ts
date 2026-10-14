@@ -27,7 +27,7 @@ export default defineEventHandler(async (event): Promise<{ agent: AgentDTO }> =>
     const provider = aiProvider(env)
     fail(409, 'agent_runtime_disabled', provider
       ? 'The Agent Durable Object must be bound before creating an agent'
-      : 'Bind Workers AI, or set AI_BASE_URL, AI_API_KEY, and AI_MODEL, before creating an agent')
+      : 'Bind Workers AI, set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN, or set AI_BASE_URL, AI_API_KEY, and AI_MODEL, before creating an agent')
   }
   const model = resolveAgentModelId(env, body.model)
   const db = getDb(env.DB)

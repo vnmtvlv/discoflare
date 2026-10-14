@@ -1,4 +1,5 @@
 import { chromiumBrowser } from './browser-cdp'
+import { cloudflareBrowser, cloudflareRestConfigured } from './cloudflare-rest'
 
 const MAX_MARKDOWN = 24_000
 const MAX_LINKS = 50
@@ -107,10 +108,16 @@ function browserError(status: number, body: string): Error {
   return new Error(`Browser request failed (${status})`)
 }
 
-type BrowserEnv = { BROWSER?: BrowserBinding, BROWSER_CDP_URL?: string }
+type BrowserEnv = {
+  BROWSER?: BrowserBinding
+  BROWSER_CDP_URL?: string
+  CLOUDFLARE_ACCOUNT_ID?: string
+  CLOUDFLARE_API_TOKEN?: string
+}
 
 export function browserBindingFor(env: BrowserEnv): BrowserBinding | null {
   if (env.BROWSER) return env.BROWSER
+  if (cloudflareRestConfigured(env)) return cloudflareBrowser(env)
   const cdpUrl = env.BROWSER_CDP_URL?.trim()
   if (cdpUrl) return chromiumBrowser(cdpUrl)
   return null
@@ -118,7 +125,7 @@ export function browserBindingFor(env: BrowserEnv): BrowserBinding | null {
 
 async function requireBrowser(env: BrowserEnv): Promise<BrowserBinding> {
   const browser = browserBindingFor(env)
-  if (!browser) throw new Error('Public page reading is unavailable. Bind Browser Run or set BROWSER_CDP_URL.')
+  if (!browser) throw new Error('Public page reading is unavailable. Bind Browser Run, set a Cloudflare API token, or set BROWSER_CDP_URL.')
   return browser
 }
 

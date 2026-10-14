@@ -10,12 +10,28 @@ import { chromiumQuickAction, resolveCdpWebSocketUrl, type CdpClient, type CdpEv
 import {
   agentRuntimeConfigured,
   aiProvider,
+  browserProvider,
+  callsProvider,
   cloudflareNetwork,
   resolveAgentModelId,
 } from '../../workers/env'
 import { containersAvailable, installationCapabilities } from '../../workers/installation-capabilities'
 import { modelForAgent } from '../../workers/ai-runtime'
-import { sendWorkspaceEmail, workspaceEmailAvailable } from '../../workers/mail-transport'
+import { liveMedia } from '../../workers/live-media'
+import { emailProvider, sendWorkspaceEmail, workspaceEmailAvailable } from '../../workers/mail-transport'
+import { liveAvailable } from '../../workers/realtimekit'
+
+const CLOUDFLARE_ACCOUNT_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+const CLOUDFLARE_API_TOKEN = 'c'.repeat(40)
+
+function restEnv(extra: Record<string, unknown> = {}) {
+  return {
+    DISCOFLARE_RUNTIME: 'celld',
+    CLOUDFLARE_ACCOUNT_ID,
+    CLOUDFLARE_API_TOKEN,
+    ...extra,
+  }
+}
 
 const message = {
   from: 'login@example.com',
@@ -112,16 +128,37 @@ describe('console.createTask guard', () => {
 })
 
 describe('model provider fallback', () => {
-  it('prefers Workers AI and otherwise requires the OpenAI-compatible trio', () => {
+  it('prefers a binding, then Workers AI REST, then the OpenAI-compatible trio', () => {
     expect(aiProvider({ AI: {}, AGENT_DO: {} } as never)).toBe('workers-ai')
+    expect(aiProvider({ ...restEnv(), AI: {}, AGENT_DO: {} } as never)).toBe('workers-ai')
+    expect(aiProvider({
+      ...restEnv(),
+      AI_BASE_URL: 'https://llm.example.com/v1',
+      AI_API_KEY: 'secret',
+      AI_MODEL: 'your-model',
+      AGENT_DO: {},
+    } as never)).toBe('workers-ai-rest')
     expect(aiProvider({
       AI_BASE_URL: 'https://llm.example.com/v1',
       AI_API_KEY: 'secret',
       AI_MODEL: 'your-model',
       AGENT_DO: {},
     } as never)).toBe('openai-compatible')
+    expect(aiProvider({
+      DISCOFLARE_RUNTIME: 'celld',
+      CLOUDFLARE_ACCOUNT_ID: 'invalid',
+      CLOUDFLARE_API_TOKEN: CLOUDFLARE_API_TOKEN,
+      AI_BASE_URL: 'https://llm.example.com/v1',
+      AI_API_KEY: 'secret',
+      AI_MODEL: 'your-model',
+    } as never)).toBe('openai-compatible')
+    expect(aiProvider({
+      ...restEnv(),
+      CLOUDFLARE_API_TOKEN: 'short',
+    } as never)).toBeNull()
     expect(aiProvider({ AI_BASE_URL: 'https://llm.example.com/v1', AGENT_DO: {} } as never)).toBeNull()
     expect(agentRuntimeConfigured({ AI: {}, AGENT_DO: {} } as never)).toBe(true)
+    expect(agentRuntimeConfigured({ ...restEnv(), AGENT_DO: {} } as never)).toBe(true)
     expect(agentRuntimeConfigured({
       AI_BASE_URL: 'https://llm.example.com/v1/',
       AI_API_KEY: 'secret',
@@ -150,6 +187,26 @@ describe('model provider fallback', () => {
     } as never)
     expect(typeof model).not.toBe('string')
     expect(modelForAgent({ AI: {}, AGENT_MODEL: 'custom' } as never)).toBe('custom')
+    expect(typeof modelForAgent(restEnv() as never, '@cf/moonshotai/kimi-k2.7-code')).not.toBe('string')
+  })
+
+  it('posts chat messages to Workers AI REST without encoding the model path', async () => {
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      expect(url).toBe(`https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/moonshotai/kimi-k2.7-code`)
+      expect(url).not.toContain('%2F')
+      expect(init.headers).toMatchObject({ Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` })
+      expect(JSON.parse(String(init.body)).messages).toEqual([{ role: 'user', content: 'Hi' }])
+      return Response.json({ success: true, result: { response: 'Hello' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const model = modelForAgent(restEnv() as never, '@cf/moonshotai/kimi-k2.7-code') as {
+      doGenerate: (options: { prompt: Array<{ role: 'user', content: Array<{ type: 'text', text: string }> }> }) => Promise<{ content: Array<{ type: string, text?: string }> }>
+    }
+    const result = await model.doGenerate({
+      prompt: [{ role: 'user', content: [{ type: 'text', text: 'Hi' }] }],
+    })
+    expect(result.content).toEqual([{ type: 'text', text: 'Hello' }])
+    vi.unstubAllGlobals()
   })
 })
 
@@ -192,6 +249,23 @@ describe('mail gateways', () => {
     }))
     expect(workspaceEmailAvailable({ SMTP_GATEWAY_URL: 'https://smtp.example.com/send' } as never)).toBe(false)
   })
+
+  it('uses Cloudflare Email Sending before an HTTP gateway and after a send binding', async () => {
+    const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
+      expect(String(url)).toBe(`https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/sending/send`)
+      expect(init.headers).toMatchObject({ Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` })
+      return Response.json({ success: true, result: { delivered: ['person@example.net'], permanent_bounces: [], queued: [] } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const env = restEnv({ MAIL_GATEWAY_URL: 'https://mail.example.com/send', MAIL_GATEWAY_TOKEN: 'mail-token' }) as never
+    await expect(sendWorkspaceEmail(env, message)).resolves.toEqual({ messageId: 'cloudflare:person@example.net' })
+    expect(emailProvider(env)).toBe('cloudflare-rest')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    const send = vi.fn(async () => ({ messageId: 'bound' }))
+    await expect(sendWorkspaceEmail(restEnv({ MAIL_EMAIL: { send } }) as never, message)).resolves.toEqual({ messageId: 'bound' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('runtime capabilities', () => {
@@ -215,7 +289,21 @@ describe('runtime capabilities', () => {
       browser: 'cdp',
       emailOutbound: true,
       emailInbound: false,
+      emailProvider: 'smtp',
+      callsProvider: null,
     })
+    expect(installationCapabilities(restEnv() as never)).toEqual({
+      calls: true,
+      containers: false,
+      browser: 'cloudflare-rest',
+      emailOutbound: true,
+      emailInbound: false,
+      emailProvider: 'cloudflare-rest',
+      callsProvider: 'realtimekit-rest',
+    })
+    expect(callsProvider({ ...restEnv(), DISCOFLARE_RUNTIME: 'cloudflare' } as never)).toBe('realtimekit')
+    expect(browserProvider(restEnv({ BROWSER_CDP_URL: 'http://127.0.0.1:9222' }) as never)).toBe('cloudflare-rest')
+    expect(browserProvider({ BROWSER_CDP_URL: 'http://127.0.0.1:9222' } as never)).toBe('cdp')
   })
 
   it('detects a celld user agent when the runtime var is unset', () => {
@@ -227,11 +315,25 @@ describe('runtime capabilities', () => {
 })
 
 describe('Chromium DevTools fallback', () => {
-  it('uses the binding first and a DevTools URL when the binding is absent', () => {
+  it('uses the binding first, then Cloudflare REST, then a DevTools URL', () => {
     const binding = { quickAction: vi.fn() }
-    expect(browserBindingFor({ BROWSER: binding })).toBe(binding)
+    expect(browserBindingFor({ BROWSER: binding, ...restEnv(), BROWSER_CDP_URL: 'http://127.0.0.1:9222' })).toBe(binding)
+    expect(browserBindingFor(restEnv({ BROWSER_CDP_URL: 'http://127.0.0.1:9222' }))?.quickAction).toEqual(expect.any(Function))
     expect(browserBindingFor({ BROWSER_CDP_URL: 'http://127.0.0.1:9222' })?.quickAction).toEqual(expect.any(Function))
     expect(browserBindingFor({})).toBeNull()
+  })
+
+  it('reads markdown through Browser Run REST', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      expect(String(url)).toBe(`https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/browser-run/markdown`)
+      return Response.json({ success: true, result: '# Page' })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(readBrowserMarkdown(restEnv() as never, 'https://example.com/')).resolves.toEqual({
+      url: 'https://example.com/',
+      markdown: '# Page',
+    })
+    vi.unstubAllGlobals()
   })
 
   it('fails closed when neither browser is configured', async () => {
@@ -277,5 +379,59 @@ describe('Chromium DevTools fallback', () => {
     const shot = await chromiumQuickAction(client, 'screenshot', 'https://example.com/')
     expect(shot.headers.get('content-type')).toBe('image/png')
     expect(new TextDecoder().decode(await shot.arrayBuffer())).toBe('png')
+  })
+})
+
+describe('RealtimeKit REST', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('does not enable calls for a placeholder account id', async () => {
+    await expect(liveAvailable({
+      DISCOFLARE_RUNTIME: 'celld',
+      CLOUDFLARE_ACCOUNT_ID: 'invalid',
+      CLOUDFLARE_API_TOKEN: CLOUDFLARE_API_TOKEN,
+    } as never)).resolves.toBe(false)
+  })
+
+  it('creates the RealtimeKit app with the shared token on the first call', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const path = String(url)
+      const method = init?.method ?? 'GET'
+      if (method === 'GET' && path.endsWith('/realtime/kit/apps')) {
+        return Response.json({ result: [{ id: 'app-1', name: 'Discoflare' }] })
+      }
+      if (method === 'GET' && path.includes('/presets')) {
+        return Response.json({ result: [{ name: 'discoflare_live_host' }, { name: 'discoflare_live_participant' }] })
+      }
+      if (method === 'POST' && path.endsWith('/meetings')) {
+        expect(path).toBe(`https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/realtime/kit/app-1/meetings`)
+        expect(init?.headers).toMatchObject({ Authorization: `Bearer ${CLOUDFLARE_API_TOKEN}` })
+        return Response.json({ result: { id: 'meeting-1' } })
+      }
+      throw new Error(`unexpected ${method} ${path}`)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const env = restEnv() as never
+    await expect(liveAvailable(env)).resolves.toBe(true)
+    const media = await liveMedia(env)
+    await expect(media?.createMeeting('room')).resolves.toEqual({ id: 'meeting-1' })
+  })
+
+  it('keeps a complete RealtimeKit deployment config ahead of the shared token', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      expect(String(url)).toBe(`https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/realtime/kit/existing-app/meetings`)
+      expect(init?.headers).toMatchObject({ Authorization: 'Bearer dddddddddddddddddddddddddddddddddddddddd' })
+      return Response.json({ result: { id: 'meeting-2' } })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const media = await liveMedia(restEnv({
+      REALTIMEKIT_ACCOUNT_ID: CLOUDFLARE_ACCOUNT_ID,
+      REALTIMEKIT_APP_ID: 'existing-app',
+      REALTIMEKIT_API_TOKEN: 'd'.repeat(40),
+    }) as never)
+    await expect(media?.createMeeting('room')).resolves.toEqual({ id: 'meeting-2' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })

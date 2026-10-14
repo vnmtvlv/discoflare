@@ -1,5 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { cloudflareRestConfigured } from './cloudflare-rest'
+
 export type Rpc<T> = { fetch: (request: Request) => Promise<Response> } & T
 
 export function asRpc<T>(stub: unknown): Rpc<T> {
@@ -109,13 +111,19 @@ export type DiscoflareEnv = {
   DISCOFLARE_CONTROL_ID?: string
   DISCOFLARE_CONTROL_TOKEN?: string
   DISCOFLARE_CONTROL_ENDPOINT?: string
+  /** Cloudflare account id used to call Workers AI, Browser Run, Email Sending, and RealtimeKit over REST. */
+  CLOUDFLARE_ACCOUNT_ID?: string
+  /** Secret. Account API token for `CLOUDFLARE_ACCOUNT_ID`. Not `DISCOFLARE_ACCOUNT_ID`. */
+  CLOUDFLARE_API_TOKEN?: string
 }
 
-export type AiProviderName = 'workers-ai' | 'openai-compatible' | null
-export type BrowserProviderName = 'workers' | 'cdp' | null
+export type AiProviderName = 'workers-ai' | 'workers-ai-rest' | 'openai-compatible' | null
+export type BrowserProviderName = 'workers' | 'cloudflare-rest' | 'cdp' | null
+export type CallsProviderName = 'realtimekit' | 'realtimekit-rest' | null
 
 export function aiProvider(env: DiscoflareEnv): AiProviderName {
   if (env.AI) return 'workers-ai'
+  if (cloudflareRestConfigured(env)) return 'workers-ai-rest'
   if (env.AI_BASE_URL?.trim() && env.AI_API_KEY?.trim() && env.AI_MODEL?.trim()) return 'openai-compatible'
   return null
 }
@@ -126,6 +134,7 @@ export function agentBrowserConfigured(env: DiscoflareEnv): boolean {
 
 export function browserProvider(env: DiscoflareEnv): BrowserProviderName {
   if (env.BROWSER) return 'workers'
+  if (cloudflareRestConfigured(env)) return 'cloudflare-rest'
   if (env.BROWSER_CDP_URL?.trim()) return 'cdp'
   return null
 }
@@ -142,6 +151,16 @@ export function cloudflareNetwork(env: DiscoflareEnv): boolean {
   const ua = typeof navigator === 'undefined' ? '' : navigator.userAgent
   if (/celld/i.test(ua)) return false
   return true
+}
+
+/**
+ * Calls on Cloudflare's network use the existing RealtimeKit connection.
+ * Off that network, the shared Cloudflare API token can drive RealtimeKit's REST API.
+ */
+export function callsProvider(env: DiscoflareEnv): CallsProviderName {
+  if (cloudflareNetwork(env)) return 'realtimekit'
+  if (cloudflareRestConfigured(env)) return 'realtimekit-rest'
+  return null
 }
 
 export const DEFAULT_WORKERS_MODEL = '@cf/moonshotai/kimi-k2.7-code'

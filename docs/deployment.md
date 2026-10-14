@@ -121,9 +121,9 @@ Manual deployments have the same Cron Trigger but no telemetry credentials, so t
 
 The build script raises Node's heap limit for the Nuxt bundle; the deploy command reuses that output instead of building a second time.
 
-The agent runtime adds no required secret when Workers AI is bound. `AGENT_MODEL` is an optional public Worker variable; each Agent profile may override it with another Workers AI model id. Without the `AI` binding, set `AI_BASE_URL`, `AI_API_KEY` (a secret), and `AI_MODEL` to use an OpenAI-compatible chat endpoint instead. `/api/setup/health` reports `aiProvider` as `workers-ai`, `openai-compatible`, or `null`.
+The agent runtime adds no required secret when Workers AI is bound. `AGENT_MODEL` is an optional public Worker variable; each Agent profile may override it with another Workers AI model id. Without the `AI` binding, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` (a secret) call Workers AI REST. Otherwise set `AI_BASE_URL`, `AI_API_KEY` (a secret), and `AI_MODEL` to use an OpenAI-compatible chat endpoint. `/api/setup/health` reports `aiProvider` as `workers-ai`, `workers-ai-rest`, `openai-compatible`, or `null`.
 
-Without a `BROWSER` binding, set `BROWSER_CDP_URL` to a private Chromium DevTools endpoint. Without an email binding, outbound mail can use `MAIL_GATEWAY_URL` or `SMTP_GATEWAY_URL`. Inbound email and RealtimeKit calls need Cloudflare. See [Self-host on celld](self-host/celld.md) for a non-Cloudflare Workers runtime.
+Without a `BROWSER` binding, the same token calls Browser Run, and `BROWSER_CDP_URL` is the Chromium DevTools fallback. Without an email binding, outbound mail uses Email Sending REST, then `MAIL_GATEWAY_URL` or `SMTP_GATEWAY_URL`. Inbound email needs Cloudflare Email Routing. RealtimeKit calls use the network on Cloudflare and the same API token off it. See [Self-host on celld](self-host/celld.md).
 
 ## Authentication
 

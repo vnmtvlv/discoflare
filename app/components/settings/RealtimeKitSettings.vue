@@ -25,17 +25,24 @@ const managed = computed(() => realtimekit.value?.source === 'deployment' || byA
 const connected = computed(() => Boolean(realtimekit.value?.configured))
 const unreadable = computed(() => realtimekit.value?.source === 'database' && !realtimekit.value.secretReadable)
 const callsUnavailable = computed(() => session.health?.capabilities.calls === false)
+const restCalls = computed(() => session.health?.capabilities.callsProvider === 'realtimekit-rest')
 const showTokenForm = computed(() => !callsUnavailable.value && !managed.value && (!connected.value || replacing.value || unreadable.value))
 const statusLabel = computed(() => {
   if (connected.value) return 'Connected'
   if (unreadable.value) return 'Reconnect needed'
+  if (restCalls.value) return 'API token'
   return 'Not connected'
 })
 
 function apply(value: RealtimeKitSettingsAdminDTO) {
   realtimekit.value = value
   // The app shell reads this to decide whether to offer calls at all.
-  if (session.health) session.health = { ...session.health, realtimekit: value.configured }
+  if (session.health) {
+    session.health = {
+      ...session.health,
+      realtimekit: value.configured || session.health.capabilities.callsProvider === 'realtimekit-rest',
+    }
+  }
 }
 
 async function load() {
@@ -137,6 +144,14 @@ onMounted(load)
       variant="subtle"
       title="Calls are unavailable on this runtime"
       description="Live sessions and calls use Cloudflare RealtimeKit. This installation is not on Cloudflare's network, so they stay off. Text chat is unaffected."
+    />
+    <UAlert
+      v-else-if="restCalls && !connected"
+      class="mt-6"
+      color="neutral"
+      variant="subtle"
+      title="Calls use your Cloudflare API token"
+      description="The first call creates a RealtimeKit app with CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN. A separate Realtime token is optional."
     />
 
     <LayoutSkeleton v-if="loading" variant="form" class="mt-6" />

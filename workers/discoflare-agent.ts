@@ -123,9 +123,11 @@ export class DiscoflareThink extends Think<DiscoflareEnv> {
         'You do not have a project, repository, or computer. Do not claim that you ran a shell command or changed a file.',
         browser === 'workers'
           ? 'You can read public web pages through Cloudflare Browser Run. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
-          : browser === 'cdp'
-            ? 'You can read public web pages through the external Chromium browser configured for this installation. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
-            : '',
+          : browser === 'cloudflare-rest'
+            ? 'You can read public web pages through Cloudflare Browser Run over its REST API. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
+            : browser === 'cdp'
+              ? 'You can read public web pages through the external Chromium browser configured for this installation. Use browser_read when you already have a URL. That is not a search engine: do not invent URLs to "google" a query. Do not browse the workspace origin. Browser sessions have no cookies or login state.'
+              : '',
         metadata?.hasImages && !canSeeImages
           ? 'The current workspace message has image attachments, but your selected model cannot inspect visual input. Do not pretend you saw them; ask for a vision-capable model or a text description if the image is needed.'
           : '',

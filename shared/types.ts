@@ -603,11 +603,13 @@ export type InvitePreviewDTO = {
   maxUses: number
 }
 
-export type AiProviderName = 'workers-ai' | 'openai-compatible' | null
-export type BrowserProviderName = 'workers' | 'cdp' | null
+export type AiProviderName = 'workers-ai' | 'workers-ai-rest' | 'openai-compatible' | null
+export type BrowserProviderName = 'workers' | 'cloudflare-rest' | 'cdp' | null
+export type EmailProviderName = 'binding' | 'cloudflare-rest' | 'gateway' | 'smtp' | null
+export type CallsProviderName = 'realtimekit' | 'realtimekit-rest' | null
 
 export type RuntimeCapabilities = {
-  /** RealtimeKit calls. False when this runtime is not on Cloudflare's network. */
+  /** RealtimeKit calls. False when neither Cloudflare's network nor its REST API is available. */
   calls: boolean
   /** Agent containers, computers, and shells. This product does not provide them. */
   containers: boolean
@@ -615,6 +617,10 @@ export type RuntimeCapabilities = {
   emailOutbound: boolean
   /** Cloudflare Email Routing. False on other Workers runtimes. */
   emailInbound: boolean
+  /** Which outbound mail path health selected. */
+  emailProvider: EmailProviderName
+  /** Which calls path health selected. */
+  callsProvider: CallsProviderName
 }
 
 export type SetupHealth = {
