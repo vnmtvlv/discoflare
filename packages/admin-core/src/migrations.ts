@@ -1,6 +1,34 @@
 import { installerError } from './errors.js'
 import type { InstallerReleaseManifest } from './types.js'
 
+function sqlString(value: string) {
+  return `'${value.replaceAll("'", "''")}'`
+}
+
+/** Pending D1 migrations as one statement batch, or null when the database is current. */
+export function pendingMigrationBatch(
+  migrations: Array<{ name: string, sql: string }>,
+  appliedNames: Iterable<string>,
+) {
+  const names = new Set<string>()
+  for (const migration of migrations) {
+    if (!/^[0-9A-Za-z_.-]+$/.test(migration.name)) {
+      installerError(502, `Discoflare migration ${migration.name} has an invalid name`)
+    }
+    if (names.has(migration.name)) installerError(502, `Discoflare migration ${migration.name} is duplicated`)
+    names.add(migration.name)
+  }
+  const applied = new Set(appliedNames)
+  const pending = migrations.filter(migration => !applied.has(migration.name))
+  if (!pending.length) return null
+  return {
+    names: pending.map(migration => migration.name),
+    sql: pending
+      .map(migration => `${migration.sql.replaceAll('--> statement-breakpoint', '\n')}\nINSERT INTO d1_migrations (name) VALUES (${sqlString(migration.name)});`)
+      .join('\n'),
+  }
+}
+
 export type ExistingWorkerMigration = { exists: boolean, migrationTag?: string }
 
 export function durableObjectMigrations(manifest: Pick<InstallerReleaseManifest, 'durableObjects'>, worker: ExistingWorkerMigration) {

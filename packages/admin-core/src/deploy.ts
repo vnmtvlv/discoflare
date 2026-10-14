@@ -2,7 +2,7 @@ import type Cloudflare from 'cloudflare'
 import type { DeployProgressReporter, DeployProgressStep, DeployRequest, InstallationControl, InstallerAssetsPayload, InstallerReleaseManifest } from './types.js'
 import { cloudflareApi, cloudflareClient } from './cloudflare-client.js'
 import { createError } from './errors.js'
-import { durableObjectMigrations } from './migrations.js'
+import { durableObjectMigrations, pendingMigrationBatch } from './migrations.js'
 import { randomBase64Url } from './random.js'
 import { ensureCloudflareAccess, ensureWorkersHostname } from './access.js'
 import { ensurePrimaryMail } from './primary-mail.js'
@@ -286,22 +286,7 @@ async function attachMailCatchAll(accessToken: string, request: DeployRequest, p
   })
 }
 
-function sqlString(value: string) {
-  return `'${value.replaceAll("'", "''")}'`
-}
-
 async function applyD1Migrations(accessToken: string, accountId: string, databaseId: string, payload: InstallerAssetsPayload) {
-  const names = new Set<string>()
-  for (const migration of payload.migrations) {
-    if (!/^[0-9A-Za-z_.-]+$/.test(migration.name)) {
-      throw createError({ statusCode: 502, statusMessage: `Discoflare migration ${migration.name} has an invalid name` })
-    }
-    if (names.has(migration.name)) {
-      throw createError({ statusCode: 502, statusMessage: `Discoflare migration ${migration.name} is duplicated` })
-    }
-    names.add(migration.name)
-  }
-
   await cloudflareApi(accessToken, `/accounts/${accountId}/d1/database/${databaseId}/query`, {
     method: 'POST',
     body: JSON.stringify({ sql: 'CREATE TABLE IF NOT EXISTS d1_migrations (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);' }),
@@ -311,17 +296,14 @@ async function applyD1Migrations(accessToken: string, accountId: string, databas
     `/accounts/${accountId}/d1/database/${databaseId}/query`,
     { method: 'POST', body: JSON.stringify({ sql: 'SELECT name FROM d1_migrations;' }) },
   )
-  const applied = new Set(rows.flatMap(result => result.results || []).map(row => row.name).filter(Boolean))
-  const pending = payload.migrations.filter(migration => !applied.has(migration.name))
-  if (pending.length) {
+  const applied = new Set(rows.flatMap(result => result.results || []).map(row => row.name).filter((name): name is string => Boolean(name)))
+  const batch = pendingMigrationBatch(payload.migrations, applied)
+  if (batch) {
     // One subrequest for every pending migration: free plans cap a Worker
     // invocation at 50 subrequests, which per-migration calls exhaust.
-    const sql = pending
-      .map(migration => `${migration.sql.replaceAll('--> statement-breakpoint', '\n')}\nINSERT INTO d1_migrations (name) VALUES (${sqlString(migration.name)});`)
-      .join('\n')
     const results = await cloudflareApi<Array<{ success?: boolean }>>(accessToken, `/accounts/${accountId}/d1/database/${databaseId}/query`, {
       method: 'POST',
-      body: JSON.stringify({ sql }),
+      body: JSON.stringify({ sql: batch.sql }),
     })
     // D1 returns one result per SQL statement (each migration holds many), so
     // only inspect per-statement success here.
@@ -329,7 +311,7 @@ async function applyD1Migrations(accessToken: string, accountId: string, databas
       throw createError({ statusCode: 502, statusMessage: 'Discoflare migration did not complete' })
     }
   }
-  return pending.map(migration => migration.name)
+  return batch?.names ?? []
 }
 
 export async function uploadAssets(accessToken: string, accountId: string, workerName: string, payload: InstallerAssetsPayload) {
