@@ -3,6 +3,7 @@ import { emailMessages, messages } from '../../drizzle/schema'
 import type { DiscoflareEnv } from '../../workers/env'
 import type { MailMessageDTO, MailThreadDTO } from '../../shared/types'
 import { mailAddressList } from '../../shared/mail'
+import { readableMailContent } from '../../shared/mail-content'
 import { getDb } from './db'
 import { hydrateMessages } from './messages'
 
@@ -18,6 +19,7 @@ export async function hydrateMailMessages(env: DiscoflareEnv, rows: Array<typeof
     const email = byId.get(message.id)
     return {
       ...message,
+      content: email?.direction === 'inbound' ? readableMailContent(message.content) : message.content,
       author: email?.direction === 'inbound'
         ? { ...message.author, displayName: email.fromName || email.fromAddress }
         : message.author,
@@ -51,6 +53,7 @@ type ThreadRow = {
   participantsJson: string
   lastMessageAt: string
   preview?: string
+  previewInbound?: number | boolean
   unread?: number
 }
 
@@ -61,7 +64,7 @@ export function mailThreadDto(row: ThreadRow): MailThreadDTO {
     subject: row.subject,
     status: row.status,
     participants: mailAddressList(row.participantsJson),
-    preview: (row.preview ?? '').slice(0, 240),
+    preview: (row.previewInbound ? readableMailContent(row.preview ?? '') : row.preview ?? '').slice(0, 240),
     lastMessageAt: row.lastMessageAt,
     unread: Boolean(row.unread),
   }
