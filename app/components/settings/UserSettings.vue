@@ -17,23 +17,11 @@ const colorMode = useColorMode()
 const revealEmail = ref(false)
 const confirmLogout = ref(false)
 const savingName = ref(false)
-const accountProviders = ref<string[]>([])
-const hasPassword = computed(() => accountProviders.value.includes('credential'))
 
 const schema = z.object({ displayName: z.string().min(1).max(80) })
 type Schema = z.output<typeof schema>
 const state = reactive<Partial<Schema>>({ displayName: session.user?.displayName || '' })
 
-const password = reactive({ current: '', next: '', confirm: '' })
-const savingPassword = ref(false)
-const passwordError = computed(() => {
-  if (password.next && password.next.length < 8) return 'Use at least 8 characters.'
-  if (password.confirm && password.next !== password.confirm) return 'The two new passwords do not match.'
-  return ''
-})
-const canSavePassword = computed(() => Boolean(
-  password.current && password.next.length >= 8 && password.next === password.confirm,
-))
 const avatarInput = ref<HTMLInputElement | null>(null)
 const avatarBusy = ref(false)
 const avatarDragging = ref(false)
@@ -55,16 +43,7 @@ const micBusy = ref(false)
 watch(open, async (v) => {
   if (v) {
     state.displayName = session.user?.displayName || ''
-    password.current = ''
-    password.next = ''
-    password.confirm = ''
     revealEmail.value = false
-    try {
-      accountProviders.value = (await $fetch<{ providers: string[] }>('/api/auth/accounts')).providers
-    }
-    catch {
-      accountProviders.value = []
-    }
     await push.refresh()
   }
 })
@@ -176,34 +155,6 @@ async function removeAvatar() {
   }
   finally {
     avatarBusy.value = false
-  }
-}
-
-async function onPassword() {
-  if (password.next.length < 8) {
-    toast.add({ title: 'New password must be at least 8 characters', color: 'error' })
-    return
-  }
-  if (password.next !== password.confirm) {
-    toast.add({ title: 'New passwords do not match', color: 'error' })
-    return
-  }
-  savingPassword.value = true
-  try {
-    await $fetch('/api/auth/change-password', {
-      method: 'POST',
-      body: { currentPassword: password.current, newPassword: password.next },
-    })
-    toast.add({ title: 'Password updated', color: 'success' })
-    password.current = ''
-    password.next = ''
-    password.confirm = ''
-  }
-  catch (err) {
-    toast.add({ title: errorMessage(err), color: 'error' })
-  }
-  finally {
-    savingPassword.value = false
   }
 }
 
@@ -320,27 +271,7 @@ async function logout() {
         </div>
       </div>
 
-      <h2 v-if="hasPassword" class="mt-10 text-xs font-bold uppercase tracking-wide text-muted">Password and Authentication</h2>
-      <div v-if="hasPassword" class="mt-3 max-w-sm space-y-3">
-        <UFormField label="Current password">
-          <FormPasswordInput v-model="password.current" class="w-full" autocomplete="current-password" />
-        </UFormField>
-        <UFormField label="New password" hint="At least 8 characters">
-          <FormPasswordInput v-model="password.next" class="w-full" autocomplete="new-password" />
-        </UFormField>
-        <UFormField
-          label="Confirm new password"
-          :error="passwordError || undefined"
-        >
-          <FormPasswordInput v-model="password.confirm" class="w-full" autocomplete="new-password" />
-        </UFormField>
-        <UButton
-          label="Change Password"
-          :loading="savingPassword"
-          :disabled="!canSavePassword"
-          @click="onPassword"
-        />
-      </div>
+      <SettingsAccountLogins />
     </template>
 
     <template v-else-if="section === 'profile'">

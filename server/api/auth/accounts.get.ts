@@ -1,9 +1,12 @@
 import { requireUser } from '../../utils/auth'
-import { authFromEvent } from '../../utils/better-auth'
+import { accountAuthContext, accountAuthSettings } from '../../utils/account-auth'
+import { cf } from '../../utils/cf'
+import { authMode } from '../../utils/cloudflare-access'
 
-export default defineEventHandler(async (event): Promise<{ providers: string[] }> => {
+export default defineEventHandler(async (event) => {
+  setHeader(event, 'Cache-Control', 'no-store')
   await requireUser(event)
-  const auth = await authFromEvent(event)
-  const accounts = await auth.api.listUserAccounts({ headers: event.headers })
-  return { providers: [...new Set(accounts.map(account => account.providerId))] }
+  if (authMode(cf(event).env) === 'access') return { providers: [], managed: true, email: null, emailVerified: false, canAddEmail: false, canSetPassword: false, methods: {}, accounts: [] }
+  const context = await accountAuthContext(event)
+  return { providers: [...new Set(context.accounts.map(account => account.providerId))], ...accountAuthSettings(context) }
 })
