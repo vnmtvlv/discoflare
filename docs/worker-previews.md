@@ -68,6 +68,9 @@ Create a GitHub Actions environment named `preview` with:
   Preview.
 - Secret `DISCOFLARE_PREVIEW_ADMIN_PASSWORD`: the shared Preview owner password,
   containing at least 12 characters.
+- Secret `OPENROUTER_API_KEY`: the key used by the E2E PR Preview job.
+- Optional variable `DISCOFLARE_E2E_MODEL`: an OpenRouter model with tool-call
+  and image support. Defaults to `openai/gpt-6-luna`.
 
 Do not configure required reviewers or a wait timer unless every Preview should
 require manual approval. Repository secrets are not required for this workflow.
@@ -116,6 +119,57 @@ Password  DISCOFLARE_PREVIEW_ADMIN_PASSWORD from the preview environment
 Treat the generated URL as a shared test environment. The application login is
 the initial access boundary; Cloudflare Access can be added later if the URL
 itself must be private.
+
+## End-to-end tests
+
+After deployment and health checks, **E2E PR Preview** runs Chromium on a
+GitHub-hosted Ubuntu runner against the immutable deployment URL for that PR
+commit. It uses the Preview owner login and receives only the OpenRouter key
+and test credentials; it has no Cloudflare deployment credential.
+
+Add the model key in **Settings → Environments → preview → Environment
+secrets**, named `OPENROUTER_API_KEY`. The job uses the repository's pinned
+TesterArmy e2e packages in `packages/e2e`. It signs in, opens two independent
+browser contexts as the Preview owner, and checks:
+
+- a scripted message arrives as a channel WebSocket frame and renders in the
+  second client without navigation or reload;
+- an OpenRouter agent can send a fresh message with the same delivery checks;
+- each message persists exactly once after reloading the sender.
+
+Each run removes its own test messages afterward. These checks cover delivery
+between two connections of one account; they do not yet cover permissions or
+delivery between different members.
+
+Verified agent actions are cached between successful runs of the same PR.
+Unique message values are substituted on replay. Cache misses and stale
+recordings use the model again; exact assertions remain in every run.
+The agent is limited to eight actions and eight model calls per goal, with no
+automatic retries. The job summary reports usage and cache hits; reports and
+traces are uploaded as seven-day Actions artifacts even when tests fail.
+Fork pull requests do not run this job or receive its credentials.
+
+For a local run, set the target and credentials in an ignored `.env.e2e`:
+
+```dotenv
+APP_URL=http://127.0.0.1:3000
+E2E_USER_ADMIN_USERNAME=owner@example.test
+E2E_USER_ADMIN_PASSWORD=your-test-password
+# Set these to include the OpenRouter agent scenario:
+E2E_AI=1
+OPENROUTER_API_KEY=your-openrouter-key
+```
+
+Start a full local Worker or select a disposable Preview, then run:
+
+```bash
+pnpm --filter @discoflare/e2e exec e2e-web install chromium
+pnpm test:e2e
+```
+
+Without `E2E_AI=1`, the agent test is skipped and the scripted delivery test
+needs no model key. The target URL must be an environment value; never commit
+personal installation URLs or credentials.
 
 ## Cleanup
 

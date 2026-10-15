@@ -69,6 +69,10 @@ jobs:
         if: matrix.check == 'typecheck'
         run: pnpm --filter @discoflare/admin typecheck
 
+      - name: Check end-to-end test types
+        if: matrix.check == 'typecheck'
+        run: pnpm --filter @discoflare/e2e typecheck
+
       - name: Build and bundle the Discoflare Admin
         if: matrix.check == 'build'
         run: pnpm --filter @discoflare/admin bundle

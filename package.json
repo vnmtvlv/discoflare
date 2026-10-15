@@ -28,6 +28,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "pnpm --filter @discoflare/e2e test",
     "db:migrate:local": "wrangler d1 migrations apply DB --local -c wrangler.dev.jsonc",
     "db:migrate": "wrangler d1 migrations apply DB --remote",
     "db:migration:create": "node scripts/create-migration.mjs",
